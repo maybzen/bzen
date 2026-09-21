@@ -147,11 +147,15 @@ export function createEntry(payload, userId) {
 export function createEntries(rows) {
   if (!rows || !rows.length) return Promise.resolve([])
   // PostgREST 일괄 insert 는 모든 객체의 키가 동일해야 하므로 키를 통일합니다.
+  // 값이 전부 비어 있는 키는 아예 보내지 않아 DB 기본값(예: created_by = auth.uid())이 적용되게 합니다.
   const cleaned = rows.map(sanitizeEntry)
-  const keys = [...new Set(cleaned.flatMap((row) => Object.keys(row)))]
+  const allKeys = [...new Set(cleaned.flatMap((row) => Object.keys(row)))]
+  const keys = allKeys.filter((key) =>
+    cleaned.some((row) => row[key] !== undefined && row[key] !== null),
+  )
   const normalized = cleaned.map((row) => {
     const out = {}
-    for (const key of keys) out[key] = key in row ? row[key] : null
+    for (const key of keys) out[key] = row[key] === undefined ? null : row[key]
     return out
   })
   return unwrap(supabase.from('entries').insert(normalized).select())

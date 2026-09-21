@@ -13,7 +13,6 @@ import {
   formatCompact,
   formatKRW,
   formatPercent,
-  monthEnd,
   monthLabel,
   previousPeriod,
 } from '../lib/format'
@@ -289,6 +288,13 @@ export default function Reports() {
                       </td>
                     </tr>
                   ))}
+                  {!monthly.length ? (
+                    <tr>
+                      <td colSpan={6} className="empty">
+                        해당 기간에 내역이 없습니다.
+                      </td>
+                    </tr>
+                  ) : null}
                 </tbody>
               </table>
             </div>
