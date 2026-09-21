@@ -1,0 +1,95 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    @apply bg-ink-100 text-ink-900 font-sans antialiased;
+  }
+  ::selection {
+    @apply bg-brand-100 text-brand-900;
+  }
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: #c3cad6 transparent;
+  }
+  *::-webkit-scrollbar {
+    width: 9px;
+    height: 9px;
+  }
+  *::-webkit-scrollbar-thumb {
+    background: #c3cad6;
+    border-radius: 999px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+  *::-webkit-scrollbar-thumb:hover {
+    background: #96a0b0;
+    background-clip: content-box;
+  }
+}
+
+@layer components {
+  .card {
+    @apply bg-white rounded-xl2 shadow-card border border-ink-200/70;
+  }
+  .btn {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-lg text-sm font-semibold transition-colors disabled:opacity-45 disabled:cursor-not-allowed;
+  }
+  .btn-primary {
+    @apply btn bg-brand-600 text-white hover:bg-brand-700 px-3.5 py-2.5 shadow-sm;
+  }
+  .btn-ghost {
+    @apply btn bg-white text-ink-700 border border-ink-200 hover:bg-ink-50 px-3.5 py-2.5;
+  }
+  .btn-soft {
+    @apply btn bg-brand-50 text-brand-700 hover:bg-brand-100 px-3.5 py-2.5;
+  }
+  .btn-danger {
+    @apply btn bg-white text-loss border border-rose-200 hover:bg-rose-50 px-3.5 py-2.5;
+  }
+  .input {
+    @apply w-full rounded-lg border border-ink-200 bg-white px-3 py-2.5 text-sm text-ink-900 placeholder:text-ink-400 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-100;
+  }
+  .label {
+    @apply block text-xs font-semibold text-ink-600 mb-1.5;
+  }
+  .chip {
+    @apply inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold whitespace-nowrap;
+  }
+  .th {
+    @apply px-3 py-2.5 text-left text-xs font-semibold text-ink-500 whitespace-nowrap;
+  }
+  .td {
+    @apply px-3 py-3 text-sm text-ink-800 align-middle;
+  }
+  .num {
+    @apply font-num tabular-nums text-right;
+  }
+  .empty {
+    @apply px-4 py-14 text-center text-sm text-ink-500;
+  }
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: #ffffff !important;
+  }
+  .card {
+    box-shadow: none !important;
+    border-color: #d7dbe2 !important;
+    break-inside: avoid;
+  }
+  section {
+    break-inside: avoid;
+  }
+  @page {
+    margin: 12mm;
+  }
+}
