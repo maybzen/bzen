@@ -82,6 +82,7 @@ export default function Layout() {
   const navigate = useNavigate()
   const [drawer, setDrawer] = useState(false)
   const [menu, setMenu] = useState(false)
+  const [profileMenu, setProfileMenu] = useState(false)
   const [company, setCompany] = useState(DEFAULT_COMPANY)
   const menuRef = useRef(null)
 
@@ -93,6 +94,7 @@ export default function Layout() {
   useEffect(() => {
     setDrawer(false)
     setMenu(false)
+    setProfileMenu(false)
   }, [location.pathname])
 
   useEffect(() => {
@@ -147,15 +149,48 @@ export default function Layout() {
           )
         })}
       </div>
-      <button
-        type="button"
-        onClick={() => {
-          onNavigate?.()
-          navigate('/settings')
-        }}
-        title="내 정보 · 설정"
-        className="border-t border-white/10 px-4 py-4 text-left transition hover:bg-white/5"
-      >
+      <div className="relative border-t border-white/10 px-4 py-4">
+        {profileMenu ? (
+          <>
+            <button
+              type="button"
+              aria-label="메뉴 닫기"
+              className="fixed inset-0 z-40 cursor-default"
+              onClick={() => setProfileMenu(false)}
+            />
+            <div className="absolute bottom-full left-3 right-3 z-50 mb-2 animate-fade-in overflow-hidden rounded-xl border border-ink-200 bg-white shadow-pop">
+              <button
+                type="button"
+                onClick={() => {
+                  setProfileMenu(false)
+                  onNavigate?.()
+                  navigate('/settings')
+                }}
+                className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-sm font-medium text-ink-700 transition hover:bg-ink-50"
+              >
+                <Icon name="settings" size={16} />
+                내 정보 · 설정
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setProfileMenu(false)
+                  handleSignOut()
+                }}
+                className="flex w-full items-center gap-2.5 border-t border-ink-100 px-4 py-2.5 text-left text-sm font-medium text-loss transition hover:bg-rose-50"
+              >
+                <Icon name="logout" size={16} />
+                로그아웃
+              </button>
+            </div>
+          </>
+        ) : null}
+        <button
+          type="button"
+          onClick={() => setProfileMenu((v) => !v)}
+          title="프로필 메뉴"
+          className="flex w-full items-center gap-2.5 rounded-xl p-1 text-left transition hover:bg-white/5"
+        >
         <div className="flex items-center gap-2.5">
           <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/10 text-xs font-bold text-white">
             {(profile?.full_name || profile?.email || '?').slice(0, 1)}
@@ -171,6 +206,7 @@ export default function Layout() {
           </span>
         </div>
       </button>
+      </div>
     </div>
   )
 
