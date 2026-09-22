@@ -271,7 +271,7 @@ export default function ProjectDetail() {
             setEditing({ ...entry, attachments: attachmentsByEntry[entry.id] || [] })
             setFormType(entry.entry_type)
           }}
-          onDelete={setRemoving}
+          onDelete={isAdmin ? setRemoving : undefined}
           onOpenAttachments={setViewerFiles}
         />
       </section>

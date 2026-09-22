@@ -70,7 +70,7 @@ function NavList({ items, onNavigate }) {
 
 export default function Layout() {
   const { profile, isAdmin, signOut } = useAuth()
-  const { perms } = useStaffPermissions()
+  const { perms } = useStaffPermissions(profile)
   const toast = useToast()
   const location = useLocation()
   const navigate = useNavigate()

@@ -115,14 +115,16 @@ export default function EntryTable({
                         >
                           <Icon name="pencil" size={15} />
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => onDelete?.(entry)}
-                          className="rounded-md p-1.5 text-ink-500 transition hover:bg-rose-50 hover:text-loss"
-                          aria-label="삭제"
-                        >
-                          <Icon name="trash" size={15} />
-                        </button>
+                        {onDelete ? (
+                          <button
+                            type="button"
+                            onClick={() => onDelete?.(entry)}
+                            className="rounded-md p-1.5 text-ink-500 transition hover:bg-rose-50 hover:text-loss"
+                            aria-label="삭제"
+                          >
+                            <Icon name="trash" size={15} />
+                          </button>
+                        ) : null}
                       </div>
                     ) : (
                       <span className="block text-right text-xs text-ink-300">—</span>
@@ -191,14 +193,16 @@ export default function EntryTable({
                       <Icon name="pencil" size={13} />
                       수정
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => onDelete?.(entry)}
-                      className="btn-ghost px-2.5 py-1.5 text-xs text-loss"
-                    >
-                      <Icon name="trash" size={13} />
-                      삭제
-                    </button>
+                    {onDelete ? (
+                      <button
+                        type="button"
+                        onClick={() => onDelete?.(entry)}
+                        className="btn-ghost px-2.5 py-1.5 text-xs text-loss"
+                      >
+                        <Icon name="trash" size={13} />
+                        삭제
+                      </button>
+                    ) : null}
                   </div>
                 ) : null}
               </div>

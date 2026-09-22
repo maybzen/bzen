@@ -9,7 +9,7 @@ import { getSettings } from './api'
  */
 export const STAFF_DEFAULT_PERMS = ['partners']
 
-/** 토글로 관리하는 메뉴 정의 (설정 화면과 공유) */
+/** 토글로 관리하는 메뉴 정의 (설정·계정관리 화면과 공유) */
 export const PERM_DEFS = [
   { key: 'partners', label: '거래처' },
   { key: 'sales', label: '매출' },
@@ -18,29 +18,43 @@ export const PERM_DEFS = [
   { key: 'reports', label: '보고서' },
 ]
 
+export const PERM_LABEL = Object.fromEntries(PERM_DEFS.map((p) => [p.key, p.label]))
+
 let cached = null
 
-export function getStaffPermissions() {
+function getStaffSettings() {
   if (!cached) {
     cached = getSettings()
-      .then((s) =>
-        Array.isArray(s?.staff_permissions) ? s.staff_permissions : STAFF_DEFAULT_PERMS,
-      )
-      .catch(() => [])
+      .then((s) => ({
+        global: Array.isArray(s?.staff_permissions) ? s.staff_permissions : STAFF_DEFAULT_PERMS,
+        overrides:
+          s?.staff_overrides && typeof s.staff_overrides === 'object' && !Array.isArray(s.staff_overrides)
+            ? s.staff_overrides
+            : {},
+      }))
+      .catch(() => ({ global: [], overrides: {} }))
   }
   return cached
 }
 
-export function useStaffPermissions() {
-  const [perms, setPerms] = useState(null)
+/** 전체 기본 권한 + 해당 계정의 추가 권한을 합친 실효 권한 */
+export function effectivePerms(staffSettings, profile) {
+  const global = staffSettings?.global || []
+  const extra =
+    (profile && staffSettings?.overrides && staffSettings.overrides[profile.id]) || []
+  return [...new Set([...global, ...(Array.isArray(extra) ? extra : [])])]
+}
+
+export function useStaffPermissions(profile) {
+  const [settings, setSettings] = useState(null)
   useEffect(() => {
     let mounted = true
-    getStaffPermissions().then((p) => {
-      if (mounted) setPerms(p)
+    getStaffSettings().then((s) => {
+      if (mounted) setSettings(s)
     })
     return () => {
       mounted = false
     }
   }, [])
-  return { perms: perms || [], loading: perms === null }
+  return { perms: effectivePerms(settings, profile), loading: settings === null }
 }

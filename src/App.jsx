@@ -58,7 +58,7 @@ function PendingApproval() {
 
 function Guard({ children, adminOnly = false, perm = null }) {
   const { loading, user, profile, isActive, isAdmin } = useAuth()
-  const { perms, loading: permsLoading } = useStaffPermissions()
+  const { perms, loading: permsLoading } = useStaffPermissions(profile)
   const location = useLocation()
 
   if (loading) return <Splash />

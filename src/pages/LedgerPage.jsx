@@ -276,7 +276,7 @@ export default function LedgerPage({ type, source = 'manual', title, description
               })
               setFormOpen(true)
             }}
-            onDelete={setRemoving}
+            onDelete={isAdmin ? setRemoving : undefined}
             onOpenAttachments={setViewerFiles}
           />
         )}

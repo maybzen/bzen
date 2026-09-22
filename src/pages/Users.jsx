@@ -4,8 +4,9 @@ import { useToast } from '../components/Toast'
 import { ConfirmDialog, Field, InlineAlert, LoadingBlock, Modal, PageHeader, Spinner } from '../components/ui'
 import { useAuth } from '../auth/AuthContext'
 import { ROLE_LABEL } from '../lib/constants'
+import { PERM_DEFS, PERM_LABEL } from '../lib/permissions'
 import { formatDateHuman } from '../lib/format'
-import { callAdminFn, listProfiles } from '../lib/api'
+import { callAdminFn, getSettings, listProfiles, updateSettings } from '../lib/api'
 
 const EMPTY = {
   full_name: '',
@@ -14,6 +15,7 @@ const EMPTY = {
   role: 'staff',
   department: '',
   phone: '',
+  menus: [],
 }
 
 export default function Users() {
@@ -24,6 +26,8 @@ export default function Users() {
   const [profiles, setProfiles] = useState([])
   const [search, setSearch] = useState('')
   const [reloadKey, setReloadKey] = useState(0)
+  const [overrides, setOverrides] = useState({})
+  const [hasOverridesColumn, setHasOverridesColumn] = useState(true)
 
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState(null)
@@ -41,7 +45,17 @@ export default function Users() {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      setProfiles(await listProfiles())
+      const [rows, settings] = await Promise.all([
+        listProfiles(),
+        getSettings().catch(() => null),
+      ])
+      setProfiles(rows)
+      if (settings && settings.staff_overrides && typeof settings.staff_overrides === 'object') {
+        setOverrides(settings.staff_overrides)
+        setHasOverridesColumn(true)
+      } else if (settings && !('staff_overrides' in settings)) {
+        setHasOverridesColumn(false)
+      }
     } catch (err) {
       toast.error(err.message)
     } finally {
@@ -77,6 +91,7 @@ export default function Users() {
       role: profile.role || 'staff',
       department: profile.department || '',
       phone: profile.phone || '',
+      menus: overrides[profile.id] || [],
     })
     setError('')
     setFormOpen(true)
@@ -96,6 +111,23 @@ export default function Users() {
           phone: form.phone,
           role: form.role,
         })
+        if (hasOverridesColumn) {
+          try {
+            const validIds = new Set([...profiles.map((p) => p.id), editing.id])
+            const next = {}
+            for (const [uid, menus] of Object.entries(overrides)) {
+              if (uid !== editing.id && validIds.has(uid) && Array.isArray(menus) && menus.length) {
+                next[uid] = menus
+              }
+            }
+            const myMenus = form.role === 'staff' ? form.menus : []
+            if (myMenus.length) next[editing.id] = myMenus
+            await updateSettings({ staff_overrides: next })
+            setOverrides(next)
+          } catch (permErr) {
+            toast.error(`계정은 수정됐지만 메뉴 권한 저장에 실패했습니다: ${permErr.message}`)
+          }
+        }
         toast.success('계정 정보가 수정되었습니다.')
         if (editing.id === user?.id) await refreshProfile()
       } else {
@@ -197,13 +229,14 @@ export default function Users() {
           <LoadingBlock />
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[820px] border-collapse">
+            <table className="w-full min-w-[980px] border-collapse">
               <thead className="bg-ink-50/70">
                 <tr>
                   <th className="th">이름</th>
                   <th className="th">이메일</th>
                   <th className="th">부서</th>
                   <th className="th">권한</th>
+                  <th className="th">추가 메뉴</th>
                   <th className="th">상태</th>
                   <th className="th">연락처</th>
                   <th className="th text-right">관리</th>
@@ -228,6 +261,21 @@ export default function Users() {
                       >
                         {ROLE_LABEL[profile.role] || profile.role}
                       </span>
+                    </td>
+                    <td className="td">
+                      {profile.role === 'admin' ? (
+                        <span className="text-xs text-ink-400">전체</span>
+                      ) : (overrides[profile.id] || []).length ? (
+                        <span className="flex flex-wrap gap-1">
+                          {(overrides[profile.id] || []).map((key) => (
+                            <span key={key} className="chip bg-brand-50 text-brand-700">
+                              {PERM_LABEL[key] || key}
+                            </span>
+                          ))}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-ink-400">기본</span>
+                      )}
                     </td>
                     <td className="td">
                       <span
@@ -282,7 +330,7 @@ export default function Users() {
                 ))}
                 {!filtered.length ? (
                   <tr>
-                    <td colSpan={7} className="empty">
+                    <td colSpan={8} className="empty">
                       해당하는 계정이 없습니다.
                     </td>
                   </tr>
@@ -295,8 +343,9 @@ export default function Users() {
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <InlineAlert tone="info">
-          <strong className="font-semibold">권한 안내</strong> — 관리자는 전체 장부 조회·수정, 계정관리, 프로젝트
-          등록이 가능합니다. 직원은 본인이 등록한 지출결의만 조회·수정할 수 있습니다.
+          <strong className="font-semibold">권한 안내</strong> — 관리자는 전체 메뉴를 봅니다. 직원은 기본 메뉴 +
+          설정에서 정한 전체 메뉴 + 계정별로 추가한 메뉴를 봅니다. 장부에서는 등록·수정은 가능하고 삭제는
+          관리자만 가능합니다.
         </InlineAlert>
         <InlineAlert tone="warn">
           마지막 관리자 계정은 권한을 내리거나 삭제할 수 없습니다. 관리자 계정을 최소 1개 유지해 주세요.
@@ -341,12 +390,52 @@ export default function Users() {
             <select
               className="input"
               value={form.role}
-              onChange={(e) => setForm((f) => ({ ...f, role: e.target.value }))}
+              onChange={(e) => setForm((f) => ({ ...f, role: e.target.value, menus: [] }))}
             >
               <option value="staff">직원</option>
               <option value="admin">관리자</option>
             </select>
           </Field>
+
+          {form.role === 'staff' ? (
+            <Field
+              label="추가 메뉴 권한"
+              hint="전체 직원 기본 권한에 더해 이 계정에만 허용합니다."
+              className="sm:col-span-2"
+            >
+              {!hasOverridesColumn ? (
+                <InlineAlert tone="warning">
+                  개인별 권한을 쓰려면 Supabase SQL Editor에서
+                  <strong> supabase/migration_user_menus.sql </strong>
+                  파일을 실행해 주세요.
+                </InlineAlert>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {PERM_DEFS.map((perm) => (
+                    <label
+                      key={perm.key}
+                      className="flex cursor-pointer items-center justify-between gap-3 rounded-lg border border-ink-200 px-3.5 py-2.5 transition hover:bg-ink-50/60"
+                    >
+                      <span className="text-sm font-semibold text-ink-800">{perm.label}</span>
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 accent-brand-600"
+                        checked={form.menus.includes(perm.key)}
+                        onChange={() =>
+                          setForm((f) => ({
+                            ...f,
+                            menus: f.menus.includes(perm.key)
+                              ? f.menus.filter((k) => k !== perm.key)
+                              : [...f.menus, perm.key],
+                          }))
+                        }
+                      />
+                    </label>
+                  ))}
+                </div>
+              )}
+            </Field>
+          ) : null}
 
           {!editing ? (
             <>
