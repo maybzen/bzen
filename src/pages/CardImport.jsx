@@ -8,9 +8,43 @@ import { useAuth } from '../auth/AuthContext'
 import { CATEGORIES, ENTRY_META } from '../lib/constants'
 import { parseAmount, parseCSV } from '../lib/csv'
 import { formatKRW, toISODate } from '../lib/format'
-import { createEntries, listEntries } from '../lib/api'
+import { createEntries, listEntries, listProjects } from '../lib/api'
 
 const TYPE_OPTIONS = ['purchase', 'opex']
+
+/** 카드사 프리셋: 파일 양식에 맞는 열 지정 */
+const COMPANY_PRESETS = {
+  auto: { label: '자동 감지', cardLabel: '' },
+  busan: {
+    label: '부산은행',
+    cardLabel: '법카 2381',
+    mapping: { date: 1, merchant: 11, amount: 9, memo: -1, currency: -1, foreign: -1, fee: 6, payable: 7 },
+  },
+  woori: {
+    label: '우리은행',
+    cardLabel: '법카 3842',
+    // 제목행 자동 탐색 + 아래 열 사용 (외화 3종은 국내분 기준 최유력 위치)
+    mapping: { date: 0, merchant: 8, amount: 9, memo: -1, currency: -1, foreign: 15, fee: -1, payable: 16 },
+  },
+}
+
+/** 제목·반복 헤더 행 판별 (우리은행처럼 중간에 제목이 반복되는 양식용) */
+function isTitleRow(cells) {
+  const text = cells.join(' ')
+  return /이용일자|가맹점|당월결제|청구합계|이용대금 상세내역|법인카드|원금|수수료|납부하실/.test(text)
+}
+
+function detectCompany(rows) {
+  const head = rows.slice(0, 30).map((r) => r.join(' ')).join('\n')
+  if (/청구합계/.test(head)) return 'busan'
+  if (/이용가맹점/.test(head)) return 'woori'
+  return 'auto'
+}
+
+function findHeaderRow(rows) {
+  const i = rows.findIndex((r) => /이용가맹점/.test(r.join(' ')))
+  return i >= 0 ? i : 0
+}
 
 function cellText(v) {
   if (v === null || v === undefined) return ''
@@ -118,20 +152,32 @@ export default function CardImport() {
   const [fileName, setFileName] = useState('')
   const [rawRows, setRawRows] = useState([])
   const [hasHeader, setHasHeader] = useState(true)
+  const [headerRow, setHeaderRow] = useState(0)
+  const [company, setCompany] = useState('auto')
+  const [cardLabel, setCardLabel] = useState('')
   const [mapping, setMapping] = useState({ date: -1, merchant: -1, amount: -1, memo: -1, currency: -1, foreign: -1, fee: -1, payable: -1 })
   const [parsing, setParsing] = useState(false)
   const [preview, setPreview] = useState([])
+  const [skippedTitles, setSkippedTitles] = useState(0)
   const [dupChecking, setDupChecking] = useState(false)
   const [registering, setRegistering] = useState(false)
   const [bulkType, setBulkType] = useState('opex')
   const [bulkCategory, setBulkCategory] = useState('')
+  const [bulkProject, setBulkProject] = useState('')
+  const [projects, setProjects] = useState([])
 
   const [registered, setRegistered] = useState([])
   const [loadingList, setLoadingList] = useState(true)
   const [reloadKey, setReloadKey] = useState(0)
 
-  const headers = useMemo(() => (hasHeader && rawRows.length ? rawRows[0] : []), [hasHeader, rawRows])
-  const dataRows = useMemo(() => (hasHeader ? rawRows.slice(1) : rawRows), [hasHeader, rawRows])
+  const headers = useMemo(
+    () => (hasHeader ? rawRows[headerRow] || [] : []),
+    [hasHeader, headerRow, rawRows],
+  )
+  const dataRows = useMemo(
+    () => (hasHeader ? rawRows.slice(headerRow + 1) : rawRows),
+    [hasHeader, headerRow, rawRows],
+  )
   const colCount = useMemo(
     () => rawRows.reduce((n, r) => Math.max(n, r.length), 0),
     [rawRows],
@@ -153,15 +199,45 @@ export default function CardImport() {
     try {
       const rows = await parseFile(file)
       if (!rows.length) throw new Error('파일에서 표를 찾지 못했습니다.')
+      const detected = detectCompany(rows)
+      const preset = COMPANY_PRESETS[detected]
       setFileName(file.name)
       setRawRows(rows)
-      setMapping(autoMap(rows[0] || []))
+      setCompany(detected)
+      setCardLabel(preset.cardLabel)
+      if (detected === 'woori') {
+        const hr = findHeaderRow(rows)
+        setHeaderRow(hr)
+        setMapping({ ...preset.mapping })
+      } else if (preset.mapping) {
+        setHeaderRow(0)
+        setMapping({ ...preset.mapping })
+      } else {
+        setHeaderRow(0)
+        setMapping(autoMap(rows[0] || []))
+      }
       setHasHeader(true)
       setPreview([])
+      setSkippedTitles(0)
     } catch (err) {
       toast.error(err.message || '파일을 읽지 못했습니다.')
     } finally {
       setParsing(false)
+    }
+  }
+
+  const applyCompany = (key) => {
+    setCompany(key)
+    const preset = COMPANY_PRESETS[key]
+    if (preset.mapping) {
+      if (key === 'woori') setHeaderRow(findHeaderRow(rawRows))
+      else setHeaderRow(0)
+      setMapping({ ...preset.mapping })
+      setCardLabel(preset.cardLabel)
+    } else {
+      setHeaderRow(0)
+      setMapping(autoMap(rawRows[0] || []))
+      setCardLabel('')
     }
   }
 
@@ -174,7 +250,18 @@ export default function CardImport() {
     let cancelled = false
     setDupChecking(true)
     ;(async () => {
-      const base = dataRows.map((r, i) => {
+      // 제목·반복 헤더 행은 조용히 제외 (우리은행처럼 중간에 제목이 반복되는 양식)
+      const bodyRows = []
+      let skipped = 0
+      for (const r of dataRows) {
+        if (isTitleRow(r) && !normDate(r[mapping.date])) {
+          skipped += 1
+          continue
+        }
+        bodyRows.push(r)
+      }
+      setSkippedTitles(skipped)
+      const base = bodyRows.map((r, i) => {
         const payable = mapping.payable >= 0 ? parseAmount(r[mapping.payable]) : 0
         const total = payable > 0 ? payable : parseAmount(r[mapping.amount])
         const date = normDate(r[mapping.date])
@@ -196,6 +283,7 @@ export default function CardImport() {
           taxFree: false,
           type: 'opex',
           category: '',
+          projectId: '',
           fxCurrency,
           fxAmount,
           fxFee,
@@ -262,6 +350,7 @@ export default function CardImport() {
         if (r.excluded || r.invalid) return r
         const next = { ...r, type: bulkType }
         if (bulkCategory) next.category = bulkCategory
+        if (bulkProject) next.projectId = bulkProject
         return next
       }),
     )
@@ -287,6 +376,7 @@ export default function CardImport() {
       const rows = active.map((r) => {
         const fxNote = r.fxAmount > 0 ? ` (${fmtFx(r.fxCurrency, r.fxAmount)})` : ''
         const feeNote = r.fxFee > 0 ? ` · 해외수수료 ${formatKRW(r.fxFee)}원` : ''
+        const cardNote = cardLabel ? ` · ${cardLabel}` : ''
         return {
           entry_type: r.type,
           source: 'card',
@@ -297,7 +387,8 @@ export default function CardImport() {
           supply_amount: r.supply,
           vat_amount: r.vat,
           payment_method: '카드',
-          memo: `법인카드 일괄등록${fileName ? ` (${fileName})` : ''}${feeNote}`,
+          memo: `법인카드 일괄등록${fileName ? ` (${fileName})` : ''}${feeNote}${cardNote}`,
+          project_id: r.projectId || null,
           fx_currency: r.fxCurrency || '',
           fx_amount: r.fxAmount || 0,
           fx_fee: r.fxFee || 0,
@@ -320,7 +411,12 @@ export default function CardImport() {
   const loadRegistered = useCallback(async () => {
     setLoadingList(true)
     try {
-      setRegistered(await listEntries({ from: period.range.from, to: period.range.to, source: 'card' }))
+      const [cardRows, projectRows] = await Promise.all([
+        listEntries({ from: period.range.from, to: period.range.to, source: 'card' }),
+        listProjects().catch(() => []),
+      ])
+      setRegistered(cardRows)
+      setProjects(projectRows || [])
     } catch (error) {
       toast.error(error.message)
     } finally {
@@ -376,6 +472,25 @@ export default function CardImport() {
 
         {rawRows.length ? (
           <div className="mt-4 border-t border-ink-100 pt-4">
+            <div className="mb-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <Field label="카드사 양식">
+                <select className="input" value={company} onChange={(e) => applyCompany(e.target.value)}>
+                  {Object.entries(COMPANY_PRESETS).map(([key, p]) => (
+                    <option key={key} value={key}>
+                      {p.label}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="카드 구분 메모" hint="등록 내역 메모에 함께 남습니다.">
+                <input
+                  className="input"
+                  value={cardLabel}
+                  onChange={(e) => setCardLabel(e.target.value)}
+                  placeholder="예: 법카 2381"
+                />
+              </Field>
+            </div>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
               {mapSelect('date', '이용일자 열 (필수)')}
               {mapSelect('merchant', '가맹점 열 (필수)')}
@@ -425,12 +540,25 @@ export default function CardImport() {
                   </option>
                 ))}
               </select>
+              <select
+                className="input w-auto"
+                value={bulkProject}
+                onChange={(e) => setBulkProject(e.target.value)}
+              >
+                <option value="">프로젝트 유지</option>
+                {projects.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
               <button type="button" className="btn-ghost" onClick={applyBulk}>
                 일괄 적용
               </button>
               <span className="ml-auto text-xs font-medium text-ink-500">
                 등록 {active.length}건 · 합계 {formatKRW(activeTotal)}원
                 {dupCount ? ` · 중복 ${dupCount}건 제외` : ''}
+                {skippedTitles ? ` · 제목행 ${skippedTitles}건 제외` : ''}
                 {dupChecking ? ' · 중복 확인 중…' : ''}
               </span>
               <button
@@ -445,13 +573,14 @@ export default function CardImport() {
           </div>
 
           <div className="max-h-[480px] overflow-auto">
-            <table className="w-full min-w-[980px] border-collapse text-xs">
+            <table className="w-full min-w-[1060px] border-collapse text-xs">
               <thead className="sticky top-0 bg-ink-50">
                 <tr>
                   <th className="th w-10">등록</th>
                   <th className="th">이용일자</th>
                   <th className="th">가맹점</th>
                   <th className="th">외화</th>
+                  <th className="th">프로젝트</th>
                   <th className="th">유형</th>
                   <th className="th">항목</th>
                   <th className="th text-right">공급가액</th>
@@ -495,6 +624,20 @@ export default function CardImport() {
                     </td>
                     <td className="td whitespace-nowrap text-xs text-ink-600">
                       {r.fxAmount > 0 ? fmtFx(r.fxCurrency, r.fxAmount) : <span className="text-ink-300">—</span>}
+                    </td>
+                    <td className="td">
+                      <select
+                        className="input w-auto py-1 text-xs"
+                        value={r.projectId}
+                        onChange={(e) => setRow(r.key, { projectId: e.target.value })}
+                      >
+                        <option value="">미지정</option>
+                        {projects.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.name}
+                          </option>
+                        ))}
+                      </select>
                     </td>
                     <td className="td">
                       <select
