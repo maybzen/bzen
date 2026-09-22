@@ -15,7 +15,7 @@ import { deleteProject, listEntries, listProfiles, listProjects } from '../lib/a
 export default function Projects() {
   const { isAdmin, user } = useAuth()
   const toast = useToast()
-  const period = usePeriod('thisYear')
+  const period = usePeriod('thisYear', 'bzen.period.projects')
 
   const [loading, setLoading] = useState(true)
   const [projects, setProjects] = useState([])

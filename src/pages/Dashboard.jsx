@@ -29,7 +29,7 @@ import { groupByMonth, groupByProject, summarize } from '../lib/summary'
 export default function Dashboard() {
   const { isAdmin, profile } = useAuth()
   const toast = useToast()
-  const period = usePeriod('thisMonth')
+  const period = usePeriod('thisMonth', 'bzen.period.dashboard')
   const navigate = useNavigate()
 
   const [loading, setLoading] = useState(true)

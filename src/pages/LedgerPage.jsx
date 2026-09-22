@@ -26,7 +26,7 @@ export default function LedgerPage({ type, source = 'manual', title, description
   const meta = ENTRY_META[type]
   const { profile, isAdmin, user } = useAuth()
   const toast = useToast()
-  const period = usePeriod('thisMonth')
+  const period = usePeriod('thisMonth', `bzen.period.ledger.${type}.${source}`)
   const [searchParams] = useSearchParams()
 
   const [entries, setEntries] = useState([])
@@ -55,6 +55,8 @@ export default function LedgerPage({ type, source = 'manual', title, description
 
   useEffect(() => {
     if (searchParams.get('new') !== null) setFormOpen(true)
+    const q = searchParams.get('search')
+    if (q) setSearch(q)
   }, [searchParams])
 
   const load = useCallback(async () => {

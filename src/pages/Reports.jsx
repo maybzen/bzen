@@ -27,7 +27,7 @@ function allMonthKeys(entries) {
 export default function Reports() {
   const { profile } = useAuth()
   const toast = useToast()
-  const period = usePeriod('thisYear')
+  const period = usePeriod('thisYear', 'bzen.period.reports')
 
   const [loading, setLoading] = useState(true)
   const [entries, setEntries] = useState([])

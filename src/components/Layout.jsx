@@ -13,6 +13,7 @@ export const NAV = [
   { to: '/expenses', label: '운영비', icon: 'receipt', roles: ['admin'] },
   { to: '/expense-reports', label: '지출결의', icon: 'coins', roles: ['admin', 'staff'] },
   { to: '/projects', label: '프로젝트', icon: 'folder', roles: ['admin', 'staff'] },
+  { to: '/partners', label: '거래처', icon: 'building', roles: ['admin'] },
   { to: '/reports', label: '보고서', icon: 'chart', roles: ['admin'] },
   { to: '/users', label: '계정관리', icon: 'users', roles: ['admin'] },
   { to: '/settings', label: '설정', icon: 'settings', roles: ['admin', 'staff'] },
@@ -20,7 +21,7 @@ export const NAV = [
 
 const NAV_GROUPS = [
   { title: '장부', items: ['/dashboard', '/sales', '/purchases', '/expenses', '/expense-reports'] },
-  { title: '분석', items: ['/projects', '/reports'] },
+  { title: '분석', items: ['/projects', '/partners', '/reports'] },
   { title: '관리', items: ['/users', '/settings'] },
 ]
 

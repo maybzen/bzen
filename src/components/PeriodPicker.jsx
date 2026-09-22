@@ -1,20 +1,61 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { PERIOD_PRESETS } from '../lib/constants'
 import { getPeriodRange } from '../lib/format'
 import { SegmentedControl } from './ui'
 
 const ALL_KEY = 'custom'
 
+const PRESET_KEYS = [...PERIOD_PRESETS.map((p) => p.key), ALL_KEY]
+
+function isISODate(s) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(String(s || ''))
+}
+
+/** localStorage에 저장된 기간을 읽습니다. 형식이 깨졌으면 null. */
+function loadStoredPeriod(storageKey) {
+  if (!storageKey) return null
+  try {
+    const raw = window.localStorage.getItem(storageKey)
+    if (!raw) return null
+    const saved = JSON.parse(raw)
+    if (!saved || !PRESET_KEYS.includes(saved.preset)) return null
+    const custom = {
+      from: isISODate(saved?.custom?.from) ? saved.custom.from : '',
+      to: isISODate(saved?.custom?.to) ? saved.custom.to : '',
+    }
+    return { preset: saved.preset, custom }
+  } catch {
+    return null
+  }
+}
+
 /**
  * 기간 상태 훅.
  * range.from / range.to (문자열)을 의존성으로 쓰면 안전합니다.
+ * storageKey를 넘기면 마지막에 본 기간을 localStorage에 저장하고,
+ * 다음에 페이지를 열 때 그대로 복원합니다. (페이지마다 다른 키 사용)
  */
-export function usePeriod(initial = 'thisMonth') {
-  const [preset, setPreset] = useState(initial)
+export function usePeriod(initial = 'thisMonth', storageKey = null) {
+  const [preset, setPreset] = useState(
+    () => loadStoredPeriod(storageKey)?.preset || initial,
+  )
   const [custom, setCustom] = useState(() => {
+    const stored = loadStoredPeriod(storageKey)
+    if (stored && (stored.preset === ALL_KEY || (stored.custom.from && stored.custom.to))) {
+      return stored.custom
+    }
     const base = getPeriodRange(initial) || getPeriodRange('thisMonth')
     return { from: base.from, to: base.to }
   })
+
+  useEffect(() => {
+    if (!storageKey) return
+    try {
+      window.localStorage.setItem(storageKey, JSON.stringify({ preset, custom }))
+    } catch {
+      /* 저장 공간이 없어도 앱은 그대로 동작합니다. */
+    }
+  }, [storageKey, preset, custom])
 
   const range = useMemo(() => {
     if (preset === ALL_KEY) {

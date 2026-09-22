@@ -7,6 +7,7 @@ import { AuthProvider, useAuth } from './auth/AuthContext'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import LedgerPage from './pages/LedgerPage'
+import Partners from './pages/Partners'
 import Projects from './pages/Projects'
 import ProjectDetail from './pages/ProjectDetail'
 import Reports from './pages/Reports'
@@ -132,6 +133,15 @@ export default function App() {
 
             <Route path="/projects" element={<Projects />} />
             <Route path="/projects/:id" element={<ProjectDetail />} />
+
+            <Route
+              path="/partners"
+              element={
+                <Guard adminOnly>
+                  <Partners />
+                </Guard>
+              }
+            />
 
             <Route
               path="/reports"
