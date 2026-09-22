@@ -183,6 +183,8 @@ export default function CardImport() {
   const [rowEdits, setRowEdits] = useState({})
   const [savingId, setSavingId] = useState(null)
   const [removing, setRemoving] = useState(null)
+  const [removingMany, setRemovingMany] = useState(null)
+  const [selected, setSelected] = useState({})
   const [busy, setBusy] = useState(false)
   const [viewerFiles, setViewerFiles] = useState(null)
 
@@ -516,6 +518,48 @@ export default function CardImport() {
       setReloadKey((k) => k + 1)
     } catch (error) {
       toast.error(error.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const selectedIds = useMemo(
+    () => registered.filter((e) => selected[e.id]).map((e) => e.id),
+    [registered, selected],
+  )
+  const selectedSum = useMemo(
+    () =>
+      registered
+        .filter((e) => selected[e.id])
+        .reduce((a, e) => a + Number(e.total_amount || 0), 0),
+    [registered, selected],
+  )
+
+  const toggleSelectAll = (on) => {
+    if (on) {
+      const next = {}
+      for (const e of registered) next[e.id] = true
+      setSelected(next)
+    } else {
+      setSelected({})
+    }
+  }
+
+  const handleDeleteMany = async () => {
+    if (!removingMany?.length) return
+    setBusy(true)
+    try {
+      for (const id of removingMany) {
+        // eslint-disable-next-line no-await-in-loop
+        await deleteEntry(id)
+      }
+      toast.success(`${removingMany.length}건이 삭제되었습니다.`)
+      setRemovingMany(null)
+      setSelected({})
+      setReloadKey((k) => k + 1)
+    } catch (error) {
+      toast.error(error.message)
+      setReloadKey((k) => k + 1)
     } finally {
       setBusy(false)
     }
@@ -886,10 +930,42 @@ export default function CardImport() {
                   ))
               })()}
             </div>
+            {selectedIds.length && isAdmin ? (
+              <div className="flex flex-wrap items-center gap-2 border-b border-ink-200 bg-brand-50/50 px-4 py-2.5 text-xs">
+                <span className="font-semibold text-ink-800">
+                  {selectedIds.length}건 선택됨 (합계 {formatKRW(selectedSum)}원)
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setRemovingMany(selectedIds)}
+                  className="font-bold text-loss hover:underline"
+                >
+                  선택 삭제
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelected({})}
+                  className="font-semibold text-ink-500 hover:underline"
+                >
+                  선택 해제
+                </button>
+              </div>
+            ) : null}
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[1080px] border-collapse text-xs">
+              <table className="w-full min-w-[1140px] border-collapse text-xs">
                 <thead className="bg-ink-50/70">
                   <tr>
+                    {isAdmin ? (
+                      <th className="th w-10 text-center">
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 accent-brand-600"
+                          checked={registered.length > 0 && selectedIds.length === registered.length}
+                          onChange={(e) => toggleSelectAll(e.target.checked)}
+                          aria-label="전체 선택"
+                        />
+                      </th>
+                    ) : null}
                     <th className="th">이용일자</th>
                     <th className="th">가맹점</th>
                     <th className="th">프로젝트</th>
@@ -913,6 +989,19 @@ export default function CardImport() {
                       edit.cardUser !== undefined ? edit.cardUser : memoUser(entry.memo)
                     return (
                       <tr key={entry.id} className={dirty ? 'bg-brand-50/40' : undefined}>
+                        {isAdmin ? (
+                          <td className="td text-center">
+                            <input
+                              type="checkbox"
+                              className="h-4 w-4 accent-brand-600"
+                              checked={Boolean(selected[entry.id])}
+                              onChange={(e) =>
+                                setSelected((m) => ({ ...m, [entry.id]: e.target.checked || undefined }))
+                              }
+                              aria-label="선택"
+                            />
+                          </td>
+                        ) : null}
                         <td className="td">
                           <input
                             type="date"
@@ -1058,6 +1147,19 @@ export default function CardImport() {
         }
         onClose={() => setRemoving(null)}
         onConfirm={handleDelete}
+      />
+
+      <ConfirmDialog
+        open={Boolean(removingMany?.length)}
+        busy={busy}
+        title="선택한 카드 내역을 삭제하시겠습니까?"
+        message={
+          removingMany?.length
+            ? `${removingMany.length}건을 삭제합니다.\n삭제하면 되돌릴 수 없습니다.`
+            : ''
+        }
+        onClose={() => setRemovingMany(null)}
+        onConfirm={handleDeleteMany}
       />
 
       <AttachmentModal
