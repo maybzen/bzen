@@ -14,7 +14,7 @@ export const NAV = [
   { to: '/expenses', label: '운영비', icon: 'receipt', perm: 'expenses' },
   { to: '/expense-reports', label: '지출결의', icon: 'coins', base: true },
   { to: '/projects', label: '프로젝트', icon: 'folder', base: true },
-  { to: '/partners', label: '거래처', icon: 'building', perm: 'partners' },
+  { to: '/partners', label: '거래처', icon: 'building', base: true },
   { to: '/reports', label: '보고서', icon: 'chart', perm: 'reports' },
   { to: '/users', label: '계정관리', icon: 'users', adminOnly: true },
   { to: '/settings', label: '설정', icon: 'settings', base: true },

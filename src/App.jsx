@@ -140,14 +140,7 @@ export default function App() {
             <Route path="/projects" element={<Projects />} />
             <Route path="/projects/:id" element={<ProjectDetail />} />
 
-            <Route
-              path="/partners"
-              element={
-                <Guard perm="partners">
-                  <Partners />
-                </Guard>
-              }
-            />
+            <Route path="/partners" element={<Partners />} />
 
             <Route
               path="/reports"

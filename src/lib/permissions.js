@@ -9,9 +9,9 @@ import { getSettings } from './api'
  */
 export const STAFF_DEFAULT_PERMS = ['partners']
 
-/** 토글로 관리하는 메뉴 정의 (설정·계정관리 화면과 공유) */
+/** 토글로 관리하는 메뉴 정의 (설정·계정관리 화면과 공유)
+ *  - 고정 공통(대시보드·지출결의·거래처·프로젝트·설정)은 여기서 뺍니다. */
 export const PERM_DEFS = [
-  { key: 'partners', label: '거래처' },
   { key: 'sales', label: '매출' },
   { key: 'purchases', label: '매입' },
   { key: 'expenses', label: '운영비' },
@@ -19,6 +19,9 @@ export const PERM_DEFS = [
 ]
 
 export const PERM_LABEL = Object.fromEntries(PERM_DEFS.map((p) => [p.key, p.label]))
+
+/** 고정 공통 메뉴: 역할·권한과 무관하게 항상 보입니다. */
+export const STAFF_BASE_LABEL = '대시보드·지출결의·거래처·프로젝트·설정'
 
 let cached = null
 

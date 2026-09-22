@@ -265,16 +265,21 @@ export default function Users() {
                     <td className="td">
                       {profile.role === 'admin' ? (
                         <span className="text-xs text-ink-400">전체</span>
-                      ) : (overrides[profile.id] || []).length ? (
-                        <span className="flex flex-wrap gap-1">
-                          {(overrides[profile.id] || []).map((key) => (
-                            <span key={key} className="chip bg-brand-50 text-brand-700">
-                              {PERM_LABEL[key] || key}
-                            </span>
-                          ))}
-                        </span>
                       ) : (
-                        <span className="text-xs text-ink-400">기본</span>
+                        (() => {
+                          const extra = (overrides[profile.id] || []).filter((k) => PERM_LABEL[k])
+                          return extra.length ? (
+                            <span className="flex flex-wrap gap-1">
+                              {extra.map((key) => (
+                                <span key={key} className="chip bg-brand-50 text-brand-700">
+                                  {PERM_LABEL[key]}
+                                </span>
+                              ))}
+                            </span>
+                          ) : (
+                            <span className="text-xs text-ink-400">기본</span>
+                          )
+                        })()
                       )}
                     </td>
                     <td className="td">
@@ -343,9 +348,9 @@ export default function Users() {
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <InlineAlert tone="info">
-          <strong className="font-semibold">권한 안내</strong> — 관리자는 전체 메뉴를 봅니다. 직원은 기본 메뉴 +
-          설정에서 정한 전체 메뉴 + 계정별로 추가한 메뉴를 봅니다. 장부에서는 등록·수정은 가능하고 삭제는
-          관리자만 가능합니다.
+          <strong className="font-semibold">권한 안내</strong> — 전 직원은 대시보드·지출결의·거래처·프로젝트·설정이
+          공통으로 보입니다. 추가 메뉴(매출·매입·운영비·보고서)는 설정 또는 계정별로 허용할 수 있습니다.
+          장부에서는 등록·수정은 가능하고 삭제는 관리자만 가능합니다.
         </InlineAlert>
         <InlineAlert tone="warn">
           마지막 관리자 계정은 권한을 내리거나 삭제할 수 없습니다. 관리자 계정을 최소 1개 유지해 주세요.
