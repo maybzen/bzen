@@ -8,7 +8,7 @@ import { callAdminFn, getSetupStatus } from '../lib/api'
 import { APP_NAME, COMPANY_EN, DEFAULT_COMPANY } from '../lib/constants'
 
 export default function Login() {
-  const { signIn, user } = useAuth()
+  const { signIn, signUp, user } = useAuth()
   const toast = useToast()
   const navigate = useNavigate()
 
@@ -21,6 +21,7 @@ export default function Login() {
   const [fullName, setFullName] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [signupSent, setSignupSent] = useState(false)
 
   useEffect(() => {
     let alive = true
@@ -57,6 +58,37 @@ export default function Login() {
     } finally {
       setBusy(false)
     }
+  }
+
+  const handleSignup = async (e) => {
+    e.preventDefault()
+    setError('')
+    if (!fullName.trim()) return setError('이름을 입력해 주세요.')
+    if (password.length < 6) return setError('비밀번호는 6자 이상이어야 합니다.')
+    if (password !== confirm) return setError('비밀번호가 서로 다릅니다.')
+
+    setBusy(true)
+    try {
+      const hasSession = await signUp(email, password, fullName)
+      if (hasSession) {
+        // 바로 로그인됨 → 비활성 직원이므로 승인 대기 화면으로 이동
+        toast.info('가입되었습니다. 관리자 승인 후 사용할 수 있습니다.')
+        navigate('/dashboard', { replace: true })
+      } else {
+        // 이메일 인증이 켜진 경우
+        setSignupSent(true)
+      }
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const switchMode = (next) => {
+    setError('')
+    setSignupSent(false)
+    setMode(next)
   }
 
   const handleSetup = async (e) => {
@@ -152,27 +184,39 @@ export default function Login() {
           ) : (
             <>
               <h2 className="text-xl font-extrabold tracking-tight text-ink-900">
-                {mode === 'setup' ? '최초 관리자 계정 만들기' : '로그인'}
+                {mode === 'setup' ? '최초 관리자 계정 만들기' : mode === 'signup' ? '직원 가입' : '로그인'}
               </h2>
               <p className="mt-1.5 text-sm text-ink-500">
                 {mode === 'setup'
                   ? '이 시스템을 관리할 첫 번째 계정입니다. 이후 직원 계정은 관리자가 추가합니다.'
-                  : '등록된 계정으로 로그인해 주세요.'}
+                  : mode === 'signup'
+                    ? '가입하면 직원 계정으로 등록되고, 관리자 승인 후 사용할 수 있습니다.'
+                    : '등록된 계정으로 로그인해 주세요.'}
               </p>
 
               {mode === 'setup' ? (
                 <div className="mt-4">
                   <InlineAlert tone="warn">
                     입력한 정보는 안전하게 저장됩니다. 비밀번호는 6자 이상으로 정해 주세요.
+                    직원 계정은 로그인 화면에서 직접 가입하며, 승인 전까지 사용할 수 없습니다.
+                  </InlineAlert>
+                </div>
+              ) : null}
+
+              {signupSent ? (
+                <div className="mt-4">
+                  <InlineAlert tone="info">
+                    가입 메일을 보냈습니다. 메일에서 인증을 완료한 뒤 로그인하면, 관리자 승인 대기 화면이
+                    나타납니다. 승인되면 관리자가 알려줍니다.
                   </InlineAlert>
                 </div>
               ) : null}
 
               <form
                 className="mt-6 flex flex-col gap-4"
-                onSubmit={mode === 'setup' ? handleSetup : handleLogin}
+                onSubmit={mode === 'setup' ? handleSetup : mode === 'signup' ? handleSignup : handleLogin}
               >
-                {mode === 'setup' ? (
+                {mode !== 'login' ? (
                   <Field label="이름" required>
                     <input
                       className="input"
@@ -209,7 +253,7 @@ export default function Login() {
                   />
                 </Field>
 
-                {mode === 'setup' ? (
+                {mode !== 'login' ? (
                   <Field label="비밀번호 확인" required>
                     <input
                       type="password"
@@ -227,16 +271,35 @@ export default function Login() {
 
                 <button type="submit" className="btn-primary mt-1 py-3" disabled={busy}>
                   {busy ? <Spinner size={16} /> : <Icon name="lock" size={16} />}
-                  {busy ? '처리 중…' : mode === 'setup' ? '계정 만들기' : '로그인'}
+                  {busy ? '처리 중…' : mode === 'setup' ? '계정 만들기' : mode === 'signup' ? '가입하기' : '로그인'}
                 </button>
               </form>
+
+              {mode === 'login' ? (
+                <button
+                  type="button"
+                  onClick={() => switchMode('signup')}
+                  className="mt-4 w-full text-center text-xs font-medium text-ink-500 transition hover:text-ink-800"
+                >
+                  계정이 없으신가요? 직원 가입하기
+                </button>
+              ) : null}
+
+              {mode === 'signup' ? (
+                <button
+                  type="button"
+                  onClick={() => switchMode('login')}
+                  className="mt-4 w-full text-center text-xs font-medium text-ink-500 transition hover:text-ink-800"
+                >
+                  이미 계정이 있습니다 → 로그인
+                </button>
+              ) : null}
 
               {mode === 'setup' ? (
                 <button
                   type="button"
                   onClick={() => {
-                    setError('')
-                    setMode('login')
+                    switchMode('login')
                   }}
                   className="mt-4 w-full text-center text-xs font-medium text-ink-500 transition hover:text-ink-800"
                 >

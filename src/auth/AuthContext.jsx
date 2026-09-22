@@ -91,6 +91,17 @@ export function AuthProvider({ children }) {
     return true
   }, [])
 
+  const signUp = useCallback(async (email, password, fullName) => {
+    const { data, error } = await supabase.auth.signUp({
+      email: String(email || '').trim(),
+      password: String(password || ''),
+      options: { data: { full_name: String(fullName || '').trim() } },
+    })
+    if (error) throw new Error(translateAuthError(error.message))
+    // 이메일 인증이 켜져 있으면 세션이 없고, 꺼져 있으면 바로 세션이 생깁니다.
+    return Boolean(data.session)
+  }, [])
+
   const signOut = useCallback(async () => {
     await supabase.auth.signOut()
     setProfile(null)
@@ -115,6 +126,7 @@ export function AuthProvider({ children }) {
       isActive: profile?.active === true,
       displayName: profile?.full_name || profile?.email || '',
       signIn,
+      signUp,
       signOut,
       refreshProfile,
       setProfile,
