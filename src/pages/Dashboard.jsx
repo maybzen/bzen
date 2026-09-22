@@ -205,8 +205,9 @@ export default function Dashboard() {
               label="전체 거래 건수"
               value={stats.count}
               unit="건"
-              desc={period.range.label}
+              desc={`매출 ${stats.sale.count} · 매입 ${stats.purchase.count} · 운영비 ${stats.opex.count}`}
               tone="ink"
+              to={isAdmin || perms.includes('reports') ? '/reports' : undefined}
             />
           </div>
 
@@ -404,14 +405,14 @@ export default function Dashboard() {
   )
 }
 
-function MiniStat({ label, value, unit = '원', desc, tone = 'ink' }) {
+function MiniStat({ label, value, unit = '원', desc, tone = 'ink', to }) {
   const tones = {
     brand: 'text-brand-700 bg-brand-50',
     rose: 'text-rose-700 bg-rose-50',
     ink: 'text-ink-700 bg-ink-100',
   }
-  return (
-    <div className="flex items-center gap-3 rounded-xl border border-ink-200 bg-white px-4 py-3">
+  const body = (
+    <>
       <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${tones[tone]}`}>
         <Icon name="chart" size={16} />
       </span>
@@ -425,7 +426,18 @@ function MiniStat({ label, value, unit = '원', desc, tone = 'ink' }) {
         </p>
         {desc ? <p className="mt-0.5 truncate text-[11px] text-ink-400">{desc}</p> : null}
       </div>
-    </div>
+    </>
+  )
+  if (!to) {
+    return <div className="flex items-center gap-3 rounded-xl border border-ink-200 bg-white px-4 py-3">{body}</div>
+  }
+  return (
+    <Link
+      to={to}
+      className="flex items-center gap-3 rounded-xl border border-ink-200 bg-white px-4 py-3 transition hover:shadow-pop"
+    >
+      {body}
+    </Link>
   )
 }
 
