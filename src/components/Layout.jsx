@@ -27,9 +27,14 @@ const NAV_GROUPS = [
   { title: '관리', items: ['/users', '/settings'] },
 ]
 
-function Brand({ company, compact = false }) {
+function Brand({ company, compact = false, onHome }) {
   return (
-    <div className="flex items-center gap-2.5">
+    <button
+      type="button"
+      onClick={onHome}
+      title="대시보드로 이동"
+      className="flex w-full items-center gap-2.5 rounded-xl p-1 text-left transition hover:bg-white/5"
+    >
       <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-brand-500 to-brand-800 text-[13px] font-black tracking-tight text-white shadow-sm">
         BZ
       </span>
@@ -41,7 +46,7 @@ function Brand({ company, compact = false }) {
           </span>
         </span>
       ) : null}
-    </div>
+    </button>
   )
 }
 
@@ -119,7 +124,14 @@ export default function Layout() {
   const sidebar = (onNavigate) => (
     <div className="flex h-full flex-col bg-ink-900">
       <div className="px-5 pb-5 pt-5">
-        <Brand company={company} />
+        <Brand
+          company={company}
+          onHome={() => {
+            onNavigate?.()
+            if (location.pathname !== '/dashboard') navigate('/dashboard')
+            else window.location.reload()
+          }}
+        />
       </div>
       <div className="flex-1 overflow-y-auto px-3 pb-4">
         {NAV_GROUPS.map((group) => {
