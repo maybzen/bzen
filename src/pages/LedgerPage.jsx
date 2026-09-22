@@ -75,7 +75,9 @@ export default function LedgerPage({ type, source = 'manual', title, description
           from: period.range.from,
           to: period.range.to,
           types: [type],
-          source,
+          // 매출·매입·운영비 장부는 카드 일괄등록분(source='card')까지 함께 보여줍니다.
+          // 지출결의(source='expense_report')는 그대로 분리 표시합니다.
+          ...(source !== 'manual' ? { source } : {}),
           projectId: projectFilter || undefined,
           search: debounced,
         }),
