@@ -1,9 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Icon from '../components/Icon'
 import PeriodPicker, { usePeriod } from '../components/PeriodPicker'
-import EntryFormModal from '../components/EntryFormModal'
-import EntryTable from '../components/EntryTable'
-import { AttachmentModal } from '../components/Attachments'
+import { AttachmentCell, AttachmentModal } from '../components/Attachments'
 import { useToast } from '../components/Toast'
 import { ConfirmDialog, EmptyState, Field, InlineAlert, LoadingBlock, PageHeader, StatCard } from '../components/ui'
 import { useAuth } from '../auth/AuthContext'
@@ -17,6 +15,7 @@ import {
   listEntries,
   listProfiles,
   listProjects,
+  updateEntry,
 } from '../lib/api'
 
 const TYPE_OPTIONS = ['purchase', 'opex']
@@ -181,11 +180,65 @@ export default function CardImport() {
   const [regProjects, setRegProjects] = useState([])
   const [regProfiles, setRegProfiles] = useState([])
   const [regAttachments, setRegAttachments] = useState({})
-  const [formOpen, setFormOpen] = useState(false)
-  const [editing, setEditing] = useState(null)
+  const [rowEdits, setRowEdits] = useState({})
+  const [savingId, setSavingId] = useState(null)
   const [removing, setRemoving] = useState(null)
   const [busy, setBusy] = useState(false)
   const [viewerFiles, setViewerFiles] = useState(null)
+
+  const setCell = (id, patch) => {
+    setRowEdits((m) => ({ ...m, [id]: { ...(m[id] || {}), ...patch } }))
+  }
+
+  const cancelRow = (id) => {
+    setRowEdits((m) => {
+      const next = { ...m }
+      delete next[id]
+      return next
+    })
+  }
+
+  const memoUser = (memo) => {
+    const m = String(memo || '').match(/이용자\s+([^·]+)/)
+    return m ? m[1].trim() : ''
+  }
+
+  const withMemoUser = (memo, user) => {
+    const base = String(memo || '').replace(/\s*·\s*이용자\s+[^·]*/, '').trim()
+    const u = String(user || '').trim()
+    return u ? `${base} · 이용자 ${u}` : base
+  }
+
+  const saveRow = async (entry) => {
+    const patch = rowEdits[entry.id]
+    if (!patch) return
+    const work = { ...entry, ...patch }
+    if (!work.entry_date || !String(work.counterparty || '').trim()) {
+      toast.error('이용일자와 가맹점을 입력해 주세요.')
+      return
+    }
+    setSavingId(entry.id)
+    try {
+      const payload = {
+        entry_date: work.entry_date,
+        counterparty: String(work.counterparty).trim(),
+        project_id: work.project_id || null,
+        entry_type: work.entry_type,
+        category: work.category || '',
+        supply_amount: Number(work.supply_amount) || 0,
+        vat_amount: Number(work.vat_amount) || 0,
+        memo: withMemoUser(entry.memo, patch.cardUser !== undefined ? patch.cardUser : memoUser(entry.memo)),
+      }
+      const saved = await updateEntry(entry.id, payload)
+      setRegistered((rows) => rows.map((r) => (r.id === entry.id ? { ...r, ...saved } : r)))
+      cancelRow(entry.id)
+      toast.success('저장되었습니다.')
+    } catch (e) {
+      toast.error(e.message)
+    } finally {
+      setSavingId(null)
+    }
+  }
 
   const headers = useMemo(
     () => (hasHeader ? rawRows[headerRow] || [] : []),
@@ -833,20 +886,155 @@ export default function CardImport() {
                   ))
               })()}
             </div>
-            <EntryTable
-              entries={registered}
-              projects={regProjects}
-              profiles={regProfiles}
-              attachmentsByEntry={regAttachments}
-              showType
-              canEdit
-              onEdit={(entry) => {
-                setEditing({ ...entry, attachments: regAttachments[entry.id] || [] })
-                setFormOpen(true)
-              }}
-              onDelete={isAdmin ? setRemoving : undefined}
-              onOpenAttachments={setViewerFiles}
-            />
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[1080px] border-collapse text-xs">
+                <thead className="bg-ink-50/70">
+                  <tr>
+                    <th className="th">이용일자</th>
+                    <th className="th">가맹점</th>
+                    <th className="th">프로젝트</th>
+                    <th className="th">유형</th>
+                    <th className="th">항목</th>
+                    <th className="th">이용자</th>
+                    <th className="th text-right">공급가액</th>
+                    <th className="th text-right">부가세</th>
+                    <th className="th text-right">합계</th>
+                    <th className="th text-right">서류</th>
+                    <th className="th text-right">저장</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-ink-100">
+                  {registered.map((entry) => {
+                    const edit = rowEdits[entry.id] || {}
+                    const work = { ...entry, ...edit }
+                    const dirty = Object.keys(edit).length > 0
+                    const saving = savingId === entry.id
+                    const cardUser =
+                      edit.cardUser !== undefined ? edit.cardUser : memoUser(entry.memo)
+                    return (
+                      <tr key={entry.id} className={dirty ? 'bg-brand-50/40' : undefined}>
+                        <td className="td">
+                          <input
+                            type="date"
+                            className="input w-auto py-1 text-xs"
+                            value={work.entry_date || ''}
+                            onChange={(e) => setCell(entry.id, { entry_date: e.target.value })}
+                          />
+                        </td>
+                        <td className="td min-w-[140px]">
+                          <input
+                            className="input py-1 text-xs"
+                            value={work.counterparty || ''}
+                            onChange={(e) => setCell(entry.id, { counterparty: e.target.value })}
+                          />
+                        </td>
+                        <td className="td">
+                          <select
+                            className="input w-auto py-1 text-xs"
+                            value={work.project_id || ''}
+                            onChange={(e) => setCell(entry.id, { project_id: e.target.value })}
+                          >
+                            <option value="">미지정</option>
+                            {regProjects.map((p) => (
+                              <option key={p.id} value={p.id}>
+                                {p.name}
+                              </option>
+                            ))}
+                          </select>
+                        </td>
+                        <td className="td">
+                          <select
+                            className="input w-auto py-1 text-xs"
+                            value={work.entry_type}
+                            onChange={(e) => setCell(entry.id, { entry_type: e.target.value, category: '' })}
+                          >
+                            <option value="purchase">매입</option>
+                            <option value="opex">운영비</option>
+                          </select>
+                        </td>
+                        <td className="td">
+                          <select
+                            className="input w-auto py-1 text-xs"
+                            value={work.category || ''}
+                            onChange={(e) => setCell(entry.id, { category: e.target.value })}
+                          >
+                            <option value="">미분류</option>
+                            {(CATEGORIES[work.entry_type] || []).map((c) => (
+                              <option key={c} value={c}>
+                                {c}
+                              </option>
+                            ))}
+                          </select>
+                        </td>
+                        <td className="td">
+                          <input
+                            className="input w-20 py-1 text-xs"
+                            value={cardUser}
+                            onChange={(e) => setCell(entry.id, { cardUser: e.target.value })}
+                            placeholder="ALL"
+                          />
+                        </td>
+                        <td className="td num">
+                          <input
+                            type="number"
+                            className="input w-24 py-1 text-right text-xs"
+                            value={work.supply_amount ?? 0}
+                            onChange={(e) => setCell(entry.id, { supply_amount: Number(e.target.value) || 0 })}
+                          />
+                        </td>
+                        <td className="td num">
+                          <input
+                            type="number"
+                            className="input w-24 py-1 text-right text-xs"
+                            value={work.vat_amount ?? 0}
+                            onChange={(e) => setCell(entry.id, { vat_amount: Number(e.target.value) || 0 })}
+                          />
+                        </td>
+                        <td className="td num font-semibold">
+                          {formatKRW(Number(work.supply_amount || 0) + Number(work.vat_amount || 0))}
+                        </td>
+                        <td className="td num">
+                          <AttachmentCell
+                            attachments={regAttachments[entry.id] || []}
+                            onOpen={setViewerFiles}
+                          />
+                        </td>
+                        <td className="td num whitespace-nowrap">
+                          {dirty ? (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => saveRow(entry)}
+                                disabled={saving}
+                                className="mr-2 text-xs font-bold text-brand-700 hover:underline disabled:opacity-50"
+                              >
+                                {saving ? '저장 중' : '저장'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => cancelRow(entry.id)}
+                                disabled={saving}
+                                className="text-xs font-semibold text-ink-400 hover:underline disabled:opacity-50"
+                              >
+                                취소
+                              </button>
+                            </>
+                          ) : isAdmin ? (
+                            <button
+                              type="button"
+                              onClick={() => setRemoving(entry)}
+                              className="text-xs font-semibold text-loss hover:underline"
+                            >
+                              삭제
+                            </button>
+                          ) : null}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
           </>
         ) : (
           <EmptyState
@@ -856,22 +1044,6 @@ export default function CardImport() {
           />
         )}
       </section>
-
-      <EntryFormModal
-        open={formOpen}
-        onClose={() => {
-          setFormOpen(false)
-          setEditing(null)
-        }}
-        onSaved={() => setReloadKey((k) => k + 1)}
-        entryType={editing?.entry_type || 'opex'}
-        source="card"
-        initial={editing}
-        projects={regProjects}
-        profiles={regProfiles}
-        isAdmin={isAdmin}
-        userId={user?.id}
-      />
 
       <ConfirmDialog
         open={Boolean(removing)}
