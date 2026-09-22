@@ -184,6 +184,12 @@ export default function CardImport() {
   const [savingId, setSavingId] = useState(null)
   const [regSort, setRegSort] = useState('date-desc')
   const [regProjectFilter, setRegProjectFilter] = useState('')
+  const [regCardFilter, setRegCardFilter] = useState('')
+
+  const cardOf = (entry) => {
+    const m = String(entry.memo || '').match(/법카\s*([\d-]+)/)
+    return m ? `법카 ${m[1]}` : '기타'
+  }
   const [removing, setRemoving] = useState(null)
   const [removingMany, setRemovingMany] = useState(null)
   const [selected, setSelected] = useState({})
@@ -527,9 +533,13 @@ export default function CardImport() {
 
   const visibleRegistered = useMemo(() => {
     const rows = registered.filter((e) => {
-      if (!regProjectFilter) return true
-      if (regProjectFilter === '__none') return !e.project_id
-      return e.project_id === regProjectFilter
+      if (regProjectFilter) {
+        if (regProjectFilter === '__none') {
+          if (e.project_id) return false
+        } else if (e.project_id !== regProjectFilter) return false
+      }
+      if (regCardFilter && cardOf(e) !== regCardFilter) return false
+      return true
     })
     rows.sort((a, b) =>
       regSort === 'date-asc'
@@ -537,7 +547,7 @@ export default function CardImport() {
         : String(b.entry_date).localeCompare(String(a.entry_date)),
     )
     return rows
-  }, [registered, regProjectFilter, regSort])
+  }, [registered, regProjectFilter, regCardFilter, regSort])
 
   const selectedIds = useMemo(
     () => visibleRegistered.filter((e) => selected[e.id]).map((e) => e.id),
@@ -926,6 +936,16 @@ export default function CardImport() {
                     {p.name}
                   </option>
                 ))}
+              </select>
+              <select
+                className="input sm:w-44"
+                value={regCardFilter}
+                onChange={(e) => setRegCardFilter(e.target.value)}
+              >
+                <option value="">전체 카드</option>
+                <option value="법카 2381">법카 2381</option>
+                <option value="법카 3842">법카 3842</option>
+                <option value="기타">기타</option>
               </select>
               <button
                 type="button"
