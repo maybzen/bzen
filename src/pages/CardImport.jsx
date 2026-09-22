@@ -7,7 +7,7 @@ import { EmptyState, Field, InlineAlert, LoadingBlock, PageHeader, StatCard } fr
 import { useAuth } from '../auth/AuthContext'
 import { CATEGORIES, ENTRY_META } from '../lib/constants'
 import { parseAmount, parseCSV } from '../lib/csv'
-import { formatKRW } from '../lib/format'
+import { formatKRW, toISODate } from '../lib/format'
 import { createEntries, listEntries } from '../lib/api'
 
 const TYPE_OPTIONS = ['purchase', 'opex']
@@ -85,18 +85,29 @@ const HEADER_KEYWORDS = {
   merchant: [/가맹점/, /상호/, /이용처/, /거래처/, /가맹/, /상점/, /merchant/i],
   amount: [/이용금액/, /청구금액/, /합계/, /금액/, /이용대금/, /결제금액/, /amount/i],
   memo: [/적요/, /내역/, /비고/, /메모/, /내용/, /할부/],
+  currency: [/통화/, /통화코드/, /currency/i],
+  foreign: [/현지/, /현지금액/, /외화/, /local/i],
+  fee: [/수수료/, /fee/i],
+  payable: [/납부/, /청구예정/, /결제예정/, /payable/i],
 }
 
 function autoMap(headers) {
-  const out = { date: -1, merchant: -1, amount: -1, memo: -1 }
+  const out = { date: -1, merchant: -1, amount: -1, memo: -1, currency: -1, foreign: -1, fee: -1, payable: -1 }
+  const keys = Object.keys(HEADER_KEYWORDS)
   headers.forEach((h, i) => {
     const t = String(h || '')
-    if (out.date < 0 && HEADER_KEYWORDS.date.some((re) => re.test(t))) out.date = i
-    if (out.merchant < 0 && HEADER_KEYWORDS.merchant.some((re) => re.test(t))) out.merchant = i
-    if (out.amount < 0 && HEADER_KEYWORDS.amount.some((re) => re.test(t))) out.amount = i
-    if (out.memo < 0 && HEADER_KEYWORDS.memo.some((re) => re.test(t))) out.memo = i
+    for (const key of keys) {
+      if (out[key] < 0 && HEADER_KEYWORDS[key].some((re) => re.test(t))) out[key] = i
+    }
   })
   return out
+}
+
+/** 외화 표기: USD 12.99 */
+function fmtFx(currency, amount) {
+  if (!amount) return ''
+  const n = Number(amount) || 0
+  return `${currency || ''} ${n.toLocaleString('en-US', { maximumFractionDigits: 2 })}`.trim()
 }
 
 export default function CardImport() {
@@ -107,7 +118,7 @@ export default function CardImport() {
   const [fileName, setFileName] = useState('')
   const [rawRows, setRawRows] = useState([])
   const [hasHeader, setHasHeader] = useState(true)
-  const [mapping, setMapping] = useState({ date: -1, merchant: -1, amount: -1, memo: -1 })
+  const [mapping, setMapping] = useState({ date: -1, merchant: -1, amount: -1, memo: -1, currency: -1, foreign: -1, fee: -1, payable: -1 })
   const [parsing, setParsing] = useState(false)
   const [preview, setPreview] = useState([])
   const [dupChecking, setDupChecking] = useState(false)
@@ -154,7 +165,7 @@ export default function CardImport() {
     }
   }
 
-  // 미리보기 생성 + 중복 검사
+  // 미리보기 생성 + 중복 검사 + 지난 분류 기억
   useEffect(() => {
     if (!dataRows.length || mapping.date < 0 || mapping.merchant < 0 || mapping.amount < 0) {
       setPreview([])
@@ -164,10 +175,14 @@ export default function CardImport() {
     setDupChecking(true)
     ;(async () => {
       const base = dataRows.map((r, i) => {
-        const total = parseAmount(r[mapping.amount])
+        const payable = mapping.payable >= 0 ? parseAmount(r[mapping.payable]) : 0
+        const total = payable > 0 ? payable : parseAmount(r[mapping.amount])
         const date = normDate(r[mapping.date])
         const merchant = cellText(r[mapping.merchant])
         const memo = mapping.memo >= 0 ? cellText(r[mapping.memo]) : ''
+        const fxCurrency = mapping.currency >= 0 ? cellText(r[mapping.currency]).toUpperCase() : ''
+        const fxAmount = mapping.foreign >= 0 ? Number(String(r[mapping.foreign] ?? '').replace(/[^0-9.-]/g, '')) || 0 : 0
+        const fxFee = mapping.fee >= 0 ? parseAmount(r[mapping.fee]) : 0
         const invalid = !date || !merchant || !Number.isFinite(total)
         const { supply, vat } = splitVat(total || 0)
         return {
@@ -181,6 +196,10 @@ export default function CardImport() {
           taxFree: false,
           type: 'opex',
           category: '',
+          fxCurrency,
+          fxAmount,
+          fxFee,
+          autoFilled: false,
           excluded: invalid,
           invalid,
           dup: false,
@@ -188,12 +207,27 @@ export default function CardImport() {
       })
       const dates = base.map((r) => r.date).filter(Boolean).sort()
       let dupSet = new Set()
+      let merchantMap = new Map()
       if (dates.length) {
         try {
-          const existing = await listEntries({ from: dates[0], to: dates[dates.length - 1], maxRows: 20000 })
+          const [existing, history] = await Promise.all([
+            listEntries({ from: dates[0], to: dates[dates.length - 1], maxRows: 20000 }),
+            listEntries({
+              from: toISODate(new Date(new Date().setMonth(new Date().getMonth() - 6))),
+              to: toISODate(new Date()),
+              maxRows: 5000,
+            }).catch(() => []),
+          ])
           dupSet = new Set(
             existing.map((x) => `${x.entry_date}|${(x.counterparty || '').trim()}|${Number(x.total_amount || 0)}`),
           )
+          // 최근 6개월: 같은 거래처의 마지막 분류를 기억 (최신순이므로 먼저 나온 것이 우선)
+          for (const x of history || []) {
+            const name = (x.counterparty || '').trim()
+            if (name && !merchantMap.has(name) && (x.entry_type === 'purchase' || x.entry_type === 'opex')) {
+              merchantMap.set(name, { type: x.entry_type, category: x.category || '' })
+            }
+          }
         } catch {
           /* 조회 실패해도 등록은 진행 */
         }
@@ -202,7 +236,13 @@ export default function CardImport() {
       setPreview(
         base.map((r) => {
           const dup = !r.invalid && dupSet.has(`${r.date}|${r.merchant}|${r.total}`)
-          return { ...r, dup, excluded: r.excluded || dup }
+          const remembered = !r.invalid ? merchantMap.get(r.merchant) : null
+          return {
+            ...r,
+            dup,
+            excluded: r.excluded || dup,
+            ...(remembered ? { type: remembered.type, category: remembered.category, autoFilled: true } : null),
+          }
         }),
       )
       setDupChecking(false)
@@ -244,19 +284,26 @@ export default function CardImport() {
     }
     setRegistering(true)
     try {
-      const rows = active.map((r) => ({
-        entry_type: r.type,
-        source: 'card',
-        entry_date: r.date,
-        counterparty: r.merchant,
-        category: r.category || '',
-        description: r.memo || r.merchant,
-        supply_amount: r.supply,
-        vat_amount: r.vat,
-        payment_method: '카드',
-        memo: `법인카드 일괄등록${fileName ? ` (${fileName})` : ''}`,
-        created_by: user?.id,
-      }))
+      const rows = active.map((r) => {
+        const fxNote = r.fxAmount > 0 ? ` (${fmtFx(r.fxCurrency, r.fxAmount)})` : ''
+        const feeNote = r.fxFee > 0 ? ` · 해외수수료 ${formatKRW(r.fxFee)}원` : ''
+        return {
+          entry_type: r.type,
+          source: 'card',
+          entry_date: r.date,
+          counterparty: r.merchant,
+          category: r.category || '',
+          description: `${r.memo || r.merchant}${fxNote}`,
+          supply_amount: r.supply,
+          vat_amount: r.vat,
+          payment_method: '카드',
+          memo: `법인카드 일괄등록${fileName ? ` (${fileName})` : ''}${feeNote}`,
+          fx_currency: r.fxCurrency || '',
+          fx_amount: r.fxAmount || 0,
+          fx_fee: r.fxFee || 0,
+          created_by: user?.id,
+        }
+      })
       await createEntries(rows)
       toast.success(`${rows.length}건이 등록되었습니다.`)
       setRawRows([])
@@ -334,7 +381,14 @@ export default function CardImport() {
               {mapSelect('merchant', '가맹점 열 (필수)')}
               {mapSelect('amount', '이용금액 열 (필수)')}
               {mapSelect('memo', '적요·메모 열 (선택)')}
+              {mapSelect('payable', '납부하실금액 열 (선택)')}
+              {mapSelect('currency', '통화 열 (선택)')}
+              {mapSelect('foreign', '현지금액 열 (선택)')}
+              {mapSelect('fee', '수수료 열 (선택)')}
             </div>
+            <p className="mt-2 text-xs text-ink-500">
+              해외 이용분은 납부하실금액(원화)이 있으면 그 금액으로, 없으면 이용금액으로 등록됩니다.
+            </p>
             <label className="mt-3 flex cursor-pointer items-center gap-2 text-xs font-medium text-ink-600">
               <input
                 type="checkbox"
@@ -391,12 +445,13 @@ export default function CardImport() {
           </div>
 
           <div className="max-h-[480px] overflow-auto">
-            <table className="w-full min-w-[900px] border-collapse text-xs">
+            <table className="w-full min-w-[980px] border-collapse text-xs">
               <thead className="sticky top-0 bg-ink-50">
                 <tr>
                   <th className="th w-10">등록</th>
                   <th className="th">이용일자</th>
                   <th className="th">가맹점</th>
+                  <th className="th">외화</th>
                   <th className="th">유형</th>
                   <th className="th">항목</th>
                   <th className="th text-right">공급가액</th>
@@ -429,11 +484,17 @@ export default function CardImport() {
                         value={r.merchant}
                         onChange={(e) => setRow(r.key, { merchant: e.target.value })}
                       />
+                      {r.autoFilled ? (
+                        <span className="chip mt-1 bg-brand-50 text-brand-700">지난 분류 적용</span>
+                      ) : null}
                       {r.dup ? (
                         <span className="chip mt-1 bg-amber-50 text-amber-700">중복 의심</span>
                       ) : null}
                       {r.invalid ? <span className="chip mt-1 bg-rose-50 text-loss">확인 필요</span> : null}
                       {r.total < 0 ? <span className="chip mt-1 bg-ink-100 text-ink-500">취소·환불</span> : null}
+                    </td>
+                    <td className="td whitespace-nowrap text-xs text-ink-600">
+                      {r.fxAmount > 0 ? fmtFx(r.fxCurrency, r.fxAmount) : <span className="text-ink-300">—</span>}
                     </td>
                     <td className="td">
                       <select
