@@ -79,6 +79,7 @@ VITE_BASE=/bzen-accounting/ npm run build
 | `/sales` | 매출 장부 | 관리자 + 허용된 직원 |
 | `/purchases` | 매입 장부 | 관리자 + 허용된 직원 |
 | `/expenses` | 운영비 장부 | 관리자 + 허용된 직원 |
+| `/cards` | 법인카드 이용내역 업로드·분류·일괄등록 | 관리자 + 허용된 직원 |
 | `/expense-reports` | 지출결의 (등록·조회) | 관리자 + 허용된 직원 |
 | `/projects` | 프로젝트 목록 · 손익 카드 | 관리자 + 허용된 직원 |
 | `/projects/:id` | 프로젝트 상세 · 월별 손익 · 거래 내역 | 관리자 + 허용된 직원 |

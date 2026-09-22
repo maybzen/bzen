@@ -8,6 +8,7 @@ import { useStaffPermissions } from './lib/permissions'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import LedgerPage from './pages/LedgerPage'
+import CardImport from './pages/CardImport'
 import Partners from './pages/Partners'
 import Projects from './pages/Projects'
 import ProjectDetail from './pages/ProjectDetail'
@@ -125,6 +126,15 @@ export default function App() {
                 </Guard>
               }
             />
+            <Route
+              path="/cards"
+              element={
+                <Guard perm="cards">
+                  <CardImport />
+                </Guard>
+              }
+            />
+
             <Route
               path="/expense-reports"
               element={

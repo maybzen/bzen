@@ -18,6 +18,7 @@ export const PERM_DEFS = [
   { key: 'sales', label: '매출' },
   { key: 'purchases', label: '매입' },
   { key: 'expenses', label: '운영비' },
+  { key: 'cards', label: '법인카드' },
   { key: 'reports', label: '보고서' },
 ]
 
