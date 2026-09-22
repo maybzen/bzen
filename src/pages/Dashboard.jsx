@@ -41,6 +41,7 @@ export default function Dashboard() {
   const [projects, setProjects] = useState([])
   const [profiles, setProfiles] = useState([])
   const [attachmentsByEntry, setAttachmentsByEntry] = useState({})
+  const [showRecent, setShowRecent] = useState(false)
 
   const monthKeys = useMemo(() => lastMonthKeys(12), [])
 
@@ -358,21 +359,44 @@ export default function Dashboard() {
           </div>
 
           <section className="card overflow-hidden">
-            <header className="flex items-center justify-between gap-3 border-b border-ink-200 px-4 py-3.5">
-              <h2 className="text-sm font-bold text-ink-900">최근 거래 내역</h2>
-              <Link to="/reports" className="text-xs font-semibold text-brand-700 hover:underline">
-                보고서 →
-              </Link>
-            </header>
-            <EntryTable
-              entries={current.slice(0, 8)}
-              projects={projects}
-              profiles={profiles}
-              attachmentsByEntry={attachmentsByEntry}
-              showType
-              canEdit={false}
-              onOpenAttachments={() => {}}
-            />
+            <button
+              type="button"
+              onClick={() => setShowRecent((v) => !v)}
+              className="flex w-full items-center justify-between gap-3 px-4 py-3.5 text-left transition hover:bg-ink-50/60"
+            >
+              <span>
+                <span className="block text-sm font-bold text-ink-900">
+                  최근 거래 내역
+                  <span className="ml-2 font-num text-xs font-semibold tabular-nums text-ink-400">
+                    {current.length}건
+                  </span>
+                </span>
+                <span className="mt-0.5 block text-xs text-ink-500">펼쳐서 선택 기간의 최근 내역을 확인합니다</span>
+              </span>
+              <span className="flex items-center gap-2">
+                <Link
+                  to="/reports"
+                  onClick={(e) => e.stopPropagation()}
+                  className="text-xs font-semibold text-brand-700 hover:underline"
+                >
+                  보고서 →
+                </Link>
+                <Icon name={showRecent ? 'chevron-down' : 'chevron-right'} size={16} className="text-ink-400" />
+              </span>
+            </button>
+            {showRecent ? (
+              <div className="border-t border-ink-200">
+                <EntryTable
+                  entries={current.slice(0, 8)}
+                  projects={projects}
+                  profiles={profiles}
+                  attachmentsByEntry={attachmentsByEntry}
+                  showType
+                  canEdit={false}
+                  onOpenAttachments={() => {}}
+                />
+              </div>
+            ) : null}
           </section>
         </>
       )}

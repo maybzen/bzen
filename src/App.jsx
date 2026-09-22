@@ -1,3 +1,4 @@
+import { Suspense, lazy } from 'react'
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import Layout from './components/Layout'
 import Icon from './components/Icon'
@@ -5,16 +6,18 @@ import { Spinner } from './components/ui'
 import { ToastProvider } from './components/Toast'
 import { AuthProvider, useAuth } from './auth/AuthContext'
 import { useStaffPermissions } from './lib/permissions'
-import Login from './pages/Login'
-import Dashboard from './pages/Dashboard'
-import LedgerPage from './pages/LedgerPage'
-import CardImport from './pages/CardImport'
-import Partners from './pages/Partners'
-import Projects from './pages/Projects'
-import ProjectDetail from './pages/ProjectDetail'
-import Reports from './pages/Reports'
-import Users from './pages/Users'
-import Settings from './pages/Settings'
+
+// 화면별 분할 로딩: 첫 화면은 가볍게, 각 메뉴는 들어갈 때 받아옵니다.
+const Login = lazy(() => import('./pages/Login'))
+const Dashboard = lazy(() => import('./pages/Dashboard'))
+const LedgerPage = lazy(() => import('./pages/LedgerPage'))
+const CardImport = lazy(() => import('./pages/CardImport'))
+const Partners = lazy(() => import('./pages/Partners'))
+const Projects = lazy(() => import('./pages/Projects'))
+const ProjectDetail = lazy(() => import('./pages/ProjectDetail'))
+const Reports = lazy(() => import('./pages/Reports'))
+const Users = lazy(() => import('./pages/Users'))
+const Settings = lazy(() => import('./pages/Settings'))
 
 function Splash() {
   return (
@@ -78,7 +81,8 @@ export default function App() {
   return (
     <ToastProvider>
       <AuthProvider>
-        <Routes>
+        <Suspense fallback={<Splash />}>
+          <Routes>
           <Route path="/login" element={<Login />} />
 
           <Route
@@ -198,7 +202,8 @@ export default function App() {
           </Route>
 
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
-        </Routes>
+          </Routes>
+        </Suspense>
       </AuthProvider>
     </ToastProvider>
   )

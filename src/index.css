@@ -64,7 +64,7 @@
     @apply px-3 py-2.5 text-left text-xs font-semibold text-ink-500 whitespace-nowrap;
   }
   .td {
-    @apply px-3 py-3 text-sm text-ink-800 align-middle;
+    @apply px-3 py-3.5 text-sm leading-relaxed text-ink-800 align-middle;
   }
   .num {
     @apply font-num tabular-nums text-right;
