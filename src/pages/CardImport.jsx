@@ -182,6 +182,8 @@ export default function CardImport() {
   const [regAttachments, setRegAttachments] = useState({})
   const [rowEdits, setRowEdits] = useState({})
   const [savingId, setSavingId] = useState(null)
+  const [regSort, setRegSort] = useState('date-desc')
+  const [regProjectFilter, setRegProjectFilter] = useState('')
   const [removing, setRemoving] = useState(null)
   const [removingMany, setRemovingMany] = useState(null)
   const [selected, setSelected] = useState({})
@@ -523,22 +525,36 @@ export default function CardImport() {
     }
   }
 
+  const visibleRegistered = useMemo(() => {
+    const rows = registered.filter((e) => {
+      if (!regProjectFilter) return true
+      if (regProjectFilter === '__none') return !e.project_id
+      return e.project_id === regProjectFilter
+    })
+    rows.sort((a, b) =>
+      regSort === 'date-asc'
+        ? String(a.entry_date).localeCompare(String(b.entry_date))
+        : String(b.entry_date).localeCompare(String(a.entry_date)),
+    )
+    return rows
+  }, [registered, regProjectFilter, regSort])
+
   const selectedIds = useMemo(
-    () => registered.filter((e) => selected[e.id]).map((e) => e.id),
-    [registered, selected],
+    () => visibleRegistered.filter((e) => selected[e.id]).map((e) => e.id),
+    [visibleRegistered, selected],
   )
   const selectedSum = useMemo(
     () =>
-      registered
+      visibleRegistered
         .filter((e) => selected[e.id])
         .reduce((a, e) => a + Number(e.total_amount || 0), 0),
-    [registered, selected],
+    [visibleRegistered, selected],
   )
 
   const toggleSelectAll = (on) => {
     if (on) {
       const next = {}
-      for (const e of registered) next[e.id] = true
+      for (const e of visibleRegistered) next[e.id] = true
       setSelected(next)
     } else {
       setSelected({})
@@ -897,17 +913,42 @@ export default function CardImport() {
           <LoadingBlock />
         ) : registered.length ? (
           <>
+            <div className="flex flex-col gap-2 border-b border-ink-200 px-4 py-3.5 sm:flex-row sm:items-center">
+              <select
+                className="input sm:w-56"
+                value={regProjectFilter}
+                onChange={(e) => setRegProjectFilter(e.target.value)}
+              >
+                <option value="">전체 프로젝트</option>
+                <option value="__none">미지정</option>
+                {regProjects.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                className="btn-ghost shrink-0"
+                onClick={() => setRegSort((s) => (s === 'date-desc' ? 'date-asc' : 'date-desc'))}
+                title="이용일자 정렬 전환"
+              >
+                <Icon name={regSort === 'date-desc' ? 'arrow-down' : 'arrow-up'} size={16} />
+                <span className="hidden sm:inline">이용일자 {regSort === 'date-desc' ? '최신순' : '오래된순'}</span>
+              </button>
+              <span className="text-xs text-ink-500 sm:ml-auto">{visibleRegistered.length}건</span>
+            </div>
             <div className="grid grid-cols-2 gap-3 border-b border-ink-200 px-4 py-3.5 lg:grid-cols-4">
-              <StatCard label="등록 건수" value={String(registered.length)} unit="건" tone="neutral" icon="card" />
+              <StatCard label="등록 건수" value={String(visibleRegistered.length)} unit="건" tone="neutral" icon="card" />
               <StatCard
                 label="합계"
-                value={registered.reduce((a, e) => a + Number(e.total_amount || 0), 0)}
+                value={visibleRegistered.reduce((a, e) => a + Number(e.total_amount || 0), 0)}
                 tone="neutral"
                 icon="coins"
               />
               {(() => {
                 const map = new Map()
-                for (const e of registered) {
+                for (const e of visibleRegistered) {
                   const m = String(e.memo || '').match(/법카\s*([\d-]+)/)
                   const label = m ? `법카 ${m[1]}` : '기타'
                   if (!map.has(label)) map.set(label, { label, count: 0, total: 0 })
@@ -960,7 +1001,7 @@ export default function CardImport() {
                         <input
                           type="checkbox"
                           className="h-4 w-4 accent-brand-600"
-                          checked={registered.length > 0 && selectedIds.length === registered.length}
+                          checked={visibleRegistered.length > 0 && selectedIds.length === visibleRegistered.length}
                           onChange={(e) => toggleSelectAll(e.target.checked)}
                           aria-label="전체 선택"
                         />
@@ -980,7 +1021,7 @@ export default function CardImport() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-ink-100">
-                  {registered.map((entry) => {
+                  {visibleRegistered.map((entry) => {
                     const edit = rowEdits[entry.id] || {}
                     const work = { ...entry, ...edit }
                     const dirty = Object.keys(edit).length > 0
