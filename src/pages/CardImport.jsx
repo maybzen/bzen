@@ -14,17 +14,15 @@ const TYPE_OPTIONS = ['purchase', 'opex']
 
 /** 카드사 프리셋: 파일 양식에 맞는 열 지정 */
 const COMPANY_PRESETS = {
-  auto: { label: '자동 감지', cardLabel: '', cardUser: '' },
+  auto: { label: '자동 감지', cardLabel: '' },
   busan: {
-    label: '부산은행',
+    label: '부산은행 2381 (직원용)',
     cardLabel: '법카 2381',
-    cardUser: 'ALL',
     mapping: { date: 1, merchant: 11, amount: 9, memo: -1, currency: -1, foreign: -1, fee: 6, payable: 7 },
   },
   woori: {
-    label: '우리은행',
+    label: '우리은행 3842 (대표님용)',
     cardLabel: '법카 3842',
-    cardUser: '',
     // 제목행 자동 탐색 + 아래 열 사용 (외화 3종은 국내분 기준 최유력 위치)
     mapping: { date: 0, merchant: 8, amount: 9, memo: -1, currency: -1, foreign: 15, fee: -1, payable: 16 },
   },
@@ -157,25 +155,6 @@ export default function CardImport() {
   const [headerRow, setHeaderRow] = useState(0)
   const [company, setCompany] = useState('auto')
   const [cardLabel, setCardLabel] = useState('')
-  const [cardUser, setCardUser] = useState('')
-
-  /** 카드별 이용자는 브라우저에 기억 (내부 시트의 이용자란 대응) */
-  const userKey = (c) => `bzen.card.user.${c || 'auto'}`
-  const loadCardUser = (c, fallback) => {
-    try {
-      return window.localStorage.getItem(userKey(c)) || fallback
-    } catch {
-      return fallback
-    }
-  }
-  const changeCardUser = (v) => {
-    setCardUser(v)
-    try {
-      window.localStorage.setItem(userKey(company), v)
-    } catch {
-      /* 무시 */
-    }
-  }
   const [mapping, setMapping] = useState({ date: -1, merchant: -1, amount: -1, memo: -1, currency: -1, foreign: -1, fee: -1, payable: -1 })
   const [parsing, setParsing] = useState(false)
   const [preview, setPreview] = useState([])
@@ -226,7 +205,6 @@ export default function CardImport() {
       setRawRows(rows)
       setCompany(detected)
       setCardLabel(preset.cardLabel)
-      setCardUser(loadCardUser(detected, preset.cardUser))
       if (detected === 'woori') {
         const hr = findHeaderRow(rows)
         setHeaderRow(hr)
@@ -256,12 +234,10 @@ export default function CardImport() {
       else setHeaderRow(0)
       setMapping({ ...preset.mapping })
       setCardLabel(preset.cardLabel)
-      setCardUser(loadCardUser(key, preset.cardUser))
     } else {
       setHeaderRow(0)
       setMapping(autoMap(rawRows[0] || []))
       setCardLabel('')
-      setCardUser(loadCardUser(key, ''))
     }
   }
 
@@ -308,6 +284,7 @@ export default function CardImport() {
           type: 'opex',
           category: '',
           projectId: '',
+          cardUser: '',
           fxCurrency,
           fxAmount,
           fxFee,
@@ -401,7 +378,7 @@ export default function CardImport() {
         const fxNote = r.fxAmount > 0 ? ` (${fmtFx(r.fxCurrency, r.fxAmount)})` : ''
         const feeNote = r.fxFee > 0 ? ` · 해외수수료 ${formatKRW(r.fxFee)}원` : ''
         const cardNote = cardLabel ? ` · ${cardLabel}` : ''
-        const userNote = cardUser.trim() ? ` · 이용자 ${cardUser.trim()}` : ''
+        const userNote = r.cardUser.trim() ? ` · 이용자 ${r.cardUser.trim()}` : ''
         return {
           entry_type: r.type,
           source: 'card',
@@ -497,8 +474,8 @@ export default function CardImport() {
 
         {rawRows.length ? (
           <div className="mt-4 border-t border-ink-100 pt-4">
-            <div className="mb-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
-              <Field label="카드사 양식">
+            <div className="mb-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <Field label="카드 선택">
                 <select className="input" value={company} onChange={(e) => applyCompany(e.target.value)}>
                   {Object.entries(COMPANY_PRESETS).map(([key, p]) => (
                     <option key={key} value={key}>
@@ -507,22 +484,9 @@ export default function CardImport() {
                   ))}
                 </select>
               </Field>
-              <Field label="카드 구분 메모" hint="등록 내역 메모에 함께 남습니다.">
-                <input
-                  className="input"
-                  value={cardLabel}
-                  onChange={(e) => setCardLabel(e.target.value)}
-                  placeholder="예: 법카 2381"
-                />
-              </Field>
-              <Field label="이용자" hint="내부 시트의 이용자란 대응. 카드별로 기억됩니다.">
-                <input
-                  className="input"
-                  value={cardUser}
-                  onChange={(e) => changeCardUser(e.target.value)}
-                  placeholder="예: ALL"
-                />
-              </Field>
+              <p className="self-end pb-2 text-xs text-ink-500">
+                이용자는 아래 목록에서 행별로 입력합니다. 메모에 함께 남습니다.
+              </p>
             </div>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
               {mapSelect('date', '이용일자 열 (필수)')}
@@ -671,6 +635,14 @@ export default function CardImport() {
                           </option>
                         ))}
                       </select>
+                    </td>
+                    <td className="td">
+                      <input
+                        className="input w-20 py-1 text-xs"
+                        value={r.cardUser}
+                        onChange={(e) => setRow(r.key, { cardUser: e.target.value })}
+                        placeholder="ALL"
+                      />
                     </td>
                     <td className="td">
                       <select
