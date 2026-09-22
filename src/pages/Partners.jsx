@@ -34,6 +34,7 @@ export default function Partners() {
   const [tableState, setTableState] = useState('checking')
   const [search, setSearch] = useState('')
   const [reloadKey, setReloadKey] = useState(0)
+  const [showUnregistered, setShowUnregistered] = useState(false)
 
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState(null)
@@ -98,9 +99,12 @@ export default function Partners() {
         last: '',
       })
     }
+    // 등록된 협력사만 기본 표시. 장부에만 있는 거래처는 옵션으로.
+    const collectUnregistered = tableState !== 'ready' || showUnregistered
     for (const e of entries) {
       const name = (e.counterparty || '').trim() || '미지정'
       if (!map.has(name)) {
+        if (!collectUnregistered) continue
         map.set(name, { key: `n:${name}`, name, partner: null, sale: 0, purchase: 0, opex: 0, count: 0, last: '' })
       }
       const row = map.get(name)
@@ -115,7 +119,7 @@ export default function Partners() {
     const all = [...map.values()]
     const filtered = q ? all.filter((r) => r.name.includes(q)) : all
     return filtered.sort((a, b) => b.sale + b.purchase + b.opex - (a.sale + a.purchase + a.opex))
-  }, [entries, partners, search])
+  }, [entries, partners, search, showUnregistered, tableState])
 
   const totals = useMemo(
     () =>
@@ -157,7 +161,7 @@ export default function Partners() {
     <div className="flex flex-col gap-5">
       <PageHeader
         title="거래처"
-        description="등록된 거래처와 장부에 입력된 거래처를 함께 보여줍니다. 금액을 눌러 해당 장부로 이동할 수 있습니다."
+        description="등록된 협력사를 보여줍니다. 금액을 눌러 해당 장부로 이동할 수 있습니다."
       >
         <PeriodPicker period={period} />
         {isAdmin && tableState === 'ready' ? (
@@ -204,6 +208,17 @@ export default function Partners() {
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
+          {tableState === 'ready' ? (
+            <label className="mt-2.5 flex cursor-pointer items-center gap-2 text-xs font-medium text-ink-600">
+              <input
+                type="checkbox"
+                className="h-4 w-4 accent-brand-600"
+                checked={showUnregistered}
+                onChange={(e) => setShowUnregistered(e.target.checked)}
+              />
+              미등록 거래처(장부에만 있는 이름)도 함께 보기
+            </label>
+          ) : null}
         </div>
 
         {loading || tableState === 'checking' ? (

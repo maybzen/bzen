@@ -1,14 +1,23 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Icon from '../components/Icon'
 import PeriodPicker, { usePeriod } from '../components/PeriodPicker'
+import EntryFormModal from '../components/EntryFormModal'
 import EntryTable from '../components/EntryTable'
+import { AttachmentModal } from '../components/Attachments'
 import { useToast } from '../components/Toast'
-import { EmptyState, Field, InlineAlert, LoadingBlock, PageHeader, StatCard } from '../components/ui'
+import { ConfirmDialog, EmptyState, Field, InlineAlert, LoadingBlock, PageHeader, StatCard } from '../components/ui'
 import { useAuth } from '../auth/AuthContext'
 import { CATEGORIES, ENTRY_META } from '../lib/constants'
 import { parseAmount, parseCSV } from '../lib/csv'
 import { formatKRW, toISODate } from '../lib/format'
-import { createEntries, listEntries, listProjects } from '../lib/api'
+import {
+  createEntries,
+  deleteEntry,
+  listAttachments,
+  listEntries,
+  listProfiles,
+  listProjects,
+} from '../lib/api'
 
 const TYPE_OPTIONS = ['purchase', 'opex']
 
@@ -145,7 +154,7 @@ function fmtFx(currency, amount) {
 }
 
 export default function CardImport() {
-  const { user } = useAuth()
+  const { isAdmin, user } = useAuth()
   const toast = useToast()
   const period = usePeriod('thisMonth', 'bzen.period.cards')
 
@@ -169,6 +178,14 @@ export default function CardImport() {
   const [registered, setRegistered] = useState([])
   const [loadingList, setLoadingList] = useState(true)
   const [reloadKey, setReloadKey] = useState(0)
+  const [regProjects, setRegProjects] = useState([])
+  const [regProfiles, setRegProfiles] = useState([])
+  const [regAttachments, setRegAttachments] = useState({})
+  const [formOpen, setFormOpen] = useState(false)
+  const [editing, setEditing] = useState(null)
+  const [removing, setRemoving] = useState(null)
+  const [busy, setBusy] = useState(false)
+  const [viewerFiles, setViewerFiles] = useState(null)
 
   const headers = useMemo(
     () => (hasHeader ? rawRows[headerRow] || [] : []),
@@ -413,18 +430,43 @@ export default function CardImport() {
   const loadRegistered = useCallback(async () => {
     setLoadingList(true)
     try {
-      const [cardRows, projectRows] = await Promise.all([
+      const [cardRows, projectRows, profileRows] = await Promise.all([
         listEntries({ from: period.range.from, to: period.range.to, source: 'card' }),
         listProjects().catch(() => []),
+        listProfiles().catch(() => []),
       ])
       setRegistered(cardRows)
       setProjects(projectRows || [])
+      setRegProjects(projectRows || [])
+      setRegProfiles(profileRows || [])
+      const files = await listAttachments(cardRows.map((r) => r.id)).catch(() => [])
+      const map = {}
+      for (const file of files || []) {
+        if (!map[file.entry_id]) map[file.entry_id] = []
+        map[file.entry_id].push(file)
+      }
+      setRegAttachments(map)
     } catch (error) {
       toast.error(error.message)
     } finally {
       setLoadingList(false)
     }
   }, [period.range.from, period.range.to, toast])
+
+  const handleDelete = async () => {
+    if (!removing) return
+    setBusy(true)
+    try {
+      await deleteEntry(removing.id)
+      toast.success('삭제되었습니다.')
+      setRemoving(null)
+      setReloadKey((k) => k + 1)
+    } catch (error) {
+      toast.error(error.message)
+    } finally {
+      setBusy(false)
+    }
+  }
 
   useEffect(() => {
     loadRegistered()
@@ -707,6 +749,40 @@ export default function CardImport() {
               </tbody>
             </table>
           </div>
+          {(() => {
+            const excluded = preview.filter((r) => r.excluded)
+            if (!excluded.length) return null
+            const sum = excluded.reduce((a, r) => a + (r.total || 0), 0)
+            return (
+              <div className="border-t border-ink-100 px-4 py-3">
+                <details>
+                  <summary className="cursor-pointer text-xs font-semibold text-ink-600 hover:text-ink-900">
+                    제외된 {excluded.length}건 보기 (합계 {formatKRW(sum)}원)
+                  </summary>
+                  <ul className="mt-2 flex max-h-56 flex-col gap-1.5 overflow-auto">
+                    {excluded.map((r) => (
+                      <li
+                        key={r.key}
+                        className="flex flex-wrap items-center gap-x-3 gap-y-0.5 rounded-lg bg-ink-50 px-3 py-2 text-xs"
+                      >
+                        <span className="font-semibold text-ink-800">
+                          {r.date || '(날짜 없음)'} · {r.merchant || '(가맹점 없음)'}
+                        </span>
+                        <span className="font-num tabular-nums text-ink-600">{formatKRW(r.total)}원</span>
+                        {r.dup ? (
+                          <span className="chip bg-amber-50 text-amber-700">중복 의심 — 장부에 이미 있음</span>
+                        ) : r.invalid ? (
+                          <span className="chip bg-rose-50 text-loss">날짜·가맹점·금액 확인 필요</span>
+                        ) : (
+                          <span className="chip bg-ink-100 text-ink-500">직접 제외 — 체크하면 등록됨</span>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              </div>
+            )
+          })()}
         </div>
       ) : rawRows.length ? (
         <InlineAlert tone="info">이용일자·가맹점·이용금액 열을 지정하면 미리보기가 나타납니다.</InlineAlert>
@@ -716,14 +792,62 @@ export default function CardImport() {
         <header className="flex flex-wrap items-center justify-between gap-3 border-b border-ink-200 px-4 py-3.5">
           <div>
             <h2 className="text-sm font-bold text-ink-900">등록된 카드 내역</h2>
-            <p className="mt-0.5 text-xs text-ink-500">{period.range.label} · 수정·삭제는 각 장부에서</p>
+            <p className="mt-0.5 text-xs text-ink-500">{period.range.label} · 바로 수정할 수 있습니다</p>
           </div>
           <PeriodPicker period={period} />
         </header>
         {loadingList ? (
           <LoadingBlock />
         ) : registered.length ? (
-          <EntryTable entries={registered} projects={[]} profiles={[]} attachmentsByEntry={{}} showType canEdit={false} />
+          <>
+            <div className="grid grid-cols-2 gap-3 border-b border-ink-200 px-4 py-3.5 lg:grid-cols-4">
+              <StatCard label="등록 건수" value={String(registered.length)} unit="건" tone="neutral" icon="card" />
+              <StatCard
+                label="합계"
+                value={registered.reduce((a, e) => a + Number(e.total_amount || 0), 0)}
+                tone="neutral"
+                icon="coins"
+              />
+              {(() => {
+                const map = new Map()
+                for (const e of registered) {
+                  const m = String(e.memo || '').match(/법카\s*([\d-]+)/)
+                  const label = m ? `법카 ${m[1]}` : '기타'
+                  if (!map.has(label)) map.set(label, { label, count: 0, total: 0 })
+                  const row = map.get(label)
+                  row.count += 1
+                  row.total += Number(e.total_amount || 0)
+                }
+                return [...map.values()]
+                  .sort((a, b) => b.total - a.total)
+                  .slice(0, 2)
+                  .map((c) => (
+                    <StatCard
+                      key={c.label}
+                      label={c.label}
+                      value={c.total}
+                      tone="neutral"
+                      icon="receipt"
+                      hint={`${c.count}건`}
+                    />
+                  ))
+              })()}
+            </div>
+            <EntryTable
+              entries={registered}
+              projects={regProjects}
+              profiles={regProfiles}
+              attachmentsByEntry={regAttachments}
+              showType
+              canEdit
+              onEdit={(entry) => {
+                setEditing({ ...entry, attachments: regAttachments[entry.id] || [] })
+                setFormOpen(true)
+              }}
+              onDelete={isAdmin ? setRemoving : undefined}
+              onOpenAttachments={setViewerFiles}
+            />
+          </>
         ) : (
           <EmptyState
             icon="card"
@@ -732,6 +856,43 @@ export default function CardImport() {
           />
         )}
       </section>
+
+      <EntryFormModal
+        open={formOpen}
+        onClose={() => {
+          setFormOpen(false)
+          setEditing(null)
+        }}
+        onSaved={() => setReloadKey((k) => k + 1)}
+        entryType={editing?.entry_type || 'opex'}
+        source="card"
+        initial={editing}
+        projects={regProjects}
+        profiles={regProfiles}
+        isAdmin={isAdmin}
+        userId={user?.id}
+      />
+
+      <ConfirmDialog
+        open={Boolean(removing)}
+        busy={busy}
+        title="카드 내역을 삭제하시겠습니까?"
+        message={
+          removing
+            ? `${removing.entry_date} · ${removing.description || removing.counterparty || '내용 없음'} (${formatKRW(
+                removing.total_amount,
+              )}원)\n삭제하면 되돌릴 수 없습니다.`
+            : ''
+        }
+        onClose={() => setRemoving(null)}
+        onConfirm={handleDelete}
+      />
+
+      <AttachmentModal
+        open={Boolean(viewerFiles)}
+        onClose={() => setViewerFiles(null)}
+        attachments={viewerFiles || []}
+      />
 
       <p className="text-center text-xs leading-relaxed text-ink-400">
         {ENTRY_META.purchase.label}·{ENTRY_META.opex.label}로 나뉘어 각 장부에 저장됩니다.

@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { createPortal } from 'react-dom'
+import { Link } from 'react-router-dom'
 import Icon from './Icon'
 import { formatKRW, formatPercent } from '../lib/format'
 
@@ -212,12 +213,13 @@ export function StatCard({
   tone = 'neutral',
   icon,
   hint,
+  to,
 }) {
   const style = TONES[tone] || TONES.neutral
   const up = typeof delta === 'number' && delta >= 0
 
-  return (
-    <div className="card p-4 sm:p-5">
+  const body = (
+    <>
       <div className="flex items-start justify-between gap-3">
         <p className="text-xs font-semibold text-ink-500">{label}</p>
         <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${style.bg} ${style.accent}`}>
@@ -244,10 +246,18 @@ export function StatCard({
           <span className="text-ink-400">—</span>
         )}
         <span className="text-ink-400">{deltaSuffix}</span>
+        {to ? <span className="ml-auto font-semibold text-brand-700">자세히 →</span> : null}
       </div>
 
       {hint ? <p className="mt-1.5 text-xs text-ink-400">{hint}</p> : null}
-    </div>
+    </>
+  )
+
+  if (!to) return <div className="card p-4 sm:p-5">{body}</div>
+  return (
+    <Link to={to} className="card block p-4 transition hover:shadow-pop sm:p-5">
+      {body}
+    </Link>
   )
 }
 

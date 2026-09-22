@@ -7,6 +7,7 @@ import EntryTable from '../components/EntryTable'
 import { useToast } from '../components/Toast'
 import { EmptyState, LoadingBlock, PageHeader, StatCard } from '../components/ui'
 import { useAuth } from '../auth/AuthContext'
+import { useStaffPermissions } from '../lib/permissions'
 import {
   listAttachments,
   listEntries,
@@ -28,6 +29,7 @@ import { groupByMonth, groupByProject, summarize } from '../lib/summary'
 
 export default function Dashboard() {
   const { isAdmin, profile } = useAuth()
+  const { perms } = useStaffPermissions(profile)
   const toast = useToast()
   const period = usePeriod('thisMonth', 'bzen.period.dashboard')
   const navigate = useNavigate()
@@ -149,6 +151,7 @@ export default function Dashboard() {
               tone="sale"
               icon="trending-up"
               delta={hasCompare ? changeRate(stats.revenue, prevStats.revenue) : undefined}
+              to={isAdmin || perms.includes('sales') ? '/sales' : undefined}
             />
             <StatCard
               label="매입 (공급가액)"
@@ -156,6 +159,7 @@ export default function Dashboard() {
               tone="purchase"
               icon="cart"
               delta={hasCompare ? changeRate(stats.purchase.supply, prevStats.purchase.supply) : undefined}
+              to={isAdmin || perms.includes('purchases') ? '/purchases' : undefined}
             />
             <StatCard
               label="운영비 (공급가액)"
@@ -163,6 +167,7 @@ export default function Dashboard() {
               tone="opex"
               icon="receipt"
               delta={hasCompare ? changeRate(stats.opex.supply, prevStats.opex.supply) : undefined}
+              to={isAdmin || perms.includes('expenses') ? '/expenses' : undefined}
             />
             <StatCard
               label="영업이익"
@@ -171,6 +176,7 @@ export default function Dashboard() {
               icon="coins"
               delta={hasCompare ? changeRate(stats.profit, prevStats.profit) : undefined}
               hint={stats.margin === null ? '매출 없음' : `이익률 ${formatPercent(stats.margin)}`}
+              to={isAdmin || perms.includes('reports') ? '/reports' : undefined}
             />
           </div>
 
