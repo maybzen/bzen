@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import Icon from './Icon'
 import { Field, InlineAlert, Modal, Spinner } from './ui'
 import { useToast } from './Toast'
-import { CATEGORIES, ENTRY_META, PAYMENT_METHODS } from '../lib/constants'
+import { CATEGORIES, ENTRY_META, PAYMENT_METHODS, categoryHint } from '../lib/constants'
 import { formatFileSize, formatKRW, todayISO } from '../lib/format'
 import { createEntry, deleteAttachment, updateEntry, uploadAttachment } from '../lib/api'
 
@@ -265,6 +265,9 @@ export default function EntryFormModal({
                 <option key={c} value={c} />
               ))}
             </datalist>
+            {categoryHint(form.category) ? (
+              <p className="mt-1 text-xs text-ink-500">💡 {categoryHint(form.category)}</p>
+            ) : null}
           </Field>
 
           <Field label="적요" className="sm:col-span-2">

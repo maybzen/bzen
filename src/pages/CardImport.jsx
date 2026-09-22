@@ -5,7 +5,7 @@ import { AttachmentCell, AttachmentModal } from '../components/Attachments'
 import { useToast } from '../components/Toast'
 import { ConfirmDialog, EmptyState, Field, InlineAlert, LoadingBlock, PageHeader, StatCard } from '../components/ui'
 import { useAuth } from '../auth/AuthContext'
-import { CATEGORIES, ENTRY_META } from '../lib/constants'
+import { CATEGORIES, ENTRY_META, categoryHint } from '../lib/constants'
 import { parseAmount, parseCSV } from '../lib/csv'
 import { formatKRW, toISODate } from '../lib/format'
 import {
@@ -734,6 +734,21 @@ export default function CardImport() {
             </div>
           </div>
 
+          <details className="border-b border-ink-200 px-4 py-2.5">
+            <summary className="cursor-pointer text-xs font-semibold text-ink-600 hover:text-ink-900">
+              계정과목이 헷갈리면 펼치기
+            </summary>
+            <div className="mt-2 grid grid-cols-1 gap-x-6 gap-y-1 pb-1 sm:grid-cols-2 xl:grid-cols-3">
+              {['purchase', 'opex'].flatMap((t) =>
+                (CATEGORIES[t] || []).map((c) => (
+                  <p key={`${t}-${c}`} className="text-xs leading-relaxed">
+                    <span className="font-semibold text-ink-800">{c}</span>
+                    <span className="text-ink-500"> — {categoryHint(c)}</span>
+                  </p>
+                )),
+              )}
+            </div>
+          </details>
           <div className="max-h-[480px] overflow-auto">
             <table className="w-full min-w-[1060px] border-collapse text-xs">
               <thead className="sticky top-0 bg-ink-50">
@@ -824,6 +839,7 @@ export default function CardImport() {
                         className="input w-auto py-1 text-xs"
                         value={r.category}
                         onChange={(e) => setRow(r.key, { category: e.target.value })}
+                        title={categoryHint(r.category) || '항목을 선택하세요'}
                       >
                         <option value="">미분류</option>
                         {(CATEGORIES[r.type] || []).map((c) => (
@@ -1107,6 +1123,7 @@ export default function CardImport() {
                             className="input w-auto py-1 text-xs"
                             value={work.category || ''}
                             onChange={(e) => setCell(entry.id, { category: e.target.value })}
+                            title={categoryHint(work.category) || '항목을 선택하세요'}
                           >
                             <option value="">미분류</option>
                             {(CATEGORIES[work.entry_type] || []).map((c) => (
