@@ -348,8 +348,8 @@ export default function Users() {
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <InlineAlert tone="info">
-          <strong className="font-semibold">권한 안내</strong> — 전 직원은 대시보드·지출결의·거래처·프로젝트·설정이
-          공통으로 보입니다. 추가 메뉴(매출·매입·운영비·보고서)는 설정 또는 계정별로 허용할 수 있습니다.
+          <strong className="font-semibold">권한 안내</strong> — 전 직원은 대시보드·설정이 공통으로 보입니다.
+          나머지 메뉴(지출결의·거래처·프로젝트·매출·매입·운영비·보고서)는 설정 또는 계정별로 허용할 수 있습니다.
           장부에서는 등록·수정은 가능하고 삭제는 관리자만 가능합니다.
         </InlineAlert>
         <InlineAlert tone="warn">

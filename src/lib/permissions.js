@@ -7,11 +7,14 @@ import { getSettings } from './api'
  * settings.staff_permissions 컬럼이 아직 없으면(마이그레이션 전)
  * 거래처만 기본 허용합니다.
  */
-export const STAFF_DEFAULT_PERMS = ['partners']
+export const STAFF_DEFAULT_PERMS = ['expense-reports', 'partners', 'projects']
 
 /** 토글로 관리하는 메뉴 정의 (설정·계정관리 화면과 공유)
- *  - 고정 공통(대시보드·지출결의·거래처·프로젝트·설정)은 여기서 뺍니다. */
+ *  - 고정 공통(대시보드·설정)은 여기서 뺍니다. 계정관리는 항상 관리자 전용. */
 export const PERM_DEFS = [
+  { key: 'expense-reports', label: '지출결의' },
+  { key: 'partners', label: '거래처' },
+  { key: 'projects', label: '프로젝트' },
   { key: 'sales', label: '매출' },
   { key: 'purchases', label: '매입' },
   { key: 'expenses', label: '운영비' },
@@ -21,7 +24,7 @@ export const PERM_DEFS = [
 export const PERM_LABEL = Object.fromEntries(PERM_DEFS.map((p) => [p.key, p.label]))
 
 /** 고정 공통 메뉴: 역할·권한과 무관하게 항상 보입니다. */
-export const STAFF_BASE_LABEL = '대시보드·지출결의·거래처·프로젝트·설정'
+export const STAFF_BASE_LABEL = '대시보드·설정'
 
 let cached = null
 

@@ -272,7 +272,7 @@ export default function Settings() {
               <h2 className="text-sm font-bold text-ink-900">직원 권한</h2>
               <p className="mt-0.5 text-xs text-ink-500">
                 전체 직원에게 공통으로 보여줄 추가 메뉴를 정합니다. 특정 직원에게만 더 보여주려면 계정관리에서
-                정하세요. 대시보드·지출결의·거래처·프로젝트·설정은 항상 보입니다.
+                정하세요. 대시보드·설정은 항상 보이고, 계정관리는 항상 관리자 전용입니다.
               </p>
             </header>
             {loadingCompany ? (

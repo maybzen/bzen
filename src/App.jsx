@@ -128,19 +128,42 @@ export default function App() {
             <Route
               path="/expense-reports"
               element={
-                <LedgerPage
-                  type="opex"
-                  source="expense_report"
-                  title="지출결의"
-                  description="직원이 사용한 비용을 증빙과 함께 기록합니다."
-                />
+                <Guard perm="expense-reports">
+                  <LedgerPage
+                    type="opex"
+                    source="expense_report"
+                    title="지출결의"
+                    description="직원이 사용한 비용을 증빙과 함께 기록합니다."
+                  />
+                </Guard>
               }
             />
 
-            <Route path="/projects" element={<Projects />} />
-            <Route path="/projects/:id" element={<ProjectDetail />} />
+            <Route
+              path="/projects"
+              element={
+                <Guard perm="projects">
+                  <Projects />
+                </Guard>
+              }
+            />
+            <Route
+              path="/projects/:id"
+              element={
+                <Guard perm="projects">
+                  <ProjectDetail />
+                </Guard>
+              }
+            />
 
-            <Route path="/partners" element={<Partners />} />
+            <Route
+              path="/partners"
+              element={
+                <Guard perm="partners">
+                  <Partners />
+                </Guard>
+              }
+            />
 
             <Route
               path="/reports"
