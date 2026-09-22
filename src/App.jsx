@@ -4,6 +4,7 @@ import Icon from './components/Icon'
 import { Spinner } from './components/ui'
 import { ToastProvider } from './components/Toast'
 import { AuthProvider, useAuth } from './auth/AuthContext'
+import { useStaffPermissions } from './lib/permissions'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import LedgerPage from './pages/LedgerPage'
@@ -55,8 +56,9 @@ function PendingApproval() {
   )
 }
 
-function Guard({ children, adminOnly = false }) {
+function Guard({ children, adminOnly = false, perm = null }) {
   const { loading, user, profile, isActive, isAdmin } = useAuth()
+  const { perms, loading: permsLoading } = useStaffPermissions()
   const location = useLocation()
 
   if (loading) return <Splash />
@@ -64,6 +66,10 @@ function Guard({ children, adminOnly = false }) {
   if (!profile) return <Splash />
   if (!isActive) return <PendingApproval />
   if (adminOnly && !isAdmin) return <Navigate to="/dashboard" replace />
+  if (perm && !isAdmin) {
+    if (permsLoading) return <Splash />
+    if (!perms.includes(perm)) return <Navigate to="/dashboard" replace />
+  }
   return children
 }
 
@@ -86,7 +92,7 @@ export default function App() {
             <Route
               path="/sales"
               element={
-                <Guard adminOnly>
+                <Guard perm="sales">
                   <LedgerPage
                     type="sale"
                     title="매출"
@@ -98,7 +104,7 @@ export default function App() {
             <Route
               path="/purchases"
               element={
-                <Guard adminOnly>
+                <Guard perm="purchases">
                   <LedgerPage
                     type="purchase"
                     title="매입"
@@ -110,7 +116,7 @@ export default function App() {
             <Route
               path="/expenses"
               element={
-                <Guard adminOnly>
+                <Guard perm="expenses">
                   <LedgerPage
                     type="opex"
                     title="운영비"
@@ -137,7 +143,7 @@ export default function App() {
             <Route
               path="/partners"
               element={
-                <Guard adminOnly>
+                <Guard perm="partners">
                   <Partners />
                 </Guard>
               }
@@ -146,7 +152,7 @@ export default function App() {
             <Route
               path="/reports"
               element={
-                <Guard adminOnly>
+                <Guard perm="reports">
                   <Reports />
                 </Guard>
               }

@@ -28,6 +28,7 @@ export default function EntryFormModal({
   initial = null,
   projects = [],
   profiles = [],
+  partnerNames = [],
   isAdmin = false,
   userId = null,
 }) {
@@ -237,10 +238,18 @@ export default function EntryFormModal({
           <Field label={labels.party}>
             <input
               className="input"
+              list="counterparty-list"
               placeholder={entryType === 'sale' ? '예: ○○ 주식회사' : '예: □□ 상사'}
               value={form.counterparty}
               onChange={set('counterparty')}
             />
+            {partnerNames.length ? (
+              <datalist id="counterparty-list">
+                {partnerNames.map((name) => (
+                  <option key={name} value={name} />
+                ))}
+              </datalist>
+            ) : null}
           </Field>
 
           <Field label={labels.category}>

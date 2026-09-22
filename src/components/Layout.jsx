@@ -4,19 +4,20 @@ import Icon from './Icon'
 import { useAuth } from '../auth/AuthContext'
 import { useToast } from './Toast'
 import { getSettings } from '../lib/api'
+import { useStaffPermissions } from '../lib/permissions'
 import { APP_NAME, COMPANY_EN, DEFAULT_COMPANY } from '../lib/constants'
 
 export const NAV = [
-  { to: '/dashboard', label: '대시보드', icon: 'dashboard', roles: ['admin', 'staff'] },
-  { to: '/sales', label: '매출', icon: 'trending-up', roles: ['admin'] },
-  { to: '/purchases', label: '매입', icon: 'cart', roles: ['admin'] },
-  { to: '/expenses', label: '운영비', icon: 'receipt', roles: ['admin'] },
-  { to: '/expense-reports', label: '지출결의', icon: 'coins', roles: ['admin', 'staff'] },
-  { to: '/projects', label: '프로젝트', icon: 'folder', roles: ['admin', 'staff'] },
-  { to: '/partners', label: '거래처', icon: 'building', roles: ['admin'] },
-  { to: '/reports', label: '보고서', icon: 'chart', roles: ['admin'] },
-  { to: '/users', label: '계정관리', icon: 'users', roles: ['admin'] },
-  { to: '/settings', label: '설정', icon: 'settings', roles: ['admin', 'staff'] },
+  { to: '/dashboard', label: '대시보드', icon: 'dashboard', base: true },
+  { to: '/sales', label: '매출', icon: 'trending-up', perm: 'sales' },
+  { to: '/purchases', label: '매입', icon: 'cart', perm: 'purchases' },
+  { to: '/expenses', label: '운영비', icon: 'receipt', perm: 'expenses' },
+  { to: '/expense-reports', label: '지출결의', icon: 'coins', base: true },
+  { to: '/projects', label: '프로젝트', icon: 'folder', base: true },
+  { to: '/partners', label: '거래처', icon: 'building', perm: 'partners' },
+  { to: '/reports', label: '보고서', icon: 'chart', perm: 'reports' },
+  { to: '/users', label: '계정관리', icon: 'users', adminOnly: true },
+  { to: '/settings', label: '설정', icon: 'settings', base: true },
 ]
 
 const NAV_GROUPS = [
@@ -69,6 +70,7 @@ function NavList({ items, onNavigate }) {
 
 export default function Layout() {
   const { profile, isAdmin, signOut } = useAuth()
+  const { perms } = useStaffPermissions()
   const toast = useToast()
   const location = useLocation()
   const navigate = useNavigate()
@@ -77,7 +79,9 @@ export default function Layout() {
   const [company, setCompany] = useState(DEFAULT_COMPANY)
   const menuRef = useRef(null)
 
-  const visible = NAV.filter((item) => item.roles.includes(isAdmin ? 'admin' : 'staff'))
+  const visible = NAV.filter(
+    (item) => isAdmin || item.base || (item.perm && perms.includes(item.perm)),
+  )
   const current = visible.find((item) => location.pathname.startsWith(item.to))
 
   useEffect(() => {

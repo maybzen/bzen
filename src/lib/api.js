@@ -226,6 +226,107 @@ export async function getAttachmentUrl(filePath, expiresIn = 3600) {
 }
 
 /* ------------------------------------------------------------------ */
+/* 거래처                                                              */
+/* ------------------------------------------------------------------ */
+
+/** counterparties 테이블이 있는지 확인 (마이그레이션 여부 감지용) */
+export async function partnersTableExists() {
+  const { error } = await supabase.from('counterparties').select('id').limit(1)
+  if (!error) return { available: true, missing: false }
+  const message = String(error.message || '')
+  const missing = error.code === '42P01' || /could not find the table|schema cache/i.test(message)
+  return { available: false, missing }
+}
+
+export function listPartners() {
+  return unwrap(supabase.from('counterparties').select('*').order('name', { ascending: true }))
+}
+
+function sanitizePartner(payload) {
+  const clean = { ...payload }
+  delete clean.id
+  delete clean.created_at
+  delete clean.updated_at
+  return clean
+}
+
+export function createPartner(payload, userId) {
+  const row = sanitizePartner({ ...payload, created_by: userId })
+  return unwrap(supabase.from('counterparties').insert(row).select().single())
+}
+
+export function updatePartner(id, patch) {
+  return unwrap(supabase.from('counterparties').update(sanitizePartner(patch)).eq('id', id).select().single())
+}
+
+export async function deletePartner(partner) {
+  const docs = await listPartnerDocs([partner.id]).catch(() => [])
+  const paths = (docs || []).map((d) => d.file_path).filter(Boolean)
+  if (paths.length) {
+    await supabase.storage.from('partner-docs').remove(paths).catch(() => {})
+  }
+  return unwrap(supabase.from('counterparties').delete().eq('id', partner.id))
+}
+
+/* ------------------------------------------------------------------ */
+/* 거래처 서류 (사업자등록증 · 통장사본)                                  */
+/* ------------------------------------------------------------------ */
+
+const PARTNER_BUCKET = 'partner-docs'
+const PARTNER_MAX_FILE = 20 * 1024 * 1024
+
+export const PARTNER_DOC_TYPES = {
+  biz: '사업자등록증',
+  bank: '통장사본',
+  other: '기타 서류',
+}
+
+export function listPartnerDocs(partnerIds) {
+  if (!partnerIds || !partnerIds.length) return Promise.resolve([])
+  return unwrap(
+    supabase.from('partner_attachments').select('*').in('partner_id', partnerIds).order('created_at', { ascending: true }),
+  )
+}
+
+export async function uploadPartnerDoc(partnerId, docType, file, userId) {
+  if (!file) throw new Error('파일을 선택해 주세요.')
+  if (file.size > PARTNER_MAX_FILE) throw new Error('파일은 20MB 이하만 올릴 수 있습니다.')
+  const path = `${partnerId}/${Date.now()}_${safeFileName(file.name)}`
+  const { error } = await supabase.storage.from(PARTNER_BUCKET).upload(path, file, {
+    contentType: file.type || 'application/octet-stream',
+    upsert: false,
+  })
+  if (error) throw new Error(`파일 업로드 실패: ${error.message}`)
+
+  return unwrap(
+    supabase
+      .from('partner_attachments')
+      .insert({
+        partner_id: partnerId,
+        file_path: path,
+        file_name: file.name,
+        mime_type: file.type || '',
+        size_bytes: file.size || 0,
+        doc_type: docType || 'other',
+        uploaded_by: userId,
+      })
+      .select()
+      .single(),
+  )
+}
+
+export async function deletePartnerDoc(doc) {
+  await supabase.storage.from(PARTNER_BUCKET).remove([doc.file_path]).catch(() => {})
+  return unwrap(supabase.from('partner_attachments').delete().eq('id', doc.id))
+}
+
+export async function getPartnerDocUrl(filePath, expiresIn = 3600) {
+  const { data, error } = await supabase.storage.from(PARTNER_BUCKET).createSignedUrl(filePath, expiresIn)
+  if (error) throw new Error(error.message)
+  return data?.signedUrl
+}
+
+/* ------------------------------------------------------------------ */
 /* 설정                                                               */
 /* ------------------------------------------------------------------ */
 

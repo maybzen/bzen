@@ -82,7 +82,8 @@ VITE_BASE=/bzen-accounting/ npm run build
 | `/expense-reports` | 지출결의 (등록·조회) | 전체 |
 | `/projects` | 프로젝트 목록 · 손익 카드 | 전체 |
 | `/projects/:id` | 프로젝트 상세 · 월별 손익 · 거래 내역 | 전체 |
-| `/reports` | 손익 보고서 (인쇄/PDF, CSV 내보내기) | 관리자 |
+| `/partners` | 거래처 목록 · 담당자 정보 · 서류(사업자등록증·통장사본) 미리보기 | 관리자 + 권한 받은 직원 |
+| `/reports` | 손익 보고서 (인쇄/PDF, CSV 내보내기) | 관리자 + 권한 받은 직원 |
 | `/users` | 계정관리 | 관리자 |
 | `/settings` | 내 정보 · 비밀번호 · 회사 정보 | 전체 |
 
@@ -144,7 +145,9 @@ VITE_BASE=/bzen-accounting/ npm run build
 | `projects` | 프로젝트 마스터 (계약금액·기간·담당자) |
 | `entries` | **통합 장부** — `entry_type`(sale/purchase/opex) + `source`(manual/expense_report) |
 | `attachments` | 증빙 파일 메타데이터 (실제 파일은 Storage `receipts` 버킷) |
-| `settings` | 회사명 · 사업자등록번호 |
+| `counterparties` | 거래처 마스터 (담당자·직함·이메일·대표번호·전화번호·메모) |
+| `partner_attachments` | 거래처 서류 메타데이터 (실제 파일은 Storage `partner-docs` 버킷) |
+| `settings` | 회사명 · 사업자등록번호 · 직원 권한(`staff_permissions`) |
 
 **`entries` 한 테이블로 매출·매입·운영비·지출결의를 모두 관리**합니다.
 유형만 다르고 구조가 같아, 보고서 집계가 단순하고 일관됩니다.
@@ -184,6 +187,15 @@ VITE_BASE=/bzen-accounting/ npm run build
 | --- | --- |
 | Supabase 프로젝트 | `bzen-accounting` (ref `zkytwruaiyfjbrppmedu`, ap-northeast-2) |
 | Edge Function | `admin-users` (계정 생성·권한·비밀번호 관리) |
-| Storage 버킷 | `receipts` (비공개) |
+| Storage 버킷 | `receipts` (비공개), `partner-docs` (비공개) |
 
 Supabase 대시보드에서 위 프로젝트를 열면 테이블·정책·함수를 직접 확인할 수 있습니다.
+
+### 거래처 등록·직원 권한을 쓰기 전 (1회성)
+
+`counterparties` 테이블과 `settings.staff_permissions` 컬럼이 있어야 합니다.
+없으면 거래처 화면은 장부 집계 목록만 보여주고, 직원 권한은 기본값(거래처만 허용)으로 동작합니다.
+
+1. Supabase 대시보드 → SQL Editor → New query
+2. 저장소의 `supabase/migration_partners.sql` 내용을 붙여넣고 Run
+3. 마지막 확인 쿼리 3개가 각각 1행씩 뜨면 성공

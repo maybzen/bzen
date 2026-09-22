@@ -16,6 +16,7 @@ import {
   deleteEntry,
   listAttachments,
   listEntries,
+  listPartners,
   listProfiles,
   listProjects,
 } from '../lib/api'
@@ -32,6 +33,7 @@ export default function LedgerPage({ type, source = 'manual', title, description
   const [entries, setEntries] = useState([])
   const [projects, setProjects] = useState([])
   const [profiles, setProfiles] = useState([])
+  const [partnerNames, setPartnerNames] = useState([])
   const [attachmentsByEntry, setAttachmentsByEntry] = useState({})
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -58,6 +60,12 @@ export default function LedgerPage({ type, source = 'manual', title, description
     const q = searchParams.get('search')
     if (q) setSearch(q)
   }, [searchParams])
+
+  useEffect(() => {
+    listPartners()
+      .then((rows) => setPartnerNames((rows || []).map((r) => r.name).filter(Boolean)))
+      .catch(() => {})
+  }, [])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -286,6 +294,7 @@ export default function LedgerPage({ type, source = 'manual', title, description
         initial={editing}
         projects={projects}
         profiles={profiles}
+        partnerNames={partnerNames}
         isAdmin={isAdmin}
         userId={user?.id}
       />

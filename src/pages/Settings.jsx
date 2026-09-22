@@ -5,6 +5,7 @@ import { useToast } from '../components/Toast'
 import { Field, InlineAlert, LoadingBlock, PageHeader, Spinner } from '../components/ui'
 import { useAuth } from '../auth/AuthContext'
 import { COMPANY_EN, ROLE_LABEL } from '../lib/constants'
+import { PERM_DEFS } from '../lib/permissions'
 import { formatDateHuman } from '../lib/format'
 import { callAdminFn, getSettings, updateProfile, updateSettings } from '../lib/api'
 
@@ -23,6 +24,10 @@ export default function Settings() {
   const [loadingCompany, setLoadingCompany] = useState(isAdmin)
   const [savingCompany, setSavingCompany] = useState(false)
 
+  const [staffPerms, setStaffPerms] = useState([])
+  const [hasPermColumn, setHasPermColumn] = useState(true)
+  const [savingPerms, setSavingPerms] = useState(false)
+
   useEffect(() => {
     if (profile) {
       setMe({
@@ -38,7 +43,15 @@ export default function Settings() {
     setLoadingCompany(true)
     try {
       const data = await getSettings()
-      if (data) setCompany({ company_name: data.company_name || '', biz_no: data.biz_no || '' })
+      if (data) {
+        setCompany({ company_name: data.company_name || '', biz_no: data.biz_no || '' })
+        if (data && 'staff_permissions' in data && Array.isArray(data.staff_permissions)) {
+          setStaffPerms(data.staff_permissions)
+          setHasPermColumn(true)
+        } else {
+          setHasPermColumn(false)
+        }
+      }
     } catch (error) {
       toast.error(error.message)
     } finally {
@@ -92,6 +105,23 @@ export default function Settings() {
     } finally {
       setSavingPw(false)
     }
+  }
+
+  const savePerms = async (e) => {
+    e.preventDefault()
+    setSavingPerms(true)
+    try {
+      await updateSettings({ staff_permissions: staffPerms })
+      toast.success('직원 권한이 저장되었습니다. 직원은 다음 접속부터 적용됩니다.')
+    } catch (error) {
+      toast.error(error.message)
+    } finally {
+      setSavingPerms(false)
+    }
+  }
+
+  const togglePerm = (key) => {
+    setStaffPerms((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]))
   }
 
   const saveCompany = async (e) => {
@@ -227,6 +257,50 @@ export default function Settings() {
                 <div className="flex justify-end">
                   <button type="submit" className="btn-primary" disabled={savingCompany}>
                     {savingCompany ? <Spinner size={15} /> : <Icon name="check" size={15} />}
+                    저장
+                  </button>
+                </div>
+              </form>
+            )}
+          </section>
+        ) : null}
+
+        {/* 직원 권한 */}
+        {isAdmin ? (
+          <section className="card p-5">
+            <header className="mb-4">
+              <h2 className="text-sm font-bold text-ink-900">직원 권한</h2>
+              <p className="mt-0.5 text-xs text-ink-500">
+                직원이 볼 수 있는 메뉴를 정합니다. 대시보드·지출결의·프로젝트·설정은 항상 보입니다.
+              </p>
+            </header>
+            {loadingCompany ? (
+              <LoadingBlock label="불러오는 중…" />
+            ) : !hasPermColumn ? (
+              <InlineAlert tone="warning">
+                권한 설정을 쓰려면 Supabase 대시보드 → SQL Editor에서 저장소의
+                <strong> supabase/migration_partners.sql </strong>
+                파일을 실행해 주세요.
+              </InlineAlert>
+            ) : (
+              <form onSubmit={savePerms} className="flex flex-col gap-2.5">
+                {PERM_DEFS.map((perm) => (
+                  <label
+                    key={perm.key}
+                    className="flex cursor-pointer items-center justify-between gap-3 rounded-lg border border-ink-200 px-3.5 py-2.5 transition hover:bg-ink-50/60"
+                  >
+                    <span className="text-sm font-semibold text-ink-800">{perm.label}</span>
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 accent-brand-600"
+                      checked={staffPerms.includes(perm.key)}
+                      onChange={() => togglePerm(perm.key)}
+                    />
+                  </label>
+                ))}
+                <div className="flex justify-end pt-1">
+                  <button type="submit" className="btn-primary" disabled={savingPerms}>
+                    {savingPerms ? <Spinner size={15} /> : <Icon name="check" size={15} />}
                     저장
                   </button>
                 </div>
