@@ -147,7 +147,15 @@ export default function Layout() {
           )
         })}
       </div>
-      <div className="border-t border-white/10 px-4 py-4">
+      <button
+        type="button"
+        onClick={() => {
+          onNavigate?.()
+          navigate('/settings')
+        }}
+        title="내 정보 · 설정"
+        className="border-t border-white/10 px-4 py-4 text-left transition hover:bg-white/5"
+      >
         <div className="flex items-center gap-2.5">
           <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/10 text-xs font-bold text-white">
             {(profile?.full_name || profile?.email || '?').slice(0, 1)}
@@ -162,7 +170,7 @@ export default function Layout() {
             </span>
           </span>
         </div>
-      </div>
+      </button>
     </div>
   )
 
