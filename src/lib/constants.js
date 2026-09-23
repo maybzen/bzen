@@ -162,16 +162,15 @@ export const PARTNER_GROUPS = [
   '기타',
 ]
 
-/** 법인카드 이용자 코드 */
+/** 법인카드 이용자 코드 (표시 순서대로) */
 export const CARD_USERS = [
-  { code: 'ALL', name: '전체' },
   { code: 'Z', name: '이향란' },
+  { code: 'B', name: '이보람 팀장님' },
   { code: 'G', name: '권혜민 대리' },
   { code: 'S', name: '박현정' },
+  { code: 'N', name: '김상희' },
   { code: 'H', name: '김혜린' },
   { code: 'J', name: '박은영' },
-  { code: 'N', name: '김상희' },
-  { code: 'B', name: '이보람 팀장님' },
   { code: 'M', name: '이정현' },
 ]
 
