@@ -164,6 +164,7 @@ export const PARTNER_GROUPS = [
 
 /** 법인카드 이용자 코드 (표시 순서대로) */
 export const CARD_USERS = [
+  { code: 'ALL', name: '전체' },
   { code: 'Z', name: '이향란' },
   { code: 'B', name: '이보람 팀장님' },
   { code: 'G', name: '권혜민 대리' },
@@ -213,8 +214,6 @@ export function sortManagers(profiles) {
     return String(a.full_name || a.email || '').localeCompare(String(b.full_name || b.email || ''), 'ko')
   })
 }
-
-export const PROJECT_STATUS_KEYS = ['planned', 'active', 'hold', 'done']
 
 export const ROLE_LABEL = {
   admin: '관리자',

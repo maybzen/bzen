@@ -162,8 +162,14 @@ function UserMultiSelect({ value, onChange }) {
     .filter(Boolean)
 
   const toggle = (code) => {
-    const next = codes.includes(code) ? codes.filter((c) => c !== code) : [...codes, code]
-    // 표시 순서(Z,B,G,S,N,H,J,M)대로 정렬
+    let next
+    if (code === 'ALL') {
+      next = codes.length === 1 && codes[0] === 'ALL' ? [] : ['ALL']
+    } else {
+      const withoutAll = codes.filter((c) => c !== 'ALL')
+      next = withoutAll.includes(code) ? withoutAll.filter((c) => c !== code) : [...withoutAll, code]
+    }
+    // 표시 순서대로 정렬
     const order = CARD_USERS.map((u) => u.code)
     next.sort((a, b) => order.indexOf(a) - order.indexOf(b))
     onChange(next.join(','))
