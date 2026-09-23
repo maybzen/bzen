@@ -1,40 +1,52 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
 import Icon from '../components/Icon'
-import PeriodPicker, { usePeriod } from '../components/PeriodPicker'
 import PartnerFormModal from '../components/PartnerFormModal'
 import { useToast } from '../components/Toast'
 import { ConfirmDialog, EmptyState, InlineAlert, LoadingBlock, PageHeader, StatCard } from '../components/ui'
 import { useAuth } from '../auth/AuthContext'
-import { useStaffPermissions } from '../lib/permissions'
-import { formatDateHuman, formatKRW } from '../lib/format'
+import { downloadTextFile, toCSV } from '../lib/csv'
 import {
   deletePartner,
-  listEntries,
   listPartnerDocs,
   listPartners,
   partnersTableExists,
 } from '../lib/api'
 
 /**
- * 거래처 목록.
- * - 등록된 거래처(마스터)와 장부에만 있는 거래처명을 합쳐서 보여줍니다.
+ * 거래처 대장 (구글시트 스타일).
+ * 등록된 협력사만 보여줍니다. 장부 집계는 하지 않습니다.
  * - 마스터 등록·수정·서류 관리는 관리자만, 조회·미리보기는 권한이 있는 직원도 가능합니다.
  */
+function memoLines(memo, prefix) {
+  return String(memo || '')
+    .split('\n')
+    .map((s) => s.trim())
+    .filter((s) => (prefix ? s.startsWith(prefix) : true))
+}
+
+function memoBizNo(memo) {
+  const hit = memoLines(memo).find((s) => /\d{3}-\d{2}-\d{5}/.test(s))
+  if (!hit) return ''
+  const m = hit.match(/\d{3}-\d{2}-\d{5}/)
+  return m ? m[0] : hit.replace(/^사업자번호:\s*/, '')
+}
+
+function memoAccounts(memo) {
+  return memoLines(memo)
+    .filter((s) => /계좌/.test(s))
+    .map((s) => s.replace(/^계좌:\s*/, ''))
+}
+
 export default function Partners() {
   const { isAdmin, user } = useAuth()
-  const { perms } = useStaffPermissions()
   const toast = useToast()
-  const period = usePeriod('thisYear', 'bzen.period.partners')
 
   const [loading, setLoading] = useState(true)
-  const [entries, setEntries] = useState([])
   const [partners, setPartners] = useState([])
   const [docsByPartner, setDocsByPartner] = useState({})
   const [tableState, setTableState] = useState('checking')
   const [search, setSearch] = useState('')
   const [reloadKey, setReloadKey] = useState(0)
-  const [showUnregistered, setShowUnregistered] = useState(false)
 
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState(null)
@@ -42,17 +54,10 @@ export default function Partners() {
   const [removing, setRemoving] = useState(null)
   const [busy, setBusy] = useState(false)
 
-  const canSalesLedger = isAdmin || perms.includes('sales')
-  const canPurchasesLedger = isAdmin || perms.includes('purchases')
-
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const [rows, table] = await Promise.all([
-        listEntries({ from: period.range.from, to: period.range.to }),
-        partnersTableExists().catch(() => ({ available: false, missing: true })),
-      ])
-      setEntries(rows)
+      const table = await partnersTableExists().catch(() => ({ available: false, missing: true }))
       if (table.available) {
         setTableState('ready')
         const master = await listPartners()
@@ -79,63 +84,26 @@ export default function Partners() {
     } finally {
       setLoading(false)
     }
-  }, [period.range.from, period.range.to, toast])
+  }, [toast])
 
   useEffect(() => {
     load()
   }, [load, reloadKey])
 
   const rows = useMemo(() => {
-    const map = new Map()
-    for (const p of partners) {
-      map.set(p.name.trim(), {
-        key: `p:${p.id}`,
-        name: p.name.trim(),
-        partner: p,
-        sale: 0,
-        purchase: 0,
-        opex: 0,
-        count: 0,
-        last: '',
-      })
-    }
-    // 등록된 협력사만 기본 표시. 장부에만 있는 거래처는 옵션으로.
-    const collectUnregistered = tableState !== 'ready' || showUnregistered
-    for (const e of entries) {
-      const name = (e.counterparty || '').trim() || '미지정'
-      if (!map.has(name)) {
-        if (!collectUnregistered) continue
-        map.set(name, { key: `n:${name}`, name, partner: null, sale: 0, purchase: 0, opex: 0, count: 0, last: '' })
-      }
-      const row = map.get(name)
-      const supply = Number(e.supply_amount || 0)
-      if (e.entry_type === 'sale') row.sale += supply
-      else if (e.entry_type === 'purchase') row.purchase += supply
-      else if (e.entry_type === 'opex') row.opex += supply
-      row.count += 1
-      if (e.entry_date && e.entry_date > row.last) row.last = e.entry_date
-    }
-    const q = search.trim()
-    const all = [...map.values()]
-    const filtered = q ? all.filter((r) => r.name.includes(q)) : all
-    return filtered.sort((a, b) => b.sale + b.purchase + b.opex - (a.sale + a.purchase + a.opex))
-  }, [entries, partners, search, showUnregistered, tableState])
-
-  const totals = useMemo(
-    () =>
-      rows.reduce(
-        (acc, r) => {
-          acc.sale += r.sale
-          acc.purchase += r.purchase
-          acc.count += r.count
-          return acc
-        },
-        { sale: 0, purchase: 0, count: 0 },
+    const q = search.trim().toLowerCase()
+    if (!q) return partners
+    return partners.filter((p) =>
+      [p.name, p.contact_person, p.job_title, p.phone_main, p.phone, p.email, p.memo].some((v) =>
+        String(v || '').toLowerCase().includes(q),
       ),
-    [rows],
-  )
+    )
+  }, [partners, search])
 
-  const ledgerLink = (to, name) => (name === '미지정' ? null : `${to}?search=${encodeURIComponent(name)}`)
+  const docTotal = useMemo(
+    () => Object.values(docsByPartner).reduce((a, list) => a + list.length, 0),
+    [docsByPartner],
+  )
 
   const handleDelete = async () => {
     if (!removing) return
@@ -157,13 +125,33 @@ export default function Partners() {
     setFormOpen(true)
   }
 
+  const exportCSV = () => {
+    if (!rows.length) {
+      toast.info('내보낼 거래처가 없습니다.')
+      return
+    }
+    const headers = ['거래처명', '담당자', '직함', '대표번호', '휴대폰', '이메일', '사업자번호', '계좌', '메모']
+    const body = rows.map((p) => [
+      p.name,
+      p.contact_person,
+      p.job_title,
+      p.phone_main,
+      p.phone,
+      p.email,
+      memoBizNo(p.memo),
+      memoAccounts(p.memo).join(' / '),
+      p.memo,
+    ])
+    downloadTextFile(`거래처대장_${new Date().toISOString().slice(0, 10)}.csv`, toCSV(headers, body))
+  }
+
   return (
     <div className="flex flex-col gap-5">
-      <PageHeader
-        title="거래처"
-        description="등록된 협력사를 보여줍니다. 금액을 눌러 해당 장부로 이동할 수 있습니다."
-      >
-        <PeriodPicker period={period} />
+      <PageHeader title="거래처" description="협력사 대장입니다. 구글시트처럼 한 행에 정보가 다 보입니다.">
+        <button type="button" className="btn-ghost" onClick={exportCSV}>
+          <Icon name="download" size={16} />
+          CSV 내보내기
+        </button>
         {isAdmin && tableState === 'ready' ? (
           <button type="button" className="btn-primary" onClick={openNew}>
             <Icon name="plus" size={16} />
@@ -176,21 +164,13 @@ export default function Partners() {
         <InlineAlert tone="warning">
           거래처 등록·서류 기능을 쓰려면 Supabase 대시보드 → SQL Editor에서 저장소의
           <strong> supabase/migration_partners.sql </strong>
-          파일을 실행해 주세요. 실행 전에는 장부 집계 목록만 표시됩니다.
+          파일을 실행해 주세요.
         </InlineAlert>
       ) : null}
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
-        <StatCard
-          label="거래처 수"
-          value={String(rows.length)}
-          unit="곳"
-          tone="neutral"
-          icon="building"
-          hint={tableState === 'ready' ? `등록 ${partners.length}곳` : undefined}
-        />
-        <StatCard label="매출 합계" value={totals.sale} tone="sale" icon="trending-up" />
-        <StatCard label="매입 합계" value={totals.purchase} tone="purchase" icon="cart" />
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <StatCard label="등록 거래처" value={String(partners.length)} unit="곳" tone="neutral" icon="building" />
+        <StatCard label="등록 서류" value={String(docTotal)} unit="건" tone="neutral" icon="file" />
       </div>
 
       <div className="card overflow-hidden">
@@ -203,141 +183,92 @@ export default function Partners() {
             />
             <input
               className="input pl-9"
-              placeholder="거래처명 검색"
+              placeholder="거래처명·담당자·연락처·메모 검색"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
-          {tableState === 'ready' ? (
-            <label className="mt-2.5 flex cursor-pointer items-center gap-2 text-xs font-medium text-ink-600">
-              <input
-                type="checkbox"
-                className="h-4 w-4 accent-brand-600"
-                checked={showUnregistered}
-                onChange={(e) => setShowUnregistered(e.target.checked)}
-              />
-              미등록 거래처(장부에만 있는 이름)도 함께 보기
-            </label>
-          ) : null}
         </div>
 
         {loading || tableState === 'checking' ? (
           <LoadingBlock />
         ) : rows.length ? (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[860px] border-collapse">
+            <table className="w-full min-w-[1080px] border-collapse text-xs">
               <thead className="bg-ink-50/70">
                 <tr>
-                  <th className="th">거래처</th>
+                  <th className="th">거래처명</th>
                   <th className="th">담당자</th>
-                  <th className="th text-right">매출</th>
-                  <th className="th text-right">매입</th>
-                  <th className="th text-right">운영비</th>
-                  <th className="th text-right">건수</th>
-                  <th className="th text-right">최근 거래</th>
+                  <th className="th">직함</th>
+                  <th className="th">대표번호</th>
+                  <th className="th">휴대폰</th>
+                  <th className="th">이메일</th>
+                  <th className="th">사업자번호</th>
+                  <th className="th">계좌</th>
                   <th className="th text-right">서류</th>
-                  {isAdmin && tableState === 'ready' ? <th className="th text-right">관리</th> : null}
+                  {isAdmin ? <th className="th text-right">관리</th> : null}
                 </tr>
               </thead>
               <tbody className="divide-y divide-ink-100">
-                {rows.map((row) => {
-                  const saleLink = row.sale > 0 && canSalesLedger ? ledgerLink('/sales', row.name) : null
-                  const purchaseLink =
-                    row.purchase > 0 && canPurchasesLedger ? ledgerLink('/purchases', row.name) : null
-                  const docCount = row.partner ? (docsByPartner[row.partner.id] || []).length : 0
+                {rows.map((p) => {
+                  const docs = docsByPartner[p.id] || []
+                  const bizNo = memoBizNo(p.memo)
+                  const accounts = memoAccounts(p.memo)
+                  const openDetail = () =>
+                    isAdmin ? (setEditing(p), setFormOpen(true)) : setViewing(p)
                   return (
-                    <tr key={row.key} className="transition hover:bg-ink-50/60">
+                    <tr key={p.id} className="transition hover:bg-ink-50/60">
                       <td className="td max-w-[200px]">
-                        <span className="block truncate font-medium text-ink-800">{row.name}</span>
-                        {row.partner ? (
-                          <span className="chip mt-1 bg-brand-50 text-brand-700">등록됨</span>
-                        ) : row.name !== '미지정' ? (
-                          <span className="chip mt-1 bg-ink-100 text-ink-500">미등록</span>
-                        ) : null}
+                        <button
+                          type="button"
+                          onClick={openDetail}
+                          className="block max-w-full truncate text-left font-medium text-ink-800 hover:text-brand-700 hover:underline"
+                        >
+                          {p.name}
+                        </button>
                       </td>
-                      <td className="td max-w-[160px] truncate text-xs text-ink-600">
-                        {row.partner?.contact_person ? (
-                          <>
-                            {row.partner.contact_person}
-                            {row.partner.job_title ? ` · ${row.partner.job_title}` : ''}
-                          </>
-                        ) : (
-                          <span className="text-ink-300">—</span>
-                        )}
-                      </td>
-                      <td className="td num">
-                        {saleLink ? (
-                          <Link to={saleLink} className="font-semibold text-brand-700 hover:underline">
-                            {formatKRW(row.sale)}
-                          </Link>
-                        ) : (
-                          formatKRW(row.sale)
-                        )}
+                      <td className="td whitespace-nowrap">{p.contact_person || <span className="text-ink-300">—</span>}</td>
+                      <td className="td whitespace-nowrap">{p.job_title || <span className="text-ink-300">—</span>}</td>
+                      <td className="td whitespace-nowrap">{p.phone_main || <span className="text-ink-300">—</span>}</td>
+                      <td className="td whitespace-nowrap">{p.phone || <span className="text-ink-300">—</span>}</td>
+                      <td className="td max-w-[200px] truncate">{p.email || <span className="text-ink-300">—</span>}</td>
+                      <td className="td whitespace-nowrap font-num tabular-nums">{bizNo || <span className="text-ink-300">—</span>}</td>
+                      <td className="td max-w-[220px] truncate" title={accounts.join('\n')}>
+                        {accounts.length ? accounts.join(' / ') : <span className="text-ink-300">—</span>}
                       </td>
                       <td className="td num">
-                        {purchaseLink ? (
-                          <Link to={purchaseLink} className="font-semibold text-amber-700 hover:underline">
-                            {formatKRW(row.purchase)}
-                          </Link>
-                        ) : (
-                          formatKRW(row.purchase)
-                        )}
-                      </td>
-                      <td className="td num">{formatKRW(row.opex)}</td>
-                      <td className="td num">{row.count}건</td>
-                      <td className="td num text-ink-500">{formatDateHuman(row.last)}</td>
-                      <td className="td num">
-                        {row.partner ? (
-                          docCount ? (
-                            <button
-                              type="button"
-                              onClick={() => (isAdmin ? (setEditing(row.partner), setFormOpen(true)) : setViewing(row.partner))}
-                              className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-xs font-semibold text-brand-700 transition hover:bg-brand-50"
-                            >
-                              <Icon name="paperclip" size={14} />
-                              {docCount}
-                            </button>
-                          ) : (
-                            <span className="text-xs text-ink-300">—</span>
-                          )
+                        {docs.length ? (
+                          <button
+                            type="button"
+                            onClick={openDetail}
+                            className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-xs font-semibold text-brand-700 transition hover:bg-brand-50"
+                          >
+                            <Icon name="paperclip" size={14} />
+                            {docs.length}
+                          </button>
                         ) : (
                           <span className="text-xs text-ink-300">—</span>
                         )}
                       </td>
-                      {isAdmin && tableState === 'ready' ? (
+                      {isAdmin ? (
                         <td className="td num whitespace-nowrap">
-                          {row.partner ? (
-                            <>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setEditing(row.partner)
-                                  setFormOpen(true)
-                                }}
-                                className="mr-2 text-xs font-semibold text-brand-700 hover:underline"
-                              >
-                                수정
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setRemoving(row.partner)}
-                                className="text-xs font-semibold text-loss hover:underline"
-                              >
-                                삭제
-                              </button>
-                            </>
-                          ) : row.name !== '미지정' ? (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setEditing({ name: row.name })
-                                setFormOpen(true)
-                              }}
-                              className="text-xs font-semibold text-brand-700 hover:underline"
-                            >
-                              등록
-                            </button>
-                          ) : null}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditing(p)
+                              setFormOpen(true)
+                            }}
+                            className="mr-2 text-xs font-semibold text-brand-700 hover:underline"
+                          >
+                            수정
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setRemoving(p)}
+                            className="text-xs font-semibold text-loss hover:underline"
+                          >
+                            삭제
+                          </button>
                         </td>
                       ) : null}
                     </tr>
@@ -349,21 +280,13 @@ export default function Partners() {
         ) : (
           <EmptyState
             icon="building"
-            title={search ? '검색 결과가 없습니다' : '거래처 내역이 없습니다'}
+            title={search ? '검색 결과가 없습니다' : '등록된 거래처가 없습니다'}
             description={
-              search
-                ? '다른 거래처명으로 검색해 보세요.'
-                : '기간을 넓히거나 장부에 거래처명을 입력해 보세요.'
+              search ? '다른 단어로 검색해 보세요.' : '거래처 등록 버튼으로 협력사를 등록해 보세요.'
             }
           />
         )}
       </div>
-
-      {!loading && !entries.length && !search ? (
-        <p className="text-center text-xs text-ink-400">
-          선택한 기간에 장부 내역이 없습니다. 기간을 넓혀 보세요.
-        </p>
-      ) : null}
 
       <PartnerFormModal
         open={formOpen}
