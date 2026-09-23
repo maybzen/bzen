@@ -11,6 +11,7 @@ import {
   listPartnerDocs,
   listPartners,
   partnersTableExists,
+  updatePartner,
 } from '../lib/api'
 
 /**
@@ -55,6 +56,22 @@ export default function Partners() {
   const [viewing, setViewing] = useState(null)
   const [removing, setRemoving] = useState(null)
   const [busy, setBusy] = useState(false)
+  const [customGroupId, setCustomGroupId] = useState(null)
+  const [customGroupValue, setCustomGroupValue] = useState('')
+
+  const saveGroup = async (partner, value) => {
+    const next = String(value || '').trim() || '기타'
+    if (next === (partner.group_name || '기타')) return
+    try {
+      const saved = await updatePartner(partner.id, { group_name: next })
+      setPartners((list) => list.map((p) => (p.id === partner.id ? { ...p, ...saved } : p)))
+      toast.success(`구분이 '${next}'(으)로 변경되었습니다.`)
+    } catch (error) {
+      toast.error(error.message)
+    } finally {
+      setCustomGroupId(null)
+    }
+  }
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -91,6 +108,11 @@ export default function Partners() {
   useEffect(() => {
     load()
   }, [load, reloadKey])
+
+  const groupOptions = useMemo(() => {
+    const custom = [...new Set(partners.map((p) => p.group_name).filter((g) => g && !PARTNER_GROUPS.includes(g)))]
+    return [...PARTNER_GROUPS, ...custom.sort()]
+  }, [partners])
 
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -199,7 +221,7 @@ export default function Partners() {
               onChange={(e) => setGroupFilter(e.target.value)}
             >
               <option value="">전체 구분</option>
-              {PARTNER_GROUPS.map((g) => (
+              {groupOptions.map((g) => (
                 <option key={g} value={g}>
                   {g}
                 </option>
@@ -238,7 +260,58 @@ export default function Partners() {
                   return (
                     <tr key={p.id} className="transition hover:bg-ink-50/60">
                       <td className="td whitespace-nowrap">
-                        <span className="chip bg-ink-100 text-ink-600">{p.group_name || '기타'}</span>
+                        {isAdmin ? (
+                          customGroupId === p.id ? (
+                            <span className="flex items-center gap-1">
+                              <input
+                                autoFocus
+                                className="input w-32 py-1 text-xs"
+                                value={customGroupValue}
+                                onChange={(e) => setCustomGroupValue(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') saveGroup(p, customGroupValue)
+                                  if (e.key === 'Escape') setCustomGroupId(null)
+                                }}
+                                placeholder="직접 입력"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => saveGroup(p, customGroupValue)}
+                                className="text-xs font-bold text-brand-700 hover:underline"
+                              >
+                                저장
+                              </button>
+                            </span>
+                          ) : (
+                            <select
+                              className="input w-auto py-1 text-xs"
+                              value={PARTNER_GROUPS.includes(p.group_name) ? p.group_name : p.group_name ? '__current' : '기타'}
+                              onChange={(e) => {
+                                const v = e.target.value
+                                if (v === '__new') {
+                                  setCustomGroupId(p.id)
+                                  setCustomGroupValue(
+                                    PARTNER_GROUPS.includes(p.group_name) ? '' : p.group_name || '',
+                                  )
+                                } else if (v !== '__current') {
+                                  saveGroup(p, v)
+                                }
+                              }}
+                            >
+                              {PARTNER_GROUPS.map((g) => (
+                                <option key={g} value={g}>
+                                  {g}
+                                </option>
+                              ))}
+                              {!PARTNER_GROUPS.includes(p.group_name) && p.group_name ? (
+                                <option value="__current">{p.group_name}</option>
+                              ) : null}
+                              <option value="__new">직접 입력…</option>
+                            </select>
+                          )
+                        ) : (
+                          <span className="chip bg-ink-100 text-ink-600">{p.group_name || '기타'}</span>
+                        )}
                       </td>
                       <td className="td max-w-[200px]">
                         <button
