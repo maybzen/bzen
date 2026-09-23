@@ -4,6 +4,7 @@ import PartnerFormModal from '../components/PartnerFormModal'
 import { useToast } from '../components/Toast'
 import { ConfirmDialog, EmptyState, InlineAlert, LoadingBlock, PageHeader, StatCard } from '../components/ui'
 import { useAuth } from '../auth/AuthContext'
+import { PARTNER_GROUPS } from '../lib/constants'
 import { downloadTextFile, toCSV } from '../lib/csv'
 import {
   deletePartner,
@@ -46,6 +47,7 @@ export default function Partners() {
   const [docsByPartner, setDocsByPartner] = useState({})
   const [tableState, setTableState] = useState('checking')
   const [search, setSearch] = useState('')
+  const [groupFilter, setGroupFilter] = useState('')
   const [reloadKey, setReloadKey] = useState(0)
 
   const [formOpen, setFormOpen] = useState(false)
@@ -92,13 +94,14 @@ export default function Partners() {
 
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase()
-    if (!q) return partners
-    return partners.filter((p) =>
-      [p.name, p.contact_person, p.job_title, p.phone_main, p.phone, p.email, p.memo].some((v) =>
+    return partners.filter((p) => {
+      if (groupFilter && (p.group_name || '기타') !== groupFilter) return false
+      if (!q) return true
+      return [p.name, p.group_name, p.contact_person, p.job_title, p.phone_main, p.phone, p.email, p.memo].some((v) =>
         String(v || '').toLowerCase().includes(q),
-      ),
-    )
-  }, [partners, search])
+      )
+    })
+  }, [partners, search, groupFilter])
 
   const docTotal = useMemo(
     () => Object.values(docsByPartner).reduce((a, list) => a + list.length, 0),
@@ -130,8 +133,9 @@ export default function Partners() {
       toast.info('내보낼 거래처가 없습니다.')
       return
     }
-    const headers = ['거래처명', '담당자', '직함', '대표번호', '휴대폰', '이메일', '사업자번호', '계좌', '메모']
+    const headers = ['구분', '거래처명', '담당자', '직함', '대표번호', '휴대폰', '이메일', '사업자번호', '계좌', '메모']
     const body = rows.map((p) => [
+      p.group_name || '기타',
       p.name,
       p.contact_person,
       p.job_title,
@@ -174,19 +178,33 @@ export default function Partners() {
       </div>
 
       <div className="card overflow-hidden">
-        <div className="border-b border-ink-200 px-4 py-3.5">
-          <div className="relative">
-            <Icon
-              name="search"
-              size={16}
-              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-400"
-            />
-            <input
-              className="input pl-9"
-              placeholder="거래처명·담당자·연락처·메모 검색"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
+        <div className="flex flex-col gap-3 border-b border-ink-200 px-4 py-3.5">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <div className="relative flex-1">
+              <Icon
+                name="search"
+                size={16}
+                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-400"
+              />
+              <input
+                className="input pl-9"
+                placeholder="거래처명·담당자·연락처·메모 검색"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
+            <select
+              className="input sm:w-52"
+              value={groupFilter}
+              onChange={(e) => setGroupFilter(e.target.value)}
+            >
+              <option value="">전체 구분</option>
+              {PARTNER_GROUPS.map((g) => (
+                <option key={g} value={g}>
+                  {g}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
 
@@ -197,6 +215,7 @@ export default function Partners() {
             <table className="w-full min-w-[1080px] border-collapse text-xs">
               <thead className="bg-ink-50/70">
                 <tr>
+                  <th className="th">구분</th>
                   <th className="th">거래처명</th>
                   <th className="th">담당자</th>
                   <th className="th">직함</th>
@@ -218,6 +237,9 @@ export default function Partners() {
                     isAdmin ? (setEditing(p), setFormOpen(true)) : setViewing(p)
                   return (
                     <tr key={p.id} className="transition hover:bg-ink-50/60">
+                      <td className="td whitespace-nowrap">
+                        <span className="chip bg-ink-100 text-ink-600">{p.group_name || '기타'}</span>
+                      </td>
                       <td className="td max-w-[200px]">
                         <button
                           type="button"

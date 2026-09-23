@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import Icon from './Icon'
 import { Field, InlineAlert, Modal, Spinner } from './ui'
 import { useToast } from './Toast'
+import { PARTNER_GROUPS } from '../lib/constants'
 import {
   PARTNER_DOC_TYPES,
   createPartner,
@@ -16,6 +17,7 @@ import { formatDateTime, formatFileSize } from '../lib/format'
 
 const EMPTY = {
   name: '',
+  group_name: '',
   contact_person: '',
   job_title: '',
   email: '',
@@ -179,6 +181,7 @@ export default function PartnerFormModal({ open, onClose, onSaved, initial, read
     if (initial) {
       setForm({
         name: initial.name || '',
+        group_name: initial.group_name || '',
         contact_person: initial.contact_person || '',
         job_title: initial.job_title || '',
         email: initial.email || '',
@@ -215,6 +218,7 @@ export default function PartnerFormModal({ open, onClose, onSaved, initial, read
     try {
       const payload = {
         name: form.name.trim(),
+        group_name: form.group_name.trim() || '기타',
         contact_person: form.contact_person.trim(),
         job_title: form.job_title.trim(),
         email: form.email.trim(),
@@ -305,6 +309,22 @@ export default function PartnerFormModal({ open, onClose, onSaved, initial, read
             placeholder="예: ○○ 주식회사"
             disabled={readOnly}
           />
+        </Field>
+
+        <Field label="구분" hint="협력사 그룹별로 묶어 봅니다.">
+          <input
+            className="input"
+            list="partner-group-list"
+            value={form.group_name}
+            onChange={set('group_name')}
+            placeholder="예: 음향·조명·영상"
+            disabled={readOnly}
+          />
+          <datalist id="partner-group-list">
+            {PARTNER_GROUPS.map((g) => (
+              <option key={g} value={g} />
+            ))}
+          </datalist>
         </Field>
 
         <Field label="담당자">

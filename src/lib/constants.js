@@ -147,6 +147,38 @@ const SUGGEST_RULES = [
   { re: /상품|도매/, type: 'purchase', category: '상품매입' },
 ]
 
+/** 거래처 구분 (협력사 그룹) */
+export const PARTNER_GROUPS = [
+  '인력·스태프',
+  '음향·조명·영상',
+  '무대·전시·장치',
+  '케이터링·식음·숙박',
+  '인쇄·디자인·홍보',
+  '장소·시설',
+  '운송·차량',
+  '사무·통신·렌탈',
+  '금융·세무·보험',
+  '상품·기념품',
+  '기타',
+]
+
+/** 법인카드 이용자 코드 */
+export const CARD_USERS = [
+  { code: 'ALL', name: '전체' },
+  { code: 'Z', name: '이향란' },
+  { code: 'G', name: '권혜민 대리' },
+  { code: 'S', name: '박현정' },
+  { code: 'H', name: '김혜린' },
+  { code: 'J', name: '박은영' },
+  { code: 'N', name: '김상희' },
+  { code: 'B', name: '이보람 팀장님' },
+  { code: 'M', name: '이정현' },
+]
+
+export function cardUserName(code) {
+  return CARD_USERS.find((u) => u.code === code)?.name || ''
+}
+
 export function suggestCategory(merchant, memo, entryType = null) {
   const text = `${merchant || ''} ${memo || ''}`
   if (!text.trim()) return null

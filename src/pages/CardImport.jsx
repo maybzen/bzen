@@ -5,8 +5,8 @@ import { AttachmentCell, AttachmentModal } from '../components/Attachments'
 import { useToast } from '../components/Toast'
 import { ConfirmDialog, EmptyState, Field, InlineAlert, LoadingBlock, PageHeader, StatCard } from '../components/ui'
 import { useAuth } from '../auth/AuthContext'
-import { CATEGORIES, ENTRY_META, categoryHint, suggestCategory } from '../lib/constants'
-import { parseAmount, parseCSV } from '../lib/csv'
+import { CATEGORIES, ENTRY_META, CARD_USERS, cardUserName, categoryHint, suggestCategory } from '../lib/constants'
+import { downloadTextFile, parseAmount, parseCSV, toCSV } from '../lib/csv'
 import { formatKRW, toISODate } from '../lib/format'
 import { detectFixedCosts } from '../lib/summary'
 import {
@@ -193,6 +193,34 @@ export default function CardImport() {
   const cardOf = (entry) => {
     const m = String(entry.memo || '').match(/법카\s*([\d-]+)/)
     return m ? `법카 ${m[1]}` : '기타'
+  }
+
+  const exportRegistered = () => {
+    if (!visibleRegistered.length) {
+      toast.info('내보낼 내역이 없습니다.')
+      return
+    }
+    const projectName = (id) => regProjects.find((p) => p.id === id)?.name || ''
+    const headers = ['이용일자', '가맹점', '적요', '프로젝트', '이용자', '유형', '항목', '공급가액', '부가세', '합계', '카드', '메모']
+    const rows = visibleRegistered.map((e) => {
+      const userCode = memoUser(e.memo)
+      const userLabel = userCode ? `${userCode}${cardUserName(userCode) ? `(${cardUserName(userCode)})` : ''}` : ''
+      return [
+        e.entry_date,
+        e.counterparty,
+        e.description,
+        projectName(e.project_id),
+        userLabel,
+        e.entry_type === 'sale' ? '매출' : e.entry_type === 'purchase' ? '매입' : '운영비',
+        e.category,
+        Number(e.supply_amount || 0),
+        Number(e.vat_amount || 0),
+        Number(e.total_amount || 0),
+        cardOf(e),
+        e.memo,
+      ]
+    })
+    downloadTextFile(`법인카드_${period.range.from || 'all'}_${period.range.to || 'all'}.csv`, toCSV(headers, rows))
   }
   const [removing, setRemoving] = useState(null)
   const [removingMany, setRemovingMany] = useState(null)
@@ -683,7 +711,12 @@ export default function CardImport() {
 
   return (
     <div className="flex flex-col gap-5">
-      <PageHeader title="법인카드" description="카드사 이용내역 파일을 올려 장부에 일괄 등록합니다." />
+      <PageHeader title="법인카드" description="카드사 이용내역 파일을 올려 장부에 일괄 등록합니다.">
+        <button type="button" className="btn-ghost" onClick={exportRegistered}>
+          <Icon name="download" size={16} />
+          목록 내보내기
+        </button>
+      </PageHeader>
 
       <div className="card p-5">
         <div className="flex flex-wrap items-center gap-2">
@@ -907,12 +940,19 @@ export default function CardImport() {
                       </select>
                     </td>
                     <td className="td">
-                      <input
-                        className="input w-20 py-1 text-xs"
+                      <select
+                        className="input w-auto py-1 text-xs"
                         value={r.cardUser}
                         onChange={(e) => setRow(r.key, { cardUser: e.target.value })}
-                        placeholder="ALL"
-                      />
+                        title={cardUserName(r.cardUser)}
+                      >
+                        <option value="">—</option>
+                        {CARD_USERS.map((u) => (
+                          <option key={u.code} value={u.code}>
+                            {u.code} · {u.name}
+                          </option>
+                        ))}
+                      </select>
                     </td>
                     <td className="td">
                       <select
@@ -1255,12 +1295,19 @@ export default function CardImport() {
                           </select>
                         </td>
                         <td className="td">
-                          <input
-                            className="input w-20 py-1 text-xs"
+                          <select
+                            className="input w-auto py-1 text-xs"
                             value={cardUser}
                             onChange={(e) => setCell(entry.id, { cardUser: e.target.value })}
-                            placeholder="ALL"
-                          />
+                            title={cardUserName(cardUser)}
+                          >
+                            <option value="">—</option>
+                            {CARD_USERS.map((u) => (
+                              <option key={u.code} value={u.code}>
+                                {u.code} · {u.name}
+                              </option>
+                            ))}
+                          </select>
                         </td>
                         <td className="td num">
                           <input
