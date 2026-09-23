@@ -59,7 +59,7 @@ export default function Projects() {
     const visible = visibleProjects
     const grouped = groupByProject(entries, visible)
     const map = new Map(grouped.map((r) => [r.project?.id || 'none', r]))
-    const all = projects.map((p) => map.get(p.id) || { project: p, sale: 0, purchase: 0, opex: 0, profit: 0, margin: null, count: 0 })
+    const all = visible.map((p) => map.get(p.id) || { project: p, sale: 0, purchase: 0, opex: 0, profit: 0, margin: null, count: 0 })
     const filtered = statusFilter === 'all' ? all : all.filter((r) => r.project.status === statusFilter)
     // 최신순: 시작일 내림차순 (없으면 등록순)
     return filtered.sort((a, b) => {
@@ -68,7 +68,7 @@ export default function Projects() {
       if (da !== db) return db.localeCompare(da)
       return String(b.project.created_at || '').localeCompare(String(a.project.created_at || ''))
     })
-  }, [entries, projects, statusFilter])
+  }, [entries, visibleProjects, statusFilter])
 
   const statusCounts = useMemo(() => {
     const counts = { all: visibleProjects.length }
