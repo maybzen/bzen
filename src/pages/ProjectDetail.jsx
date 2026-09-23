@@ -148,7 +148,6 @@ export default function ProjectDetail() {
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-1.5">
               <span className={`chip ${status.chip}`}>{status.label}</span>
-              {project.code ? <span className="chip bg-ink-100 text-ink-500">{project.code}</span> : null}
             </div>
             <h1 className="mt-2 text-xl font-extrabold tracking-tight text-ink-900 sm:text-2xl">
               {project.name}
@@ -157,6 +156,15 @@ export default function ProjectDetail() {
               {project.client || '발주처 미지정'}
               {project.start_date
                 ? ` · ${formatDateHuman(project.start_date)}${project.end_date ? ` ~ ${formatDateHuman(project.end_date)}` : ''}`
+                : ''}
+            </p>
+            <p className="mt-1 text-sm text-ink-600">
+              {profiles.find((p) => p.id === project.manager_id)?.full_name
+                ? `담당 ${profiles.find((p) => p.id === project.manager_id).full_name}`
+                : '담당 미지정'}
+              {project.venue ? ` · ${project.venue}` : ''}
+              {Number(project.profit_rate)
+                ? ` · 목표 수익률 ${formatPercent(Number(project.profit_rate))}`
                 : ''}
             </p>
           </div>

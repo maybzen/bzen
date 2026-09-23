@@ -1,17 +1,18 @@
 import { useEffect, useState } from 'react'
 import { Field, InlineAlert, Modal, Spinner } from './ui'
 import { useToast } from './Toast'
-import { PROJECT_STATUS, PROJECT_STATUS_KEYS } from '../lib/constants'
+import { PROJECT_STATUS, PROJECT_STATUS_KEYS, sortManagers } from '../lib/constants'
 import { createProject, updateProject } from '../lib/api'
 
 const EMPTY = {
   name: '',
-  code: '',
   client: '',
   status: 'active',
   start_date: '',
   end_date: '',
   contract_amount: '',
+  profit_rate: '',
+  venue: '',
   manager_id: '',
   memo: '',
 }
@@ -28,12 +29,13 @@ export default function ProjectFormModal({ open, onClose, onSaved, initial, prof
     if (initial) {
       setForm({
         name: initial.name || '',
-        code: initial.code || '',
         client: initial.client || '',
         status: initial.status || 'active',
         start_date: initial.start_date || '',
         end_date: initial.end_date || '',
         contract_amount: String(initial.contract_amount ?? ''),
+        profit_rate: initial.profit_rate ? String(initial.profit_rate) : '',
+        venue: initial.venue || '',
         manager_id: initial.manager_id || '',
         memo: initial.memo || '',
       })
@@ -53,12 +55,13 @@ export default function ProjectFormModal({ open, onClose, onSaved, initial, prof
     try {
       const payload = {
         name: form.name.trim(),
-        code: form.code.trim(),
         client: form.client.trim(),
         status: form.status,
         start_date: form.start_date || null,
         end_date: form.end_date || null,
         contract_amount: Math.round(Number(String(form.contract_amount).replace(/[^0-9.-]/g, '')) || 0),
+        profit_rate: Number(String(form.profit_rate).replace(/[^0-9.-]/g, '')) || 0,
+        venue: form.venue.trim(),
         manager_id: form.manager_id || null,
         memo: form.memo.trim(),
       }
@@ -109,12 +112,12 @@ export default function ProjectFormModal({ open, onClose, onSaved, initial, prof
           <input className="input" value={form.name} onChange={set('name')} placeholder="예: 2026 브랜드 리뉴얼" />
         </Field>
 
-        <Field label="프로젝트 코드">
-          <input className="input" value={form.code} onChange={set('code')} placeholder="예: BZ-2601" />
-        </Field>
-
         <Field label="발주처 / 고객사">
           <input className="input" value={form.client} onChange={set('client')} placeholder="예: ○○ 주식회사" />
+        </Field>
+
+        <Field label="장소">
+          <input className="input" value={form.venue} onChange={set('venue')} placeholder="예: BEXCO 제2전시장" />
         </Field>
 
         <Field label="진행 상태">
@@ -130,7 +133,7 @@ export default function ProjectFormModal({ open, onClose, onSaved, initial, prof
         <Field label="담당자">
           <select className="input" value={form.manager_id} onChange={set('manager_id')}>
             <option value="">선택 안 함</option>
-            {profiles.map((p) => (
+            {sortManagers(profiles).map((p) => (
               <option key={p.id} value={p.id}>
                 {p.full_name || p.email}
                 {p.department ? ` · ${p.department}` : ''}
@@ -154,6 +157,16 @@ export default function ProjectFormModal({ open, onClose, onSaved, initial, prof
             value={form.contract_amount}
             onChange={set('contract_amount')}
             placeholder="0"
+          />
+        </Field>
+
+        <Field label="목표 수익률 (%)" hint="비워두면 표시하지 않습니다.">
+          <input
+            className="input num text-left"
+            inputMode="decimal"
+            value={form.profit_rate}
+            onChange={set('profit_rate')}
+            placeholder="예: 30"
           />
         </Field>
 

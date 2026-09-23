@@ -21,6 +21,8 @@ export default function Projects() {
   const [projects, setProjects] = useState([])
   const [entries, setEntries] = useState([])
   const [profiles, setProfiles] = useState([])
+
+  const managerName = (id) => profiles.find((p) => p.id === id)?.full_name || ''
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState(null)
   const [removing, setRemoving] = useState(null)
@@ -144,9 +146,6 @@ export default function Projects() {
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-1.5">
                       <span className={`chip ${status.chip}`}>{status.label}</span>
-                      {project.code ? (
-                        <span className="chip bg-ink-100 text-ink-500">{project.code}</span>
-                      ) : null}
                     </div>
                     <Link
                       to={`/projects/${project.id}`}
@@ -160,6 +159,19 @@ export default function Projects() {
                         ? ` · ${formatDateHuman(project.start_date)}${project.end_date ? ` ~ ${formatDateHuman(project.end_date)}` : ''}`
                         : ''}
                     </p>
+                    <p className="mt-0.5 truncate text-xs text-ink-500">
+                      {managerName(project.manager_id)
+                        ? `담당 ${managerName(project.manager_id)}`
+                        : '담당 미지정'}
+                      {project.venue ? ` · ${project.venue}` : ''}
+                    </p>
+                    {(project.contract_amount > 0 || Number(project.profit_rate)) ? (
+                      <p className="mt-0.5 truncate text-xs font-semibold text-ink-700">
+                        {project.contract_amount > 0 ? `계약 ${formatKRW(project.contract_amount)}원` : ''}
+                        {project.contract_amount > 0 && Number(project.profit_rate) ? ' · ' : ''}
+                        {Number(project.profit_rate) ? `목표 ${formatPercent(Number(project.profit_rate))}` : ''}
+                      </p>
+                    ) : null}
                   </div>
 
                   {isAdmin ? (
