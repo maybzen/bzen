@@ -214,6 +214,8 @@ export function StatCard({
   icon,
   hint,
   to,
+  onClick,
+  selected,
 }) {
   const style = TONES[tone] || TONES.neutral
   const up = typeof delta === 'number' && delta >= 0
@@ -253,7 +255,21 @@ export function StatCard({
     </>
   )
 
-  if (!to) return <div className="card p-4 sm:p-5">{body}</div>
+  if (!to && !onClick) return <div className="card p-4 sm:p-5">{body}</div>
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        title="클릭해서 목록 필터"
+        className={`card block w-full p-4 text-left transition hover:shadow-pop sm:p-5 ${
+          selected ? 'ring-2 ring-brand-500' : ''
+        }`}
+      >
+        {body}
+      </button>
+    )
+  }
   return (
     <Link to={to} className="card block p-4 transition hover:shadow-pop sm:p-5">
       {body}

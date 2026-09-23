@@ -1033,7 +1033,11 @@ export default function CardImport() {
                       value={c.total}
                       tone="neutral"
                       icon="receipt"
-                      hint={`${c.count}건`}
+                      hint={`${c.count}건 · 클릭하면 이 카드만 보기`}
+                      onClick={() =>
+                        setRegCardFilter((f) => (f === c.label ? '' : c.label))
+                      }
+                      selected={regCardFilter === c.label}
                     />
                   ))
               })()}
