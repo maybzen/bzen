@@ -1362,49 +1362,6 @@ export default function CardImport() {
         attachments={viewerFiles || []}
       />
 
-      <section className="card overflow-hidden">
-        <header className="border-b border-ink-200 px-4 py-3.5">
-          <h2 className="text-sm font-bold text-ink-900">고정비 자동 감지</h2>
-          <p className="mt-0.5 text-xs text-ink-500">
-            최근 12개월 · 3개월 이상 · 월 금액 편차 35% 이내면 고정비로 봅니다 (장부 전체 기준)
-          </p>
-        </header>
-        {fixedLoading ? (
-          <LoadingBlock />
-        ) : fixedCosts.length ? (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[560px] border-collapse text-xs">
-              <thead className="bg-ink-50/70">
-                <tr>
-                  <th className="th">거래처</th>
-                  <th className="th text-right">월 평균</th>
-                  <th className="th text-right">감지 개월</th>
-                  <th className="th text-right">최근 금액</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-ink-100">
-                {fixedCosts.map((f) => (
-                  <tr key={f.name}>
-                    <td className="td font-medium">{f.name}</td>
-                    <td className="td num font-bold">{formatKRW(f.avg)}</td>
-                    <td className="td num">{f.months}개월</td>
-                    <td className="td num text-ink-500">
-                      {formatKRW(f.last)} <span className="text-ink-400">({f.lastMonth.slice(2)})</span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <EmptyState
-            icon="coins"
-            title="감지된 고정비가 없습니다"
-            description="자료가 3개월 이상 쌓이면 자동으로 잡힙니다."
-          />
-        )}
-      </section>
-
       <p className="text-center text-xs leading-relaxed text-ink-400">
         {ENTRY_META.purchase.label}·{ENTRY_META.opex.label}로 나뉘어 각 장부에 저장됩니다.
         할부 건은 전체 금액으로 한 번에 등록되니 나눠야 하면 행을 수정해 주세요.

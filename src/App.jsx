@@ -13,6 +13,7 @@ const Dashboard = lazy(() => import('./pages/Dashboard'))
 const LedgerPage = lazy(() => import('./pages/LedgerPage'))
 const CardImport = lazy(() => import('./pages/CardImport'))
 const Partners = lazy(() => import('./pages/Partners'))
+const FixedCosts = lazy(() => import('./pages/FixedCosts'))
 const Projects = lazy(() => import('./pages/Projects'))
 const ProjectDetail = lazy(() => import('./pages/ProjectDetail'))
 const Reports = lazy(() => import('./pages/Reports'))
@@ -175,6 +176,15 @@ export default function App() {
               element={
                 <Guard perm="partners">
                   <Partners />
+                </Guard>
+              }
+            />
+
+            <Route
+              path="/fixed-costs"
+              element={
+                <Guard perm="fixed">
+                  <FixedCosts />
                 </Guard>
               }
             />
