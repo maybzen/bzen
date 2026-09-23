@@ -117,16 +117,17 @@ const SUGGEST_RULES = [
   { re: /주유|주유소|에너지|충전|기름/, type: 'opex', category: '차량유지비' },
   { re: /주차|파킹/, type: 'opex', category: '차량유지비' },
   { re: /택시|티머니|코레일|KTX|항공|고속버스|공항|철도|지하철|버스/, type: 'opex', category: '여비교통비' },
+  { re: /기장/, type: 'opex', category: '지급수수료' },
   { re: /인쇄|명함|프린트|감사패|현수막|플래카드/, type: 'opex', category: '도서인쇄비' },
   { re: /교보|알라딘|예스24|서점|도서/, type: 'opex', category: '도서인쇄비' },
   { re: /세무|세금|구청|법원|등기소|국세|지방세|국민연금|건강보험|고용보험/, type: 'opex', category: '세금과공과' },
   {
-    re: /김밥|식당|레스토랑|급식|뷔페|족발|치킨|피자|햄버거|국밥|냉면|분식|돈까스|삼겹|갈비|초밥|중식|양식|한식|일식|카페|커피|베이커리|제과|과자|빵집|아이스크림|빙수|설빙|투마미|미분당|케이크|도넛|샌드위치|샐러드|포케|마라탕|떡볶이|순대|쌀국수|칼국수|국수|라면|짬뽕|짜장|탕수육|카레|커리|횟집|사시미|참가자미|참치|광어|연어|파스타|스테이크|고깃집|술집|호프|이자카야|브런치|도시락|후식|다과|음료|주스/,
+    re: /김밥|식당|레스토랑|급식|뷔페|족발|치킨|피자|햄버거|국밥|냉면|분식|돈까스|삼겹|갈비|초밥|중식|양식|한식|일식|카페|커피|베이커리|제과|과자|빵집|아이스크림|빙수|설빙|투마미|미분당|케이크|도넛|샌드위치|샐러드|포케|마라탕|떡볶이|순대|쌀국수|칼국수|국수|라면|짬뽕|짜장|탕수육|카레|커리|횟집|사시미|참가자미|참치|광어|연어|파스타|스테이크|고깃집|술집|호프|이자카야|브런치|도시락|후식|다과|음료|주스|케이터링|연회|리셉션/,
     type: 'opex',
     category: '복리후생비',
   },
-  { re: /KT|SKT|LGU|SK텔레콤|통신|인터넷|와이파이|휴대폰|포켓와이파이/, type: 'opex', category: '통신비' },
-  { re: /우체국|우편|등기/, type: 'opex', category: '통신비' },
+  { re: /KT|SKT|LGU|SK텔레콤|통신|전화|인터넷|와이파이|휴대폰|포켓와이파이/, type: 'opex', category: '통신비' },
+  { re: /우체국|우편/, type: 'opex', category: '통신비' },
   {
     re: /구독|Notion|노션|Adobe|어도비|Microsoft|MS365|AWS|클라우드|GPT|ChatGPT|Claude|클로드|Anthropic|OpenAI|오픈AI|유튜브|넷플릭스|멜론|스포티파이|한글과컴퓨터|안랩|백신/,
     type: 'opex',
@@ -137,14 +138,35 @@ const SUGGEST_RULES = [
   { re: /보험/, type: 'opex', category: '보험료' },
   { re: /은행|토스|카카오페이|페이코|수수료/, type: 'opex', category: '지급수수료' },
   { re: /다이소|문구|마트|편의점|올리브영|이케아|하이마트|전자랜드|쿠팡|GS25|지에스|CU\b|씨유|세븐일레븐|이마트24|미니스톱|홈플러스|롯데마트/, type: 'opex', category: '소모품비' },
+  { re: /블루링크|하이패스|통행료/, type: 'opex', category: '차량유지비' },
+  { re: /관리비/, type: 'opex', category: '임차료' },
+  { re: /복합기|공청기|공기청정/, type: 'opex', category: '임차료' },
+  { re: /숙박/, type: 'opex', category: '여비교통비' },
+  { re: /통역/, type: 'purchase', category: '외주용역비' },
+  { re: /음향|조명|무대|중계|사진촬영|등록시스템/, type: 'purchase', category: '외주용역비' },
+  { re: /출력|제작물|제작비|포토존|아크릴|기념품/, type: 'purchase', category: '외주용역비' },
   { re: /렌탈|리스|임대/, type: 'opex', category: '임차료' },
   { re: /한전|전기요금|가스요금|수도요금|수돗물/, type: 'opex', category: '수도광열비' },
   { re: /급여|월급|상여|인건/, type: 'opex', category: '인건비' },
   { re: /외주|용역|프리랜서|컨설팅|자문/, type: 'purchase', category: '외주용역비' },
   { re: /원재료|자재|원단/, type: 'purchase', category: '원재료비' },
-  { re: /택배|운송|화물|퀵서비스|용달/, type: 'purchase', category: '운반비' },
+  { re: /택배|운송|수송|화물|퀵서비스|용달/, type: 'purchase', category: '운반비' },
   { re: /노트북|컴퓨터|모니터|키보드|마우스|장비|가전|냉장고/, type: 'purchase', category: '장비구입' },
   { re: /상품|도매/, type: 'purchase', category: '상품매입' },
+  { re: /대관/, type: 'purchase', category: '임차료' },
+  { re: /월관리|월 관리/, type: 'purchase', category: '임차료' },
+  { re: /보관|창고/, type: 'purchase', category: '임차료' },
+  { re: /생수/, type: 'opex', category: '복리후생비' },
+  { re: /회계사|세무사|회계법인/, type: 'opex', category: '지급수수료' },
+  { re: /홈페이지|웹사이트/, type: 'purchase', category: '외주용역비' },
+  { re: /티셔츠|단체복|유니폼/, type: 'purchase', category: '외주용역비' },
+  { re: /오피스넷/, type: 'opex', category: '통신비' },
+  { re: /세관|관세/, type: 'opex', category: '세금과공과' },
+  { re: /디자인/, type: 'purchase', category: '외주용역비' },
+  { re: /전시|부스/, type: 'purchase', category: '외주용역비' },
+  { re: /시안/, type: 'purchase', category: '외주용역비' },
+  { re: /영상|촬영/, type: 'purchase', category: '외주용역비' },
+  { re: /LED/, type: 'purchase', category: '외주용역비' },
 ]
 
 /** 거래처 구분 (협력사 그룹) */
@@ -180,7 +202,7 @@ export function cardUserName(code) {
 }
 
 export function suggestCategory(merchant, memo, entryType = null) {
-  const text = `${merchant || ''} ${memo || ''}`
+  const text = `${merchant || ''} ${memo || ''}`.replace(/\s+/g, '')
   if (!text.trim()) return null
   for (const rule of SUGGEST_RULES) {
     if (entryType && rule.type !== entryType) continue
