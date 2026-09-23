@@ -5,7 +5,7 @@ import PeriodPicker, { usePeriod } from '../components/PeriodPicker'
 import ProjectFormModal from '../components/ProjectFormModal'
 import { ProfitBar } from '../components/Charts'
 import { useToast } from '../components/Toast'
-import { ConfirmDialog, EmptyState, LoadingBlock, PageHeader, StatCard } from '../components/ui'
+import { ConfirmDialog, EmptyState, LoadingBlock, PageHeader, SegmentedControl, StatCard } from '../components/ui'
 import { useAuth } from '../auth/AuthContext'
 import { PROJECT_STATUS } from '../lib/constants'
 import { formatDateHuman, formatKRW, formatPercent } from '../lib/format'
@@ -28,6 +28,7 @@ export default function Projects() {
   const [removing, setRemoving] = useState(null)
   const [busy, setBusy] = useState(false)
   const [reloadKey, setReloadKey] = useState(0)
+  const [statusFilter, setStatusFilter] = useState('active')
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -54,8 +55,22 @@ export default function Projects() {
   const rows = useMemo(() => {
     const grouped = groupByProject(entries, projects)
     const map = new Map(grouped.map((r) => [r.project?.id || 'none', r]))
-    return projects.map((p) => map.get(p.id) || { project: p, sale: 0, purchase: 0, opex: 0, profit: 0, margin: null, count: 0 })
-  }, [entries, projects])
+    const all = projects.map((p) => map.get(p.id) || { project: p, sale: 0, purchase: 0, opex: 0, profit: 0, margin: null, count: 0 })
+    const filtered = statusFilter === 'all' ? all : all.filter((r) => r.project.status === statusFilter)
+    // 최신순: 시작일 내림차순 (없으면 등록순)
+    return filtered.sort((a, b) => {
+      const da = a.project.start_date || ''
+      const db = b.project.start_date || ''
+      if (da !== db) return db.localeCompare(da)
+      return String(b.project.created_at || '').localeCompare(String(a.project.created_at || ''))
+    })
+  }, [entries, projects, statusFilter])
+
+  const statusCounts = useMemo(() => {
+    const counts = { all: projects.length }
+    for (const p of projects) counts[p.status] = (counts[p.status] || 0) + 1
+    return counts
+  }, [projects])
 
   const totals = useMemo(() => summarize(entries), [entries])
   const maxSale = Math.max(1, ...rows.map((r) => Math.max(r.sale, Math.abs(r.profit))))
@@ -107,6 +122,23 @@ export default function Projects() {
         />
       </div>
 
+      <div className="card overflow-hidden">
+        <div className="border-b border-ink-200 px-4 py-3.5">
+          <SegmentedControl
+            size="sm"
+            value={statusFilter}
+            onChange={setStatusFilter}
+            options={[
+              { key: 'active', label: `진행중 ${statusCounts.active || 0}` },
+              { key: 'proposal', label: `제안서 ${statusCounts.proposal || 0}` },
+              { key: 'done', label: `완료 ${statusCounts.done || 0}` },
+              { key: 'dropped', label: `탈락 ${statusCounts.dropped || 0}` },
+              { key: 'all', label: `전체 ${statusCounts.all || 0}` },
+            ]}
+          />
+        </div>
+      </div>
+
       {loading ? (
         <LoadingBlock />
       ) : !projects.length ? (
@@ -139,6 +171,24 @@ export default function Projects() {
             const status = PROJECT_STATUS[project.status] || PROJECT_STATUS.active
             const achieved =
               project.contract_amount > 0 ? (row.sale / project.contract_amount) * 100 : null
+
+            // 제안서·탈락은 장부 집계 대신 제안 정보 위주로 보여줍니다.
+            if (project.status === 'proposal' || project.status === 'dropped') {
+              return (
+                <ProposalCard
+                  key={project.id}
+                  project={project}
+                  status={status}
+                  isAdmin={isAdmin}
+                  managerName={managerName(project.manager_id)}
+                  onEdit={() => {
+                    setEditing(project)
+                    setFormOpen(true)
+                  }}
+                  onDelete={() => setRemoving(project)}
+                />
+              )
+            }
 
             return (
               <article key={project.id} className="card flex flex-col p-4">
@@ -287,5 +337,93 @@ export default function Projects() {
         onConfirm={handleDelete}
       />
     </div>
+  )
+}
+
+function ProposalCard({ project, status, isAdmin, managerName, onEdit, onDelete }) {
+  return (
+    <article className="card flex flex-col p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className={`chip ${status.chip}`}>{status.label}</span>
+          </div>
+          <Link
+            to={`/projects/${project.id}`}
+            className="mt-2 block truncate text-base font-bold text-ink-900 hover:text-brand-700"
+          >
+            {project.name}
+          </Link>
+          <p className="mt-0.5 truncate text-xs text-ink-500">
+            {project.client || '발주처 미지정'}
+            {project.start_date
+              ? ` · ${formatDateHuman(project.start_date)}${project.end_date ? ` ~ ${formatDateHuman(project.end_date)}` : ''}`
+              : ''}
+          </p>
+          <p className="mt-0.5 truncate text-xs text-ink-500">
+            {managerName ? `담당 ${managerName}` : '담당 미지정'}
+            {project.venue ? ` · ${project.venue}` : ''}
+          </p>
+        </div>
+
+        {isAdmin ? (
+          <div className="flex shrink-0 items-center gap-1">
+            <button
+              type="button"
+              className="rounded-md p-1.5 text-ink-500 transition hover:bg-brand-50 hover:text-brand-700"
+              onClick={onEdit}
+              aria-label="수정"
+            >
+              <Icon name="pencil" size={15} />
+            </button>
+            <button
+              type="button"
+              className="rounded-md p-1.5 text-ink-500 transition hover:bg-rose-50 hover:text-loss"
+              onClick={onDelete}
+              aria-label="삭제"
+            >
+              <Icon name="trash" size={15} />
+            </button>
+          </div>
+        ) : null}
+      </div>
+
+      <dl className="mt-4 grid grid-cols-3 gap-2 rounded-lg bg-ink-50/80 p-3 text-center">
+        <div>
+          <dt className="text-[11px] font-semibold text-ink-500">제안 금액</dt>
+          <dd className="mt-0.5 font-num text-sm font-bold tabular-nums text-ink-900">
+            {project.contract_amount > 0 ? formatKRW(project.contract_amount) : '—'}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-[11px] font-semibold text-ink-500">수익률</dt>
+          <dd className="mt-0.5 font-num text-sm font-bold tabular-nums text-ink-900">
+            {Number(project.profit_rate) ? formatPercent(Number(project.profit_rate)) : '—'}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-[11px] font-semibold text-ink-500">수익</dt>
+          <dd
+            className={`mt-0.5 font-num text-sm font-extrabold tabular-nums ${
+              Number(project.profit_amount) >= 0 ? 'text-ink-900' : 'text-loss'
+            }`}
+          >
+            {Number(project.profit_amount) ? `${formatKRW(Number(project.profit_amount))}` : '—'}
+          </dd>
+        </div>
+      </dl>
+
+      {project.memo ? (
+        <p className="mt-3 line-clamp-2 whitespace-pre-line text-xs leading-relaxed text-ink-500">
+          {project.memo}
+        </p>
+      ) : null}
+
+      <div className="mt-3 flex items-center justify-end">
+        <Link to={`/projects/${project.id}`} className="text-xs font-semibold text-brand-700 hover:underline">
+          상세 →
+        </Link>
+      </div>
+    </article>
   )
 }
