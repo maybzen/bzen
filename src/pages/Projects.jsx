@@ -52,8 +52,12 @@ export default function Projects() {
     load()
   }, [load, reloadKey]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // 내부 귀속용(비젠내부·비젠채용)은 목록에서 숨기고 선택지에는 둡니다.
+  const visibleProjects = useMemo(() => projects.filter((p) => !p.is_hidden), [projects])
+
   const rows = useMemo(() => {
-    const grouped = groupByProject(entries, projects)
+    const visible = visibleProjects
+    const grouped = groupByProject(entries, visible)
     const map = new Map(grouped.map((r) => [r.project?.id || 'none', r]))
     const all = projects.map((p) => map.get(p.id) || { project: p, sale: 0, purchase: 0, opex: 0, profit: 0, margin: null, count: 0 })
     const filtered = statusFilter === 'all' ? all : all.filter((r) => r.project.status === statusFilter)
@@ -67,10 +71,10 @@ export default function Projects() {
   }, [entries, projects, statusFilter])
 
   const statusCounts = useMemo(() => {
-    const counts = { all: projects.length }
-    for (const p of projects) counts[p.status] = (counts[p.status] || 0) + 1
+    const counts = { all: visibleProjects.length }
+    for (const p of visibleProjects) counts[p.status] = (counts[p.status] || 0) + 1
     return counts
-  }, [projects])
+  }, [visibleProjects])
 
   const totals = useMemo(() => summarize(entries), [entries])
   const maxSale = Math.max(1, ...rows.map((r) => Math.max(r.sale, Math.abs(r.profit))))
@@ -110,7 +114,7 @@ export default function Projects() {
       </PageHeader>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatCard label="프로젝트 수" value={String(projects.length)} unit="개" tone="neutral" icon="folder" />
+        <StatCard label="프로젝트 수" value={String(visibleProjects.length)} unit="개" tone="neutral" icon="folder" />
         <StatCard label="전체 매출" value={totals.revenue} tone="sale" icon="trending-up" />
         <StatCard label="전체 비용" value={totals.cost} tone="opex" icon="cart" />
         <StatCard
@@ -141,7 +145,7 @@ export default function Projects() {
 
       {loading ? (
         <LoadingBlock />
-      ) : !projects.length ? (
+      ) : !visibleProjects.length ? (
         <div className="card">
           <EmptyState
             icon="folder"
