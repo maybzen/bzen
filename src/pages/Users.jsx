@@ -69,10 +69,17 @@ export default function Users() {
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
-    if (!q) return profiles
-    return profiles.filter((p) =>
-      [p.full_name, p.email, p.department].some((v) => String(v || '').toLowerCase().includes(q)),
-    )
+    const list = q
+      ? profiles.filter((p) =>
+          [p.full_name, p.email, p.department].some((v) => String(v || '').toLowerCase().includes(q)),
+        )
+      : profiles.slice()
+    // 관리자 먼저(가입순), 다음 직원(가입순)
+    return list.sort((a, b) => {
+      const rank = (p) => (p.role === 'admin' ? 0 : 1)
+      if (rank(a) !== rank(b)) return rank(a) - rank(b)
+      return String(a.created_at || '').localeCompare(String(b.created_at || ''))
+    })
   }, [profiles, search])
 
   const openCreate = () => {
