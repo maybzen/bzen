@@ -153,6 +153,70 @@ function fmtFx(currency, amount) {
   return `${currency || ''} ${n.toLocaleString('en-US', { maximumFractionDigits: 2 })}`.trim()
 }
 
+/** 법인카드 이용자 다중 선택 (ALL은 단독) */
+function UserMultiSelect({ value, onChange }) {
+  const [open, setOpen] = useState(false)
+  const codes = String(value || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+
+  const toggle = (code) => {
+    let next
+    if (code === 'ALL') {
+      next = codes.length === 1 && codes[0] === 'ALL' ? [] : ['ALL']
+    } else {
+      const withoutAll = codes.filter((c) => c !== 'ALL')
+      next = withoutAll.includes(code) ? withoutAll.filter((c) => c !== code) : [...withoutAll, code]
+    }
+    onChange(next.join(','))
+  }
+
+  const label = codes.length
+    ? codes.map((c) => (cardUserName(c) ? `${c} ${cardUserName(c)}` : c)).join(', ')
+    : '선택'
+
+  return (
+    <span className="relative inline-block">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        title={label}
+        className="input w-auto max-w-[130px] truncate py-1 text-left text-xs"
+      >
+        {codes.join(',') || '—'}
+      </button>
+      {open ? (
+        <>
+          <button
+            type="button"
+            aria-label="닫기"
+            className="fixed inset-0 z-40 cursor-default"
+            onClick={() => setOpen(false)}
+          />
+          <span className="absolute left-0 top-full z-50 mt-1 flex max-h-56 w-44 flex-col gap-0.5 overflow-auto rounded-lg border border-ink-200 bg-white p-1.5 shadow-pop">
+            {CARD_USERS.map((u) => (
+              <label
+                key={u.code}
+                className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-xs hover:bg-ink-50"
+              >
+                <input
+                  type="checkbox"
+                  className="h-3.5 w-3.5 accent-brand-600"
+                  checked={codes.includes(u.code)}
+                  onChange={() => toggle(u.code)}
+                />
+                <span className="font-bold text-ink-800">{u.code}</span>
+                <span className="truncate text-ink-500">{u.name}</span>
+              </label>
+            ))}
+          </span>
+        </>
+      ) : null}
+    </span>
+  )
+}
+
 export default function CardImport() {
   const { isAdmin, user } = useAuth()
   const toast = useToast()
@@ -203,8 +267,13 @@ export default function CardImport() {
     const projectName = (id) => regProjects.find((p) => p.id === id)?.name || ''
     const headers = ['이용일자', '가맹점', '적요', '프로젝트', '이용자', '유형', '항목', '공급가액', '부가세', '합계', '카드', '메모']
     const rows = visibleRegistered.map((e) => {
-      const userCode = memoUser(e.memo)
-      const userLabel = userCode ? `${userCode}${cardUserName(userCode) ? `(${cardUserName(userCode)})` : ''}` : ''
+      const userCodes = memoUser(e.memo)
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean)
+      const userLabel = userCodes
+        .map((c) => (cardUserName(c) ? `${c}(${cardUserName(c)})` : c))
+        .join(',')
       return [
         e.entry_date,
         e.counterparty,
@@ -940,19 +1009,7 @@ export default function CardImport() {
                       </select>
                     </td>
                     <td className="td">
-                      <select
-                        className="input w-auto py-1 text-xs"
-                        value={r.cardUser}
-                        onChange={(e) => setRow(r.key, { cardUser: e.target.value })}
-                        title={cardUserName(r.cardUser)}
-                      >
-                        <option value="">—</option>
-                        {CARD_USERS.map((u) => (
-                          <option key={u.code} value={u.code}>
-                            {u.code} · {u.name}
-                          </option>
-                        ))}
-                      </select>
+                      <UserMultiSelect value={r.cardUser} onChange={(v) => setRow(r.key, { cardUser: v })} />
                     </td>
                     <td className="td">
                       <select
@@ -1295,19 +1352,10 @@ export default function CardImport() {
                           </select>
                         </td>
                         <td className="td">
-                          <select
-                            className="input w-auto py-1 text-xs"
+                          <UserMultiSelect
                             value={cardUser}
-                            onChange={(e) => setCell(entry.id, { cardUser: e.target.value })}
-                            title={cardUserName(cardUser)}
-                          >
-                            <option value="">—</option>
-                            {CARD_USERS.map((u) => (
-                              <option key={u.code} value={u.code}>
-                                {u.code} · {u.name}
-                              </option>
-                            ))}
-                          </select>
+                            onChange={(v) => setCell(entry.id, { cardUser: v })}
+                          />
                         </td>
                         <td className="td num">
                           <input

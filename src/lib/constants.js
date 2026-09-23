@@ -173,6 +173,9 @@ export const CARD_USERS = [
   { code: 'N', name: '김상희' },
   { code: 'B', name: '이보람 팀장님' },
   { code: 'M', name: '이정현' },
+  { code: 'L', name: '확인 필요' },
+  { code: 'E', name: '확인 필요' },
+  { code: 'Y', name: '확인 필요' },
 ]
 
 export function cardUserName(code) {
