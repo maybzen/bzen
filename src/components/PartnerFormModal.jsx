@@ -41,6 +41,31 @@ function DocPreview({ doc }) {
   const [loading, setLoading] = useState(false)
   const toast = useToast()
 
+  // 드라이브 연결 서류: 외부 링크로 열기 (드라이브는 인라인 미리보기 차단)
+  if (doc.external_url) {
+    return (
+      <div className="flex items-center gap-3 rounded-lg border border-ink-200 px-3 py-2.5">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-ink-100 text-ink-500">
+          <Icon name={isImage(doc.mime_type, doc.file_name) ? 'image' : 'file'} size={17} />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm font-semibold text-ink-800">{doc.file_name}</span>
+          <span className="mt-0.5 block text-xs text-ink-500">
+            <span className="chip bg-ink-100 text-ink-600">드라이브 연결</span>
+          </span>
+        </span>
+        <button
+          type="button"
+          onClick={() => window.open(doc.external_url, '_blank', 'noopener')}
+          className="btn-ghost px-2.5 py-1.5 text-xs"
+        >
+          <Icon name="download" size={14} />
+          열기
+        </button>
+      </div>
+    )
+  }
+
   const ensureUrl = async () => {
     if (url) return url
     setLoading(true)
@@ -323,7 +348,7 @@ export default function PartnerFormModal({ open, onClose, onSaved, initial, read
       <div className="mt-5 border-t border-ink-100 pt-4">
         <h3 className="text-sm font-bold text-ink-900">서류</h3>
         <p className="mt-0.5 text-xs text-ink-500">
-          사업자등록증·통장사본을 올려두면 다운로드 없이 바로 미리볼 수 있습니다.
+          직접 올린 서류는 다운로드 없이 바로 미리볼 수 있고, 드라이브 연결 서류는 열기로 확인합니다.
         </p>
 
         {!partnerId ? (
