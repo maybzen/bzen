@@ -172,6 +172,7 @@ export default function CardImport() {
   const [bulkType, setBulkType] = useState('opex')
   const [bulkCategory, setBulkCategory] = useState('')
   const [bulkProject, setBulkProject] = useState('')
+  const [previewSort, setPreviewSort] = useState('file')
   const [projects, setProjects] = useState([])
 
   const [registered, setRegistered] = useState([])
@@ -232,6 +233,7 @@ export default function CardImport() {
       const payload = {
         entry_date: work.entry_date,
         counterparty: String(work.counterparty).trim(),
+        description: String(work.description || '').trim(),
         project_id: work.project_id || null,
         entry_type: work.entry_type,
         category: work.category || '',
@@ -357,6 +359,7 @@ export default function CardImport() {
           date,
           merchant,
           memo,
+          description: memo || '',
           total: total || 0,
           supply,
           vat,
@@ -438,6 +441,12 @@ export default function CardImport() {
   }
 
   const active = useMemo(() => preview.filter((r) => !r.excluded && !r.invalid), [preview])
+  const sortedPreview = useMemo(() => {
+    const rows = preview.slice()
+    if (previewSort === 'date-asc') rows.sort((a, b) => String(a.date).localeCompare(String(b.date)))
+    else if (previewSort === 'date-desc') rows.sort((a, b) => String(b.date).localeCompare(String(a.date)))
+    return rows
+  }, [preview, previewSort])
   const dupCount = useMemo(() => preview.filter((r) => r.dup).length, [preview])
   const activeTotal = useMemo(() => active.reduce((a, r) => a + r.total, 0), [active])
 
@@ -459,13 +468,14 @@ export default function CardImport() {
         const feeNote = r.fxFee > 0 ? ` · 해외수수료 ${formatKRW(r.fxFee)}원` : ''
         const cardNote = cardLabel ? ` · ${cardLabel}` : ''
         const userNote = r.cardUser.trim() ? ` · 이용자 ${r.cardUser.trim()}` : ''
+        const description = `${r.description.trim() || r.memo || r.merchant}${fxNote}`
         return {
           entry_type: r.type,
           source: 'card',
           entry_date: r.date,
           counterparty: r.merchant,
           category: r.category || '',
-          description: `${r.memo || r.merchant}${fxNote}`,
+          description,
           supply_amount: r.supply,
           vat_amount: r.vat,
           payment_method: '카드',
@@ -717,6 +727,17 @@ export default function CardImport() {
               <button type="button" className="btn-ghost" onClick={applyBulk}>
                 일괄 적용
               </button>
+              <button
+                type="button"
+                className="btn-ghost"
+                onClick={() => setPreviewSort((s) => (s === 'date-desc' ? 'date-asc' : s === 'date-asc' ? 'file' : 'date-desc'))}
+                title="미리보기 순서 전환"
+              >
+                <Icon name={previewSort === 'file' ? 'menu' : previewSort === 'date-desc' ? 'arrow-down' : 'arrow-up'} size={16} />
+                <span className="hidden sm:inline">
+                  {previewSort === 'file' ? '파일 순서' : previewSort === 'date-desc' ? '날짜 최신순' : '날짜 오래된순'}
+                </span>
+              </button>
               <span className="ml-auto text-xs font-medium text-ink-500">
                 등록 {active.length}건 · 합계 {formatKRW(activeTotal)}원
                 {dupCount ? ` · 중복 ${dupCount}건 제외` : ''}
@@ -750,14 +771,16 @@ export default function CardImport() {
             </div>
           </details>
           <div className="max-h-[480px] overflow-auto">
-            <table className="w-full min-w-[1060px] border-collapse text-xs">
+            <table className="w-full min-w-[1220px] border-collapse text-xs">
               <thead className="sticky top-0 bg-ink-50">
                 <tr>
                   <th className="th w-10">등록</th>
                   <th className="th">이용일자</th>
                   <th className="th">가맹점</th>
                   <th className="th">외화</th>
+                  <th className="th">적요</th>
                   <th className="th">프로젝트</th>
+                  <th className="th">이용자</th>
                   <th className="th">유형</th>
                   <th className="th">항목</th>
                   <th className="th text-right">공급가액</th>
@@ -766,7 +789,7 @@ export default function CardImport() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-ink-100">
-                {preview.map((r) => (
+                {sortedPreview.map((r) => (
                   <tr key={r.key} className={r.excluded ? 'bg-ink-50/60 text-ink-400' : 'hover:bg-ink-50/60'}>
                     <td className="td text-center">
                       <input
@@ -801,6 +824,14 @@ export default function CardImport() {
                     </td>
                     <td className="td whitespace-nowrap text-xs text-ink-600">
                       {r.fxAmount > 0 ? fmtFx(r.fxCurrency, r.fxAmount) : <span className="text-ink-300">—</span>}
+                    </td>
+                    <td className="td min-w-[150px]">
+                      <input
+                        className="input py-1 text-xs"
+                        value={r.description}
+                        onChange={(e) => setRow(r.key, { description: e.target.value })}
+                        placeholder="예: A4용지 2박스"
+                      />
                     </td>
                     <td className="td">
                       <select
@@ -1029,7 +1060,7 @@ export default function CardImport() {
               </div>
             ) : null}
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[1140px] border-collapse text-xs">
+              <table className="w-full min-w-[1220px] border-collapse text-xs">
                 <thead className="bg-ink-50/70">
                   <tr>
                     {isAdmin ? (
@@ -1045,6 +1076,7 @@ export default function CardImport() {
                     ) : null}
                     <th className="th">이용일자</th>
                     <th className="th">가맹점</th>
+                    <th className="th">적요</th>
                     <th className="th">프로젝트</th>
                     <th className="th">유형</th>
                     <th className="th">항목</th>
@@ -1092,6 +1124,14 @@ export default function CardImport() {
                             className="input py-1 text-xs"
                             value={work.counterparty || ''}
                             onChange={(e) => setCell(entry.id, { counterparty: e.target.value })}
+                          />
+                        </td>
+                        <td className="td min-w-[150px]">
+                          <input
+                            className="input py-1 text-xs"
+                            value={work.description || ''}
+                            onChange={(e) => setCell(entry.id, { description: e.target.value })}
+                            placeholder="예: A4용지 2박스"
                           />
                         </td>
                         <td className="td">
