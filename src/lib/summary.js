@@ -1,4 +1,4 @@
-import { monthKeyOf } from './format'
+import { monthKey, monthKeyOf } from './format'
 
 const EMPTY = () => ({ supply: 0, vat: 0, total: 0, count: 0 })
 
@@ -123,4 +123,44 @@ export function groupByCounterparty(entries, type) {
     row.count += 1
   }
   return [...map.values()].sort((a, b) => b.total - a.total)
+}
+
+/**
+ * 고정비 자동 감지.
+ * 같은 거래처가 여러 달에 걸쳐 비슷한 금액으로 나오면 고정비로 봅니다.
+ * 기준: 최근 12개월 중 3개월 이상 등장 + 월 합계 편차(CV) 35% 이내
+ */
+export function detectFixedCosts(entries, { months = 12, minMonths = 3, maxCV = 0.35 } = {}) {
+  const now = new Date()
+  const fromKey = monthKey(new Date(now.getFullYear(), now.getMonth() - (months - 1), 1))
+  const perName = new Map()
+  for (const e of entries || []) {
+    const mk = monthKeyOf(e.entry_date)
+    if (!mk || mk < fromKey) continue
+    const name = (e.counterparty || '').trim()
+    if (!name || name === '미지정') continue
+    if (!perName.has(name)) perName.set(name, new Map())
+    const byMonth = perName.get(name)
+    byMonth.set(mk, (byMonth.get(mk) || 0) + Number(e.total_amount || 0))
+  }
+  const out = []
+  for (const [name, byMonth] of perName) {
+    const totals = [...byMonth.values()]
+    if (byMonth.size < minMonths) continue
+    const avg = totals.reduce((a, v) => a + v, 0) / totals.length
+    if (!avg) continue
+    const variance = totals.reduce((a, v) => a + (v - avg) ** 2, 0) / totals.length
+    const cv = Math.sqrt(variance) / avg
+    if (cv > maxCV) continue
+    const monthsSorted = [...byMonth.keys()].sort()
+    out.push({
+      name,
+      months: byMonth.size,
+      avg: Math.round(avg),
+      last: Math.round(totals[totals.length - 1]),
+      lastMonth: monthsSorted[monthsSorted.length - 1],
+      count: totals.length,
+    })
+  }
+  return out.sort((a, b) => b.avg - a.avg)
 }

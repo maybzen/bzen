@@ -8,6 +8,7 @@ import { useAuth } from '../auth/AuthContext'
 import { CATEGORIES, ENTRY_META, categoryHint } from '../lib/constants'
 import { parseAmount, parseCSV } from '../lib/csv'
 import { formatKRW, toISODate } from '../lib/format'
+import { detectFixedCosts } from '../lib/summary'
 import {
   createEntries,
   deleteEntry,
@@ -178,6 +179,8 @@ export default function CardImport() {
   const [registered, setRegistered] = useState([])
   const [loadingList, setLoadingList] = useState(true)
   const [reloadKey, setReloadKey] = useState(0)
+  const [fixedCosts, setFixedCosts] = useState([])
+  const [fixedLoading, setFixedLoading] = useState(true)
   const [regProjects, setRegProjects] = useState([])
   const [regProfiles, setRegProfiles] = useState([])
   const [regAttachments, setRegAttachments] = useState({})
@@ -220,17 +223,13 @@ export default function CardImport() {
     return u ? `${base} · 이용자 ${u}` : base
   }
 
-  const saveRow = async (entry) => {
-    const patch = rowEdits[entry.id]
-    if (!patch) return
+  const buildRowPayload = (entry, patch) => {
     const work = { ...entry, ...patch }
     if (!work.entry_date || !String(work.counterparty || '').trim()) {
-      toast.error('이용일자와 가맹점을 입력해 주세요.')
-      return
+      return { error: '이용일자와 가맹점을 입력해 주세요.' }
     }
-    setSavingId(entry.id)
-    try {
-      const payload = {
+    return {
+      payload: {
         entry_date: work.entry_date,
         counterparty: String(work.counterparty).trim(),
         description: String(work.description || '').trim(),
@@ -240,15 +239,50 @@ export default function CardImport() {
         supply_amount: Number(work.supply_amount) || 0,
         vat_amount: Number(work.vat_amount) || 0,
         memo: withMemoUser(entry.memo, patch.cardUser !== undefined ? patch.cardUser : memoUser(entry.memo)),
-      }
+      },
+    }
+  }
+
+  const saveRow = async (entry, silent = false) => {
+    const patch = rowEdits[entry.id]
+    if (!patch) return true
+    const { payload, error } = buildRowPayload(entry, patch)
+    if (error) {
+      if (!silent) toast.error(error)
+      return false
+    }
+    setSavingId(entry.id)
+    try {
       const saved = await updateEntry(entry.id, payload)
       setRegistered((rows) => rows.map((r) => (r.id === entry.id ? { ...r, ...saved } : r)))
       cancelRow(entry.id)
-      toast.success('저장되었습니다.')
+      if (!silent) toast.success('저장되었습니다.')
+      return true
     } catch (e) {
-      toast.error(e.message)
+      if (!silent) toast.error(e.message)
+      return false
     } finally {
       setSavingId(null)
+    }
+  }
+
+  const [bulkSaving, setBulkSaving] = useState(false)
+
+  const saveAllDirty = async () => {
+    const targets = visibleRegistered.filter((e) => rowEdits[e.id])
+    if (!targets.length) return
+    setBulkSaving(true)
+    let ok = 0
+    try {
+      for (const entry of targets) {
+        // eslint-disable-next-line no-await-in-loop
+        const done = await saveRow(entry, true)
+        if (done) ok += 1
+      }
+      if (ok === targets.length) toast.success(`${ok}건이 모두 저장되었습니다.`)
+      else toast.error(`${targets.length}건 중 ${ok}건 저장, ${targets.length - ok}건 실패했습니다.`)
+    } finally {
+      setBulkSaving(false)
     }
   }
 
@@ -541,6 +575,8 @@ export default function CardImport() {
     }
   }
 
+  const fixedSet = useMemo(() => new Set(fixedCosts.map((f) => f.name)), [fixedCosts])
+
   const visibleRegistered = useMemo(() => {
     const rows = registered.filter((e) => {
       if (regProjectFilter) {
@@ -604,6 +640,24 @@ export default function CardImport() {
   useEffect(() => {
     loadRegistered()
   }, [loadRegistered, reloadKey])
+
+  useEffect(() => {
+    let alive = true
+    setFixedLoading(true)
+    const now = new Date()
+    const from = toISODate(new Date(now.getFullYear(), now.getMonth() - 11, 1))
+    listEntries({ from, to: toISODate(now), maxRows: 20000 })
+      .then((rows) => {
+        if (alive) setFixedCosts(detectFixedCosts(rows || []))
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (alive) setFixedLoading(false)
+      })
+    return () => {
+      alive = false
+    }
+  }, [reloadKey, toast])
 
   const mapSelect = (key, label) => (
     <Field label={label}>
@@ -1063,6 +1117,21 @@ export default function CardImport() {
                 </button>
               </div>
             ) : null}
+            {Object.keys(rowEdits).length > 0 ? (
+              <div className="flex flex-wrap items-center gap-2 border-b border-ink-200 bg-brand-50/50 px-4 py-2.5 text-xs">
+                <span className="font-semibold text-ink-800">
+                  수정 중 {Object.keys(rowEdits).length}건
+                </span>
+                <button
+                  type="button"
+                  onClick={saveAllDirty}
+                  disabled={bulkSaving}
+                  className="font-bold text-brand-700 hover:underline disabled:opacity-50"
+                >
+                  {bulkSaving ? '저장 중…' : '일괄 저장'}
+                </button>
+              </div>
+            ) : null}
             <div className="overflow-x-auto">
               <table className="w-full min-w-[1220px] border-collapse text-xs">
                 <thead className="bg-ink-50/70">
@@ -1129,6 +1198,9 @@ export default function CardImport() {
                             value={work.counterparty || ''}
                             onChange={(e) => setCell(entry.id, { counterparty: e.target.value })}
                           />
+                          {fixedSet.has(String(work.counterparty || '').trim()) ? (
+                            <span className="chip mt-1 bg-brand-50 text-brand-700">고정비</span>
+                          ) : null}
                         </td>
                         <td className="td min-w-[150px]">
                           <input
@@ -1289,6 +1361,49 @@ export default function CardImport() {
         onClose={() => setViewerFiles(null)}
         attachments={viewerFiles || []}
       />
+
+      <section className="card overflow-hidden">
+        <header className="border-b border-ink-200 px-4 py-3.5">
+          <h2 className="text-sm font-bold text-ink-900">고정비 자동 감지</h2>
+          <p className="mt-0.5 text-xs text-ink-500">
+            최근 12개월 · 3개월 이상 · 월 금액 편차 35% 이내면 고정비로 봅니다 (장부 전체 기준)
+          </p>
+        </header>
+        {fixedLoading ? (
+          <LoadingBlock />
+        ) : fixedCosts.length ? (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[560px] border-collapse text-xs">
+              <thead className="bg-ink-50/70">
+                <tr>
+                  <th className="th">거래처</th>
+                  <th className="th text-right">월 평균</th>
+                  <th className="th text-right">감지 개월</th>
+                  <th className="th text-right">최근 금액</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-ink-100">
+                {fixedCosts.map((f) => (
+                  <tr key={f.name}>
+                    <td className="td font-medium">{f.name}</td>
+                    <td className="td num font-bold">{formatKRW(f.avg)}</td>
+                    <td className="td num">{f.months}개월</td>
+                    <td className="td num text-ink-500">
+                      {formatKRW(f.last)} <span className="text-ink-400">({f.lastMonth.slice(2)})</span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <EmptyState
+            icon="coins"
+            title="감지된 고정비가 없습니다"
+            description="자료가 3개월 이상 쌓이면 자동으로 잡힙니다."
+          />
+        )}
+      </section>
 
       <p className="text-center text-xs leading-relaxed text-ink-400">
         {ENTRY_META.purchase.label}·{ENTRY_META.opex.label}로 나뉘어 각 장부에 저장됩니다.
