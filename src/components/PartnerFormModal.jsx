@@ -7,6 +7,7 @@ import {
   createPartner,
   deletePartnerDoc,
   getPartnerDocUrl,
+  linkExternalDoc,
   listPartnerDocs,
   updatePartner,
   uploadPartnerDoc,
@@ -38,30 +39,53 @@ function isPdf(mime, name) {
 function DocPreview({ doc }) {
   const [url, setUrl] = useState('')
   const [open, setOpen] = useState(false)
+  const [showEmbed, setShowEmbed] = useState(false)
   const [loading, setLoading] = useState(false)
   const toast = useToast()
 
-  // 드라이브 연결 서류: 외부 링크로 열기 (드라이브는 인라인 미리보기 차단)
+  // 드라이브 연결 서류
   if (doc.external_url) {
+    const fileId = String(doc.external_url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/)?.[1] || '')
     return (
-      <div className="flex items-center gap-3 rounded-lg border border-ink-200 px-3 py-2.5">
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-ink-100 text-ink-500">
-          <Icon name={isImage(doc.mime_type, doc.file_name) ? 'image' : 'file'} size={17} />
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-semibold text-ink-800">{doc.file_name}</span>
-          <span className="mt-0.5 block text-xs text-ink-500">
-            <span className="chip bg-ink-100 text-ink-600">드라이브 연결</span>
+      <div className="rounded-lg border border-ink-200">
+        <div className="flex items-center gap-3 px-3 py-2.5">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-ink-100 text-ink-500">
+            <Icon name={isImage(doc.mime_type, doc.file_name) ? 'image' : 'file'} size={17} />
           </span>
-        </span>
-        <button
-          type="button"
-          onClick={() => window.open(doc.external_url, '_blank', 'noopener')}
-          className="btn-ghost px-2.5 py-1.5 text-xs"
-        >
-          <Icon name="download" size={14} />
-          열기
-        </button>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-sm font-semibold text-ink-800">{doc.file_name}</span>
+            <span className="mt-0.5 block text-xs text-ink-500">
+              <span className="chip bg-ink-100 text-ink-600">드라이브 연결</span>
+            </span>
+          </span>
+          {fileId ? (
+            <button
+              type="button"
+              onClick={() => setShowEmbed((v) => !v)}
+              className="btn-ghost px-2.5 py-1.5 text-xs"
+            >
+              <Icon name="image" size={14} />
+              {showEmbed ? '닫기' : '보기'}
+            </button>
+          ) : null}
+          <button
+            type="button"
+            onClick={() => window.open(doc.external_url, '_blank', 'noopener')}
+            className="btn-ghost px-2.5 py-1.5 text-xs"
+          >
+            <Icon name="download" size={14} />
+            열기
+          </button>
+        </div>
+        {showEmbed && fileId ? (
+          <div className="border-t border-ink-100 bg-ink-50/60 p-3">
+            <iframe
+              title={doc.file_name}
+              src={`https://drive.google.com/file/d/${fileId}/preview`}
+              className="h-96 w-full rounded-lg border border-ink-200 bg-white"
+            />
+          </div>
+        ) : null}
       </div>
     )
   }
@@ -403,11 +427,95 @@ export default function PartnerFormModal({ open, onClose, onSaved, initial, read
                     등록된 {PARTNER_DOC_TYPES[type]}이(가) 없습니다.
                   </p>
                 )}
+                {!readOnly ? (
+                  <DriveLinkForm
+                    docType={type}
+                    partnerId={partnerId}
+                    userId={userId}
+                    onLinked={(doc) => setDocs((d) => [...d, doc])}
+                  />
+                ) : null}
               </section>
             ))}
           </div>
         )}
       </div>
     </Modal>
+  )
+}
+
+function DriveLinkForm({ docType, partnerId, userId, onLinked }) {
+  const toast = useToast()
+  const [open, setOpen] = useState(false)
+  const [name, setName] = useState('')
+  const [link, setLink] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="mt-2 text-xs font-semibold text-brand-700 hover:underline"
+      >
+        + 드라이브 공유 링크로 연결
+      </button>
+    )
+  }
+
+  const submit = async () => {
+    setBusy(true)
+    try {
+      const saved = await linkExternalDoc(partnerId, docType, name, link, userId)
+      onLinked?.(saved)
+      setName('')
+      setLink('')
+      setOpen(false)
+      toast.success('드라이브 서류가 연결되었습니다.')
+    } catch (err) {
+      toast.error(err.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="mt-2 rounded-lg border border-dashed border-ink-300 p-3">
+      <p className="text-xs font-semibold text-ink-700">
+        드라이브에서 파일 우클릭 → 공유 → 링크 복사 후 붙여넣기
+      </p>
+      <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <input
+          className="input py-1.5 text-xs"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="표시 이름 (예: 사업자등록증.jpg)"
+        />
+        <input
+          className="input py-1.5 text-xs"
+          value={link}
+          onChange={(e) => setLink(e.target.value)}
+          placeholder="https://drive.google.com/..."
+        />
+      </div>
+      <div className="mt-2 flex justify-end gap-2">
+        <button
+          type="button"
+          onClick={() => setOpen(false)}
+          disabled={busy}
+          className="text-xs font-semibold text-ink-500 hover:underline"
+        >
+          취소
+        </button>
+        <button
+          type="button"
+          onClick={submit}
+          disabled={busy}
+          className="text-xs font-bold text-brand-700 hover:underline disabled:opacity-50"
+        >
+          {busy ? '연결 중…' : '연결'}
+        </button>
+      </div>
+    </div>
   )
 }

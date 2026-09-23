@@ -316,8 +316,38 @@ export async function uploadPartnerDoc(partnerId, docType, file, userId) {
 }
 
 export async function deletePartnerDoc(doc) {
+  if (!doc.file_path) {
+    // 드라이브 연결 서류는 DB 행만 삭제
+    return unwrap(supabase.from('partner_attachments').delete().eq('id', doc.id))
+  }
   await supabase.storage.from(PARTNER_BUCKET).remove([doc.file_path]).catch(() => {})
   return unwrap(supabase.from('partner_attachments').delete().eq('id', doc.id))
+}
+
+/** 드라이브 공유 링크로 서류 연결 (파일을 올리지 않고 링크만 저장) */
+export async function linkExternalDoc(partnerId, docType, name, url, userId) {
+  const cleanUrl = String(url || '').trim()
+  if (!cleanUrl) throw new Error('드라이브 링크를 입력해 주세요.')
+  if (!/^https:\/\/(drive|docs)\.google\.com\//.test(cleanUrl)) {
+    throw new Error('구글 드라이브 공유 링크가 아닙니다.')
+  }
+  const label = String(name || '').trim() || '드라이브 서류'
+  return unwrap(
+    supabase
+      .from('partner_attachments')
+      .insert({
+        partner_id: partnerId,
+        file_path: '',
+        file_name: label,
+        mime_type: '',
+        size_bytes: 0,
+        doc_type: docType || 'other',
+        external_url: cleanUrl,
+        uploaded_by: userId,
+      })
+      .select()
+      .single(),
+  )
 }
 
 export async function getPartnerDocUrl(filePath, expiresIn = 3600) {
