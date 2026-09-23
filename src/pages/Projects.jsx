@@ -165,11 +165,19 @@ export default function Projects() {
                         : '담당 미지정'}
                       {project.venue ? ` · ${project.venue}` : ''}
                     </p>
-                    {(project.contract_amount > 0 || Number(project.profit_rate)) ? (
+                    {(project.contract_amount > 0 || Number(project.profit_rate) || Number(project.profit_amount)) ? (
                       <p className="mt-0.5 truncate text-xs font-semibold text-ink-700">
                         {project.contract_amount > 0 ? `계약 ${formatKRW(project.contract_amount)}원` : ''}
-                        {project.contract_amount > 0 && Number(project.profit_rate) ? ' · ' : ''}
-                        {Number(project.profit_rate) ? `목표 ${formatPercent(Number(project.profit_rate))}` : ''}
+                        {project.contract_amount > 0 && (Number(project.profit_rate) || Number(project.profit_amount)) ? ' · ' : ''}
+                        {Number(project.profit_rate) ? `수익률 ${formatPercent(Number(project.profit_rate))}` : ''}
+                        {Number(project.profit_rate) && Number(project.profit_amount) ? ' · ' : ''}
+                        {Number(project.profit_amount) ? (
+                          <span className={Number(project.profit_amount) >= 0 ? '' : 'text-loss'}>
+                            수익 {formatKRW(Number(project.profit_amount))}원
+                          </span>
+                        ) : (
+                          ''
+                        )}
                       </p>
                     ) : null}
                   </div>

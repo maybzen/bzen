@@ -163,10 +163,22 @@ export default function ProjectDetail() {
                 ? `담당 ${profiles.find((p) => p.id === project.manager_id).full_name}`
                 : '담당 미지정'}
               {project.venue ? ` · ${project.venue}` : ''}
-              {Number(project.profit_rate)
-                ? ` · 목표 수익률 ${formatPercent(Number(project.profit_rate))}`
-                : ''}
             </p>
+            {(project.contract_amount > 0 || Number(project.profit_rate) || Number(project.profit_amount)) ? (
+              <p className="mt-1 text-sm font-semibold text-ink-800">
+                {project.contract_amount > 0 ? `계약 ${formatKRW(project.contract_amount)}원` : ''}
+                {project.contract_amount > 0 && (Number(project.profit_rate) || Number(project.profit_amount)) ? ' · ' : ''}
+                {Number(project.profit_rate) ? `수익률 ${formatPercent(Number(project.profit_rate))}` : ''}
+                {Number(project.profit_rate) && Number(project.profit_amount) ? ' · ' : ''}
+                {Number(project.profit_amount) ? (
+                  <span className={Number(project.profit_amount) >= 0 ? '' : 'text-loss'}>
+                    수익 {formatKRW(Number(project.profit_amount))}원
+                  </span>
+                ) : (
+                  ''
+                )}
+              </p>
+            ) : null}
           </div>
 
           {isAdmin ? (

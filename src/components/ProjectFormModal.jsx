@@ -12,6 +12,7 @@ const EMPTY = {
   end_date: '',
   contract_amount: '',
   profit_rate: '',
+  profit_amount: '',
   venue: '',
   manager_id: '',
   memo: '',
@@ -35,6 +36,7 @@ export default function ProjectFormModal({ open, onClose, onSaved, initial, prof
         end_date: initial.end_date || '',
         contract_amount: String(initial.contract_amount ?? ''),
         profit_rate: initial.profit_rate ? String(initial.profit_rate) : '',
+        profit_amount: initial.profit_amount ? String(initial.profit_amount) : '',
         venue: initial.venue || '',
         manager_id: initial.manager_id || '',
         memo: initial.memo || '',
@@ -61,6 +63,7 @@ export default function ProjectFormModal({ open, onClose, onSaved, initial, prof
         end_date: form.end_date || null,
         contract_amount: Math.round(Number(String(form.contract_amount).replace(/[^0-9.-]/g, '')) || 0),
         profit_rate: Number(String(form.profit_rate).replace(/[^0-9.-]/g, '')) || 0,
+        profit_amount: Math.round(Number(String(form.profit_amount).replace(/[^0-9.-]/g, '')) || 0),
         venue: form.venue.trim(),
         manager_id: form.manager_id || null,
         memo: form.memo.trim(),
@@ -160,13 +163,23 @@ export default function ProjectFormModal({ open, onClose, onSaved, initial, prof
           />
         </Field>
 
-        <Field label="목표 수익률 (%)" hint="비워두면 표시하지 않습니다.">
+        <Field label="수익률 (%)" hint="탈락 등으로 손실이면 음수로 적어주세요.">
           <input
             className="input num text-left"
             inputMode="decimal"
             value={form.profit_rate}
             onChange={set('profit_rate')}
             placeholder="예: 30"
+          />
+        </Field>
+
+        <Field label="수익 (원)" hint="확정·예상 수익금. 손실이면 음수.">
+          <input
+            className="input num text-left"
+            inputMode="numeric"
+            value={form.profit_amount}
+            onChange={set('profit_amount')}
+            placeholder="0"
           />
         </Field>
 
