@@ -5,7 +5,7 @@ import { AttachmentCell, AttachmentModal } from '../components/Attachments'
 import { useToast } from '../components/Toast'
 import { ConfirmDialog, EmptyState, Field, InlineAlert, LoadingBlock, PageHeader, StatCard } from '../components/ui'
 import { useAuth } from '../auth/AuthContext'
-import { CATEGORIES, ENTRY_META, categoryHint } from '../lib/constants'
+import { CATEGORIES, ENTRY_META, categoryHint, suggestCategory } from '../lib/constants'
 import { parseAmount, parseCSV } from '../lib/csv'
 import { formatKRW, toISODate } from '../lib/format'
 import { detectFixedCosts } from '../lib/summary'
@@ -443,11 +443,16 @@ export default function CardImport() {
         base.map((r) => {
           const dup = !r.invalid && dupSet.has(`${r.date}|${r.merchant}|${r.total}`)
           const remembered = !r.invalid ? merchantMap.get(r.merchant) : null
+          const kw = !remembered && !r.invalid ? suggestCategory(r.merchant, r.memo, null) : null
           return {
             ...r,
             dup,
             excluded: r.excluded || dup,
-            ...(remembered ? { type: remembered.type, category: remembered.category, autoFilled: true } : null),
+            ...(remembered
+              ? { type: remembered.type, category: remembered.category, autoFilled: true, autoLabel: '지난 분류 적용' }
+              : kw
+                ? { type: kw.type, category: kw.category, autoFilled: true, autoLabel: '추천 적용' }
+                : null),
           }
         }),
       )
@@ -868,7 +873,7 @@ export default function CardImport() {
                         onChange={(e) => setRow(r.key, { merchant: e.target.value })}
                       />
                       {r.autoFilled ? (
-                        <span className="chip mt-1 bg-brand-50 text-brand-700">지난 분류 적용</span>
+                        <span className="chip mt-1 bg-brand-50 text-brand-700">{r.autoLabel || '자동 적용'}</span>
                       ) : null}
                       {r.dup ? (
                         <span className="chip mt-1 bg-amber-50 text-amber-700">중복 의심</span>

@@ -48,6 +48,7 @@ export const CATEGORIES = {
     '수도광열비',
     '차량유지비',
     '소모품비',
+    '도서인쇄비',
     '접대비',
     '회의비',
     '여비교통비',
@@ -86,7 +87,8 @@ export const CATEGORY_HINTS = {
   통신비: '휴대폰·인터넷·와이파이·우편요금',
   수도광열비: '수도·전기·가스 요금',
   차량유지비: '주유·주차·정비·통행료',
-  소모품비: '문구·비품 등 사무용품',
+  소모품비: '문구·사무용품',
+  도서인쇄비: '명함·감사패·인쇄물·도서',
   접대비: '거래처 접대·선물·상품권',
   회의비: '회의비·세미나 catering 등',
   여비교통비: '택시·KTX 등 출장 이동비',
@@ -102,6 +104,57 @@ export const CATEGORY_HINTS = {
 
 export function categoryHint(name) {
   return CATEGORY_HINTS[String(name || '').trim()] || ''
+}
+
+/**
+ * 이용내역으로 계정과목 추천. 위에서부터 순서대로 매칭됩니다.
+ * entryType이 주어지면 해당 유형 규칙만 봅니다 (장부 입력용).
+ */
+const SUGGEST_RULES = [
+  { re: /상품권/, type: 'opex', category: '접대비' },
+  { re: /골프|유흥|노래방|접대/, type: 'opex', category: '접대비' },
+  { re: /수리|수선/, type: 'opex', category: '수선비' },
+  { re: /주유|주유소|에너지|충전|기름/, type: 'opex', category: '차량유지비' },
+  { re: /주차|파킹/, type: 'opex', category: '차량유지비' },
+  { re: /택시|티머니|코레일|KTX|항공|고속버스|공항|철도|지하철|버스/, type: 'opex', category: '여비교통비' },
+  { re: /인쇄|명함|프린트|감사패|현수막|플래카드/, type: 'opex', category: '도서인쇄비' },
+  { re: /교보|알라딘|예스24|서점|도서/, type: 'opex', category: '도서인쇄비' },
+  { re: /세무|세금|구청|법원|등기소|국세|지방세|국민연금|건강보험|고용보험/, type: 'opex', category: '세금과공과' },
+  {
+    re: /김밥|식당|레스토랑|급식|뷔페|족발|치킨|피자|햄버거|국밥|냉면|분식|돈까스|삼겹|갈비|초밥|중식|양식|한식|일식|카페|커피|베이커리|제과|아이스크림|빙수|케이크|도넛|샌드위치|샐러드|포케|마라탕|떡볶이|순대|쌀국수|파스타|스테이크|횟집|고깃집|술집|호프|이자카야|브런치|도시락|후식|다과|음료|주스/,
+    type: 'opex',
+    category: '복리후생비',
+  },
+  { re: /KT|SKT|LGU|SK텔레콤|통신|인터넷|와이파이|휴대폰|포켓와이파이/, type: 'opex', category: '통신비' },
+  { re: /우체국|우편|등기/, type: 'opex', category: '통신비' },
+  {
+    re: /구독|Notion|노션|Adobe|어도비|Microsoft|MS365|AWS|클라우드|GPT|ChatGPT|유튜브|넷플릭스|멜론|스포티파이|한글과컴퓨터|안랩|백신/,
+    type: 'opex',
+    category: '지급수수료',
+  },
+  { re: /광고|마케팅|홍보/, type: 'opex', category: '광고선전비' },
+  { re: /학원|세미나|강의|교육/, type: 'opex', category: '교육훈련비' },
+  { re: /보험/, type: 'opex', category: '보험료' },
+  { re: /은행|토스|카카오페이|페이코|수수료/, type: 'opex', category: '지급수수료' },
+  { re: /다이소|문구|마트|편의점|올리브영|이케아|하이마트|전자랜드|쿠팡/, type: 'opex', category: '소모품비' },
+  { re: /렌탈|리스|임대/, type: 'opex', category: '임차료' },
+  { re: /한전|전기요금|가스요금|수도요금|수돗물/, type: 'opex', category: '수도광열비' },
+  { re: /급여|월급|상여|인건/, type: 'opex', category: '인건비' },
+  { re: /외주|용역|프리랜서|컨설팅|자문/, type: 'purchase', category: '외주용역비' },
+  { re: /원재료|자재|원단/, type: 'purchase', category: '원재료비' },
+  { re: /택배|운송|화물|퀵서비스|용달/, type: 'purchase', category: '운반비' },
+  { re: /노트북|컴퓨터|모니터|키보드|마우스|장비|가전|냉장고/, type: 'purchase', category: '장비구입' },
+  { re: /상품|도매/, type: 'purchase', category: '상품매입' },
+]
+
+export function suggestCategory(merchant, memo, entryType = null) {
+  const text = `${merchant || ''} ${memo || ''}`
+  if (!text.trim()) return null
+  for (const rule of SUGGEST_RULES) {
+    if (entryType && rule.type !== entryType) continue
+    if (rule.re.test(text)) return { type: rule.type, category: rule.category }
+  }
+  return null
 }
 
 export const PROJECT_STATUS = {

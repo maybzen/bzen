@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import Icon from './Icon'
 import { Field, InlineAlert, Modal, Spinner } from './ui'
 import { useToast } from './Toast'
-import { CATEGORIES, ENTRY_META, PAYMENT_METHODS, categoryHint } from '../lib/constants'
+import { CATEGORIES, ENTRY_META, PAYMENT_METHODS, categoryHint, suggestCategory } from '../lib/constants'
 import { formatFileSize, formatKRW, todayISO } from '../lib/format'
 import { createEntry, deleteAttachment, updateEntry, uploadAttachment } from '../lib/api'
 
@@ -268,6 +268,19 @@ export default function EntryFormModal({
             {categoryHint(form.category) ? (
               <p className="mt-1 text-xs text-ink-500">💡 {categoryHint(form.category)}</p>
             ) : null}
+            {(() => {
+              const s = suggestCategory(form.counterparty, form.description, entryType)
+              if (!s || s.category === String(form.category || '').trim()) return null
+              return (
+                <button
+                  type="button"
+                  onClick={() => setForm((f) => ({ ...f, category: s.category }))}
+                  className="mt-1.5 text-xs font-semibold text-brand-700 hover:underline"
+                >
+                  추천: {s.category} 넣기
+                </button>
+              )
+            })()}
           </Field>
 
           <Field label="적요" className="sm:col-span-2">
