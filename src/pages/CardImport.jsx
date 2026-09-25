@@ -324,7 +324,7 @@ export default function CardImport() {
     }
   }, [registered])
 
-  const applySuggest = (entry) => {
+  const suggestPatch = (entry) => {
     const kw = suggestCategory(entry.counterparty, entry.memo, null)
     const remembered = regMemory.cat(entry.counterparty)
     const [rType, rCat] = remembered ? remembered.split('|') : []
@@ -339,6 +339,11 @@ export default function CardImport() {
     }
     const d = regMemory.desc(entry.counterparty)
     if (d && d !== (entry.description || '').trim()) patch.description = d
+    return patch
+  }
+
+  const applySuggest = (entry) => {
+    const patch = suggestPatch(entry)
     if (!Object.keys(patch).length) {
       toast.info('추천할 내용이 없습니다.')
       return
@@ -1370,14 +1375,16 @@ export default function CardImport() {
                               onChange={(e) => setCell(entry.id, { description: e.target.value })}
                               placeholder="예: A4용지 2박스"
                             />
-                            <button
-                              type="button"
-                              title="적요·항목 추천 적용"
-                              onClick={() => applySuggest(entry)}
-                              className="shrink-0 rounded-md px-1.5 py-1 text-xs hover:bg-brand-50"
-                            >
-                              ✨
-                            </button>
+                            {Object.keys(suggestPatch(work)).length > 0 ? (
+                              <button
+                                type="button"
+                                title="적요·항목 추천 적용"
+                                onClick={() => applySuggest(entry)}
+                                className="shrink-0 rounded-md px-1.5 py-1 text-xs hover:bg-brand-50"
+                              >
+                                ✨
+                              </button>
+                            ) : null}
                           </div>
                         </td>
                         <td className="td">
