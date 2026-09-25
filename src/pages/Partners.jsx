@@ -66,10 +66,9 @@ export default function Partners() {
       const saved = await updatePartner(partner.id, { group_name: next })
       setPartners((list) => list.map((p) => (p.id === partner.id ? { ...p, ...saved } : p)))
       toast.success(`구분이 '${next}'(으)로 변경되었습니다.`)
+      setCustomGroupId(null)
     } catch (error) {
       toast.error(error.message)
-    } finally {
-      setCustomGroupId(null)
     }
   }
 

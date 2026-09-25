@@ -24,6 +24,21 @@ function allMonthKeys(entries) {
   return [...keys].sort()
 }
 
+/** 선택 기간의 달 목록 (0건 달도 포함). 기간 미지정이면 데이터 기준 */
+function rangeMonthKeys(from, to, entries) {
+  if (!from || !to) return allMonthKeys(entries)
+  const out = []
+  let cur = String(from).slice(0, 7)
+  const end = String(to).slice(0, 7)
+  for (let i = 0; i < 120 && cur <= end; i += 1) {
+    out.push(cur)
+    const [y, m] = cur.split('-').map(Number)
+    const d = new Date(y, m, 1)
+    cur = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+  }
+  return out
+}
+
 export default function Reports() {
   const { profile } = useAuth()
   const toast = useToast()
@@ -62,7 +77,10 @@ export default function Reports() {
   const prevStats = useMemo(() => summarize(previous), [previous])
   const hasCompare = Boolean(period.range.from && period.range.to)
 
-  const monthKeys = useMemo(() => allMonthKeys(entries), [entries])
+  const monthKeys = useMemo(
+    () => rangeMonthKeys(period.range.from, period.range.to, entries),
+    [entries, period.range.from, period.range.to],
+  )
   const monthly = useMemo(() => groupByMonth(entries, monthKeys), [entries, monthKeys])
   const maxMonthly = Math.max(1, ...monthly.map((m) => Math.max(m.sale, Math.abs(m.profit))))
 
@@ -78,6 +96,24 @@ export default function Reports() {
   const purchaseByCategory = useMemo(() => groupByCategory(entries, 'purchase'), [entries])
   const salesByClient = useMemo(() => groupByCounterparty(entries, 'sale').slice(0, 12), [entries])
   const maxCategory = Math.max(1, ...opexByCategory.map((c) => c.supply))
+  const maxPurchase = Math.max(1, ...purchaseByCategory.map((c) => c.supply))
+
+  /** 분기별 부가세 (매출세액 − 매입세액). 음수면 환급 */
+  const quarterlyVat = useMemo(() => {
+    const map = new Map()
+    for (const e of entries || []) {
+      const mk = String(e.entry_date || '').slice(0, 7)
+      if (!/^\d{4}-\d{2}$/.test(mk)) continue
+      const q = `${mk.slice(0, 4)}Q${Math.floor((Number(mk.slice(5, 7)) - 1) / 3) + 1}`
+      if (!map.has(q)) map.set(q, { q, saleVat: 0, buyVat: 0 })
+      const r = map.get(q)
+      if (e.entry_type === 'sale') r.saleVat += Number(e.vat_amount || 0)
+      else r.buyVat += Number(e.vat_amount || 0)
+    }
+    return [...map.values()]
+      .sort((a, b) => (a.q < b.q ? -1 : 1))
+      .map((r) => ({ ...r, net: r.saleVat - r.buyVat }))
+  }, [entries])
 
   const exportSummary = () => {
     const lines = []
@@ -241,12 +277,46 @@ export default function Reports() {
               <SmallFigure label="매출세액" value={stats.sale.vat} />
               <SmallFigure label="매입세액 (매입+운영비)" value={stats.purchase.vat + stats.opex.vat} />
               <SmallFigure
-                label="부가세 납부 예상"
-                value={stats.vatPayable}
+                label={stats.vatPayable < 0 ? '부가세 환급 예상' : '부가세 납부 예상'}
+                value={Math.abs(stats.vatPayable)}
                 highlight
                 hint="매출세액 − 매입세액"
               />
             </div>
+
+            {quarterlyVat.length ? (
+              <div className="border-t border-ink-100 px-4 py-4">
+                <p className="mb-2 text-xs font-bold text-ink-600">분기 부가세 예상 (선택 기간 기준)</p>
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[480px] border-collapse text-sm">
+                    <thead className="bg-ink-50/70">
+                      <tr>
+                        <th className="th">분기</th>
+                        <th className="th text-right">매출세액</th>
+                        <th className="th text-right">매입세액</th>
+                        <th className="th text-right">납부(환급) 예상</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-ink-100">
+                      {quarterlyVat.map((r) => (
+                        <tr key={r.q}>
+                          <td className="td font-semibold">{r.q}</td>
+                          <td className="td num">{formatKRW(r.saleVat)}원</td>
+                          <td className="td num">{formatKRW(r.buyVat)}원</td>
+                          <td className={`td num font-bold ${r.net < 0 ? 'text-emerald-700' : 'text-loss'}`}>
+                            {r.net < 0 ? `환급 ${formatKRW(Math.abs(r.net))}원` : `${formatKRW(r.net)}원`}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <p className="mt-2 text-[11px] leading-relaxed text-ink-400">
+                  3분기 확정신고 납부기한은 10/25입니다. 간이과세·면세·공제 한도 등에 따라 달라지니
+                  신고 전 세무사와 확인하세요.
+                </p>
+              </div>
+            ) : null}
           </section>
 
           {/* 2. 월별 추이 */}
@@ -393,7 +463,7 @@ export default function Reports() {
                       <li key={row.category} className="flex items-center gap-3">
                         <span className="w-28 shrink-0 truncate text-xs text-ink-600">{row.category}</span>
                         <span className="flex-1">
-                          <ProfitBar value={row.supply} max={maxCategory} tone="profit" />
+                          <ProfitBar value={row.supply} max={maxPurchase} tone="profit" />
                         </span>
                         <span className="shrink-0 font-num text-xs font-semibold tabular-nums text-ink-800">
                           {formatCompact(row.supply)}

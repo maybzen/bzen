@@ -153,12 +153,13 @@ export function detectFixedCosts(entries, { months = 12, minMonths = 3, maxCV = 
     const cv = Math.sqrt(variance) / avg
     if (cv > maxCV) continue
     const monthsSorted = [...byMonth.keys()].sort()
+    const lastKey = monthsSorted[monthsSorted.length - 1]
     out.push({
       name,
       months: byMonth.size,
       avg: Math.round(avg),
-      last: Math.round(totals[totals.length - 1]),
-      lastMonth: monthsSorted[monthsSorted.length - 1],
+      last: Math.round(byMonth.get(lastKey) || 0),
+      lastMonth: lastKey,
       count: totals.length,
     })
   }

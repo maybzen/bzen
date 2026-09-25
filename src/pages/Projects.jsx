@@ -427,7 +427,7 @@ function ProposalCard({ project, row, status, isAdmin, managerName, onEdit, onDe
       </dl>
       {showLedgerLoss ? (
         <p className="mt-2 text-[11px] text-ink-500">
-          탈락 제안 투입 비용 {row.count}건을 손실로 집계합니다.
+          탈락 제안의 선택 기간 투입 비용 {row.count}건을 손실로 집계합니다.
         </p>
       ) : null}
 

@@ -325,7 +325,7 @@ export default function CardImport() {
   }, [registered])
 
   const suggestPatch = (entry) => {
-    const kw = suggestCategory(entry.counterparty, entry.memo, null)
+    const kw = suggestCategory(entry.counterparty, entry.description, null)
     const remembered = regMemory.cat(entry.counterparty)
     const [rType, rCat] = remembered ? remembered.split('|') : []
     const type = kw?.type || (rType === 'purchase' || rType === 'opex' ? rType : null)
@@ -1553,7 +1553,11 @@ export default function CardImport() {
         }}
         entryType={detailEntry?.entry_type === 'purchase' ? 'purchase' : 'opex'}
         source="card"
-        initial={detailEntry}
+        initial={
+          detailEntry
+            ? { ...detailEntry, attachments: regAttachments[detailEntry.id] || [] }
+            : null
+        }
         projects={regProjects}
         profiles={regProfiles}
         partnerNames={[]}

@@ -464,6 +464,7 @@ export default function Users() {
 
               <Field label="초기 비밀번호" required hint="6자 이상">
                 <input
+                  type="password"
                   className="input"
                   value={form.password}
                   onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
@@ -521,6 +522,7 @@ export default function Users() {
       >
         <Field label="새 비밀번호" required hint="6자 이상">
           <input
+            type="password"
             className="input"
             value={pwValue}
             onChange={(e) => setPwValue(e.target.value)}

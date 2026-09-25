@@ -183,8 +183,8 @@ export default function Dashboard() {
 
           <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
             <MiniStat
-              label="부가세 납부 예상"
-              value={stats.vatPayable}
+              label={stats.vatPayable < 0 ? '부가세 환급 예상' : '부가세 납부 예상'}
+              value={Math.abs(stats.vatPayable)}
               desc="매출세액 − 매입세액"
               tone="brand"
             />
