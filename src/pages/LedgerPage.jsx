@@ -108,20 +108,6 @@ export default function LedgerPage({ type, source = 'manual', title, description
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [type, source, projectFilter, debounced, period.range.from, period.range.to, reloadKey])
 
-  const totals = useMemo(
-    () =>
-      shown.reduce(
-        (acc, e) => {
-          acc.supply += Number(e.supply_amount || 0)
-          acc.vat += Number(e.vat_amount || 0)
-          acc.total += Number(e.total_amount || 0)
-          return acc
-        },
-        { supply: 0, vat: 0, total: 0 },
-      ),
-    [shown],
-  )
-
   const projectName = (id) => projects.find((p) => p.id === id)?.name || ''
   const personName = (id) => profiles.find((p) => p.id === id)?.full_name || ''
   /** 직원 키: 결의자 id → 퇴사자 통합 → 미지정. 날짜가 아니라 사람 기준 */
@@ -163,6 +149,20 @@ export default function LedgerPage({ type, source = 'manual', title, description
     }
     return [...map.values()].sort((a, b) => b.total - a.total)
   }, [entries, isReport, profiles])
+
+  const totals = useMemo(
+    () =>
+      shown.reduce(
+        (acc, e) => {
+          acc.supply += Number(e.supply_amount || 0)
+          acc.vat += Number(e.vat_amount || 0)
+          acc.total += Number(e.total_amount || 0)
+          return acc
+        },
+        { supply: 0, vat: 0, total: 0 },
+      ),
+    [shown],
+  )
 
   const handleDelete = async () => {
     if (!removing) return
