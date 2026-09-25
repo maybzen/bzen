@@ -182,6 +182,7 @@ export default function Projects() {
                 <ProposalCard
                   key={project.id}
                   project={project}
+                  row={row}
                   status={status}
                   isAdmin={isAdmin}
                   managerName={managerName(project.manager_id)}
@@ -344,7 +345,11 @@ export default function Projects() {
   )
 }
 
-function ProposalCard({ project, status, isAdmin, managerName, onEdit, onDelete }) {
+function ProposalCard({ project, row, status, isAdmin, managerName, onEdit, onDelete }) {
+  // 탈락 제안: 수기 수익금이 없으면 장부에 찍힌 투입 비용을 손실(-)로 보여줍니다.
+  const spent = Number(row?.purchase || 0) + Number(row?.opex || 0) - Number(row?.sale || 0)
+  const showLedgerLoss =
+    project.status === 'dropped' && !Number(project.profit_amount) && spent > 0
   return (
     <article className="card flex flex-col p-4">
       <div className="flex items-start justify-between gap-3">
@@ -409,13 +414,22 @@ function ProposalCard({ project, status, isAdmin, managerName, onEdit, onDelete 
           <dt className="text-[11px] font-semibold text-ink-500">수익</dt>
           <dd
             className={`mt-0.5 font-num text-sm font-extrabold tabular-nums ${
-              Number(project.profit_amount) >= 0 ? 'text-ink-900' : 'text-loss'
+              Number(project.profit_amount) >= 0 && !showLedgerLoss ? 'text-ink-900' : 'text-loss'
             }`}
           >
-            {Number(project.profit_amount) ? `${formatKRW(Number(project.profit_amount))}` : '—'}
+            {Number(project.profit_amount)
+              ? `${formatKRW(Number(project.profit_amount))}`
+              : showLedgerLoss
+                ? `-${formatKRW(spent)}`
+                : '—'}
           </dd>
         </div>
       </dl>
+      {showLedgerLoss ? (
+        <p className="mt-2 text-[11px] text-ink-500">
+          탈락 제안 투입 비용 {row.count}건을 손실로 집계합니다.
+        </p>
+      ) : null}
 
       {project.memo ? (
         <p className="mt-3 line-clamp-2 whitespace-pre-line text-xs leading-relaxed text-ink-500">

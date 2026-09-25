@@ -9,6 +9,17 @@ function personName(profiles, id) {
   return p?.full_name || p?.email || '—'
 }
 
+/** 담당자 표기: 결의자 → 퇴사자 코드(메모의 N지결 등) → 기존 방식 순 */
+function ownerLabel(profiles, entry) {
+  if (entry.requester_id) return personName(profiles, entry.requester_id)
+  if (entry.source === 'expense_report') {
+    const m = String(entry.memo || '').match(/([A-Z]+)\s*지결/)
+    if (m) return `퇴사자(${m[1]})`
+    return '미지정'
+  }
+  return personName(profiles, entry.created_by)
+}
+
 export default function EntryTable({
   entries = [],
   projects = [],
@@ -102,7 +113,7 @@ export default function EntryTable({
                     <AttachmentCell attachments={files} onOpen={onOpenAttachments} />
                   </td>
                   <td className="td max-w-[110px] truncate text-xs text-ink-500">
-                    {personName(profiles, entry.requester_id || entry.created_by)}
+                    {ownerLabel(profiles, entry)}
                   </td>
                   <td className="td">
                     {canEdit ? (

@@ -39,6 +39,7 @@ export default function LedgerPage({ type, source = 'manual', title, description
   const [search, setSearch] = useState('')
   const [debounced, setDebounced] = useState('')
   const [projectFilter, setProjectFilter] = useState('')
+  const [personFilter, setPersonFilter] = useState('')
   const [reloadKey, setReloadKey] = useState(0)
 
   const [formOpen, setFormOpen] = useState(false)
@@ -109,7 +110,7 @@ export default function LedgerPage({ type, source = 'manual', title, description
 
   const totals = useMemo(
     () =>
-      entries.reduce(
+      shown.reduce(
         (acc, e) => {
           acc.supply += Number(e.supply_amount || 0)
           acc.vat += Number(e.vat_amount || 0)
@@ -118,11 +119,50 @@ export default function LedgerPage({ type, source = 'manual', title, description
         },
         { supply: 0, vat: 0, total: 0 },
       ),
-    [entries],
+    [shown],
   )
 
   const projectName = (id) => projects.find((p) => p.id === id)?.name || ''
   const personName = (id) => profiles.find((p) => p.id === id)?.full_name || ''
+  /** 직원 키: 결의자 id → 퇴사자 통합 → 미지정. 날짜가 아니라 사람 기준 */
+  const exCodeOf = (e) => {
+    const m = String(e.memo || '').match(/([A-Z]+)\s*지결/)
+    return m ? m[1] : ''
+  }
+  const ownerKey = (e) => e.requester_id || (exCodeOf(e) ? 'ex' : '__none')
+  const ownerNameByKey = (key) => {
+    if (key === '__none') return '미지정'
+    if (key === 'ex' || key.startsWith('ex:')) return '퇴사자'
+    return personName(key) || '미지정'
+  }
+  const ownerName = (e) => {
+    if (e.requester_id) return ownerNameByKey(e.requester_id)
+    const code = exCodeOf(e)
+    if (code) return `퇴사자(${code})`
+    return '미지정'
+  }
+  /** 직원은 자기 결의만 봅니다 (관리자는 전체 + 직원별 전환) */
+  const lockedSelf = isReport && !isAdmin && user?.id ? user.id : ''
+  const effectiveFilter = lockedSelf || personFilter
+
+  /** 지출결의: 직원 필터 + 직원별 소계 (날짜가 아니라 사람 기준으로 봅니다) */
+  const shown = useMemo(() => {
+    if (!isReport || !effectiveFilter) return entries
+    return entries.filter((e) => ownerKey(e) === effectiveFilter)
+  }, [entries, isReport, effectiveFilter])
+
+  const byPerson = useMemo(() => {
+    if (!isReport) return []
+    const map = new Map()
+    for (const e of entries) {
+      const key = ownerKey(e)
+      if (!map.has(key)) map.set(key, { key, name: ownerNameByKey(key), n: 0, total: 0 })
+      const g = map.get(key)
+      g.n += 1
+      g.total += Number(e.total_amount || 0)
+    }
+    return [...map.values()].sort((a, b) => b.total - a.total)
+  }, [entries, isReport, profiles])
 
   const handleDelete = async () => {
     if (!removing) return
@@ -140,7 +180,7 @@ export default function LedgerPage({ type, source = 'manual', title, description
   }
 
   const exportCSV = () => {
-    if (!entries.length) {
+    if (!shown.length) {
       toast.info('내보낼 내역이 없습니다.')
       return
     }
@@ -159,7 +199,7 @@ export default function LedgerPage({ type, source = 'manual', title, description
       '담당',
       '비고',
     ]
-    const rows = entries.map((e) => [
+    const rows = shown.map((e) => [
       e.entry_date,
       ENTRY_META[e.entry_type]?.label || e.entry_type,
       e.doc_no,
@@ -171,7 +211,7 @@ export default function LedgerPage({ type, source = 'manual', title, description
       Number(e.vat_amount || 0),
       Number(e.total_amount || 0),
       e.payment_method,
-      personName(e.requester_id || e.created_by),
+      isReport ? ownerName(e) : personName(e.requester_id || e.created_by),
       e.memo,
     ])
     const label = isReport ? '지출결의' : title
@@ -210,13 +250,36 @@ export default function LedgerPage({ type, source = 'manual', title, description
         <StatCard label="합계 금액" value={totals.total} tone="neutral" icon="coins" />
         <StatCard
           label="건수"
-          value={String(entries.length)}
+          value={String(shown.length)}
           unit="건"
           tone="neutral"
           icon="file"
           hint={period.range.label}
         />
       </div>
+
+      {isReport && !lockedSelf && byPerson.length > 0 ? (
+        <div className="card px-4 py-3.5">
+          <p className="mb-2 text-xs font-semibold text-ink-500">직원별 소계</p>
+          <div className="flex flex-wrap gap-2">
+            {byPerson.map((g) => (
+              <button
+                key={g.key}
+                type="button"
+                onClick={() => setPersonFilter((cur) => (cur === g.key ? '' : g.key))}
+                title="클릭하면 해당 직원만 표시됩니다"
+                className={`rounded-full border px-3 py-1.5 text-xs ${
+                  personFilter === g.key
+                    ? 'border-brand-600 bg-brand-50 font-semibold text-brand-700'
+                    : 'border-ink-200 text-ink-600'
+                }`}
+              >
+                {g.name} · {g.n}건 · {formatKRW(g.total)}원
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
 
       <div className="card overflow-hidden">
         <div className="flex flex-col gap-3 border-b border-ink-200 px-4 py-3.5">
@@ -250,6 +313,23 @@ export default function LedgerPage({ type, source = 'manual', title, description
               ))}
             </select>
 
+            {isReport && !lockedSelf ? (
+              <select
+                className="input sm:w-44"
+                value={personFilter}
+                onChange={(e) => setPersonFilter(e.target.value)}
+              >
+                <option value="">전체 직원</option>
+                {profiles.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.full_name}
+                  </option>
+                ))}
+                <option value="ex">퇴사자</option>
+                <option value="__none">미지정</option>
+              </select>
+            ) : null}
+
             <button
               type="button"
               className="btn-ghost shrink-0"
@@ -266,7 +346,7 @@ export default function LedgerPage({ type, source = 'manual', title, description
           <LoadingBlock />
         ) : (
           <EntryTable
-            entries={entries}
+            entries={shown}
             projects={projects}
             profiles={profiles}
             attachmentsByEntry={attachmentsByEntry}
@@ -336,7 +416,7 @@ export default function LedgerPage({ type, source = 'manual', title, description
         onDownloadTemplate={downloadTemplate}
       />
 
-      {!loading && !entries.length && !search && !projectFilter ? (
+      {!loading && !shown.length && !search && !projectFilter && !personFilter ? (
         <p className="text-center text-xs text-ink-400">
           {isReport
             ? '직원이 올린 지출결의가 이곳에 쌓입니다.'
