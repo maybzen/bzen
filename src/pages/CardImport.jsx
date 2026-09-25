@@ -25,8 +25,8 @@ const TYPE_OPTIONS = ['purchase', 'opex']
 const COMPANY_PRESETS = {
   auto: { label: '자동 감지', cardLabel: '' },
   busan: {
-    label: '부산은행 2381 (직원용)',
-    cardLabel: '법카 2381',
+    label: '부산은행 9988→2381 (직원용)',
+    cardLabel: '법카 9988→2381',
     mapping: { date: 1, merchant: 11, amount: 9, memo: -1, currency: -1, foreign: -1, fee: 6, payable: 7 },
   },
   woori: {
@@ -1153,7 +1153,7 @@ export default function CardImport() {
                 onChange={(e) => setRegCardFilter(e.target.value)}
               >
                 <option value="">전체 카드</option>
-                <option value="법카 2381">법카 2381</option>
+                <option value="법카 9988→2381">법카 9988→2381</option>
                 <option value="법카 3918→3842">법카 3918→3842</option>
                 <option value="카드의정석 0854">카드의정석 0854</option>
                 <option value="기타">기타</option>
