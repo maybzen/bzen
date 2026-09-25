@@ -30,14 +30,9 @@ const COMPANY_PRESETS = {
     mapping: { date: 1, merchant: 11, amount: 9, memo: -1, currency: -1, foreign: -1, fee: 6, payable: 7 },
   },
   woori: {
-    label: '우리은행 3842 (대표님용)',
-    cardLabel: '법카 3842',
+    label: '우리은행 3918→3842 (대표님용)',
+    cardLabel: '법카 3918→3842',
     // 제목행 자동 탐색 + 아래 열 사용 (외화 3종은 국내분 기준 최유력 위치)
-    mapping: { date: 0, merchant: 8, amount: 9, memo: -1, currency: -1, foreign: 15, fee: -1, payable: 16 },
-  },
-  woori3918: {
-    label: '우리은행 3918',
-    cardLabel: '법카 3918',
     mapping: { date: 0, merchant: 8, amount: 9, memo: -1, currency: -1, foreign: 15, fee: -1, payable: 16 },
   },
   woori0854: {
@@ -267,8 +262,8 @@ export default function CardImport() {
   const [regCardFilter, setRegCardFilter] = useState('')
 
   const cardOf = (entry) => {
-    const m = String(entry.memo || '').match(/(법카|카드의정석)\s*([\d-]+)/)
-    return m ? `${m[1]} ${m[2]}` : '기타'
+    const m = String(entry.memo || '').match(/(법카\s*\d+(?:→\d+)?|카드의정석\s*[\d-]+)/)
+    return m ? m[1].replace(/\s+/g, ' ') : '기타'
   }
 
   const exportRegistered = () => {
@@ -1159,8 +1154,7 @@ export default function CardImport() {
               >
                 <option value="">전체 카드</option>
                 <option value="법카 2381">법카 2381</option>
-                <option value="법카 3842">법카 3842</option>
-                <option value="법카 3918">법카 3918</option>
+                <option value="법카 3918→3842">법카 3918→3842</option>
                 <option value="카드의정석 0854">카드의정석 0854</option>
                 <option value="기타">기타</option>
               </select>
@@ -1186,8 +1180,8 @@ export default function CardImport() {
               {(() => {
                 const map = new Map()
                 for (const e of visibleRegistered) {
-                  const m = String(e.memo || '').match(/(법카|카드의정석)\s*([\d-]+)/)
-                  const label = m ? `${m[1]} ${m[2]}` : '기타'
+                  const m = String(e.memo || '').match(/(법카\s*\d+(?:→\d+)?|카드의정석\s*[\d-]+)/)
+                  const label = m ? m[1].replace(/\s+/g, ' ') : '기타'
                   if (!map.has(label)) map.set(label, { label, count: 0, total: 0 })
                   const row = map.get(label)
                   row.count += 1
