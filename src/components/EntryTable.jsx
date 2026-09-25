@@ -186,6 +186,7 @@ export default function EntryTable({
                   <p className="mt-0.5 truncate text-xs text-ink-500">
                     {entry.counterparty || '—'}
                     {project ? ` · ${project.name}` : ''}
+                    {entry.source === 'expense_report' ? ` · ${ownerLabel(profiles, entry)}` : ''}
                   </p>
                 </div>
                 <div className="shrink-0 text-right">
