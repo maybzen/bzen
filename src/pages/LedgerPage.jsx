@@ -167,7 +167,7 @@ export default function LedgerPage({ type, source = 'manual', title, description
       const g = map.get(key) || { key, name: nm, n: 0, supply: 0, vat: 0, total: 0 }
       ordered.push(g)
     }
-    for (const key of showEx ? ['ex', '__none'] : ['__none']) {
+    for (const key of showEx ? ['ex'] : []) {
       const g = map.get(key) || {
         key,
         name: ownerNameByKey(key),
