@@ -158,7 +158,7 @@ export default function LedgerPage({ type, source = 'manual', title, description
       g.vat += Number(e.vat_amount || 0)
       g.total += Number(e.total_amount || 0)
     }
-    return [...map.values()].sort((a, b) => b.total - a.total)
+    return [...map.values()].sort((a, b) => a.name.localeCompare(b.name, 'ko'))
   }, [base, isReport, profiles])
 
   const totals = useMemo(
