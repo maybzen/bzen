@@ -130,13 +130,8 @@ export default function LedgerPage({ type, source = 'manual', title, description
   /** 직원은 자기 결의만 봅니다 (관리자는 전체 + 직원별 전환) */
   const lockedSelf = isReport && !isAdmin && user?.id ? user.id : ''
   const effectiveFilter = lockedSelf || personFilter
-  /** 퇴사자분은 기본 숨김 (급여대장 반영 후에는 안 씀). 토글로 다시 볼 수 있음 */
-  const [showEx, setShowEx] = useState(false)
-  const base = useMemo(() => {
-    if (!isReport) return entries
-    if (showEx || lockedSelf) return entries
-    return entries.filter((e) => ownerKey(e) !== 'ex')
-  }, [entries, isReport, showEx, lockedSelf])
+  /** 퇴사자분은 기타에 합산됩니다 */
+  const base = useMemo(() => entries, [entries])
 
   /** 지출결의: 직원 필터 + 직원별 소계 (날짜가 아니라 사람 기준으로 봅니다) */
   const shown = useMemo(() => {
@@ -167,7 +162,7 @@ export default function LedgerPage({ type, source = 'manual', title, description
       const g = map.get(key) || { key, name: nm, n: 0, supply: 0, vat: 0, total: 0 }
       ordered.push(g)
     }
-    for (const key of showEx ? ['ex'] : []) {
+    for (const key of ['ex']) {
       const g = map.get(key) || {
         key,
         name: ownerNameByKey(key),
@@ -179,7 +174,7 @@ export default function LedgerPage({ type, source = 'manual', title, description
       ordered.push(g)
     }
     return ordered
-  }, [base, isReport, profiles, showEx])
+  }, [base, isReport, profiles])
 
   const totals = useMemo(
     () =>
@@ -362,20 +357,9 @@ export default function LedgerPage({ type, source = 'manual', title, description
                     {p.full_name}
                   </option>
                 ))}
-                <option value="ex">기타(퇴사자)</option>
+                <option value="ex">기타</option>
                 <option value="__none">미지정</option>
               </select>
-            ) : null}
-            {isReport && !lockedSelf ? (
-              <label className="flex shrink-0 cursor-pointer items-center gap-1.5 text-xs text-ink-500">
-                <input
-                  type="checkbox"
-                  className="h-4 w-4 accent-brand-600"
-                  checked={showEx}
-                  onChange={(e) => setShowEx(e.target.checked)}
-                />
-                퇴사자 포함
-              </label>
             ) : null}
 
             <button
