@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Icon from '../components/Icon'
+import EntryFormModal from '../components/EntryFormModal'
 import PeriodPicker, { usePeriod } from '../components/PeriodPicker'
 import { AttachmentCell, AttachmentModal } from '../components/Attachments'
 import { useToast } from '../components/Toast'
@@ -298,9 +299,58 @@ export default function CardImport() {
     })
     downloadTextFile(`법인카드_${period.range.from || 'all'}_${period.range.to || 'all'}.csv`, toCSV(headers, rows))
   }
+  /** 등록済み 내역에서 가맹점별 적요·분류 기억 (추천용) */
+  const regMemory = useMemo(() => {
+    const desc = new Map()
+    const cat = new Map()
+    for (const e of registered || []) {
+      const key = String(e.counterparty || '').trim()
+      if (!key) continue
+      const d = String(e.description || '').trim()
+      if (d) {
+        if (!desc.has(key)) desc.set(key, new Map())
+        const m = desc.get(key)
+        m.set(d, (m.get(d) || 0) + 1)
+      }
+      const ck = `${e.entry_type}|${e.category || ''}`
+      if (!cat.has(key)) cat.set(key, new Map())
+      const m2 = cat.get(key)
+      m2.set(ck, (m2.get(ck) || 0) + 1)
+    }
+    const top = (m) => [...m.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || ''
+    return {
+      desc: (k) => top(desc.get(String(k || '').trim()) || new Map()),
+      cat: (k) => top(cat.get(String(k || '').trim()) || new Map()),
+    }
+  }, [registered])
+
+  const applySuggest = (entry) => {
+    const kw = suggestCategory(entry.counterparty, entry.memo, null)
+    const remembered = regMemory.cat(entry.counterparty)
+    const [rType, rCat] = remembered ? remembered.split('|') : []
+    const type = kw?.type || (rType === 'purchase' || rType === 'opex' ? rType : null)
+    const category = kw?.category || (type && rType === type ? rCat : '')
+    const patch = {}
+    if (type && type !== entry.entry_type) {
+      patch.entry_type = type
+      patch.category = category || ''
+    } else if (category && category !== entry.category) {
+      patch.category = category
+    }
+    const d = regMemory.desc(entry.counterparty)
+    if (d && d !== (entry.description || '').trim()) patch.description = d
+    if (!Object.keys(patch).length) {
+      toast.info('추천할 내용이 없습니다.')
+      return
+    }
+    setCell(entry.id, patch)
+    toast.success('추천을 적용했습니다. 저장 버튼을 눌러주세요.')
+  }
+
   const [removing, setRemoving] = useState(null)
   const [removingMany, setRemovingMany] = useState(null)
   const [selected, setSelected] = useState({})
+  const [detailEntry, setDetailEntry] = useState(null)
   const [busy, setBusy] = useState(false)
   const [viewerFiles, setViewerFiles] = useState(null)
 
@@ -1313,12 +1363,22 @@ export default function CardImport() {
                           ) : null}
                         </td>
                         <td className="td min-w-[150px]">
-                          <input
-                            className="input py-1 text-xs"
-                            value={work.description || ''}
-                            onChange={(e) => setCell(entry.id, { description: e.target.value })}
-                            placeholder="예: A4용지 2박스"
-                          />
+                          <div className="flex items-center gap-1">
+                            <input
+                              className="input min-w-0 flex-1 py-1 text-xs"
+                              value={work.description || ''}
+                              onChange={(e) => setCell(entry.id, { description: e.target.value })}
+                              placeholder="예: A4용지 2박스"
+                            />
+                            <button
+                              type="button"
+                              title="적요·항목 추천 적용"
+                              onClick={() => applySuggest(entry)}
+                              className="shrink-0 rounded-md px-1.5 py-1 text-xs hover:bg-brand-50"
+                            >
+                              ✨
+                            </button>
+                          </div>
                         </td>
                         <td className="td">
                           <select
@@ -1391,6 +1451,13 @@ export default function CardImport() {
                           />
                         </td>
                         <td className="td num whitespace-nowrap">
+                          <button
+                            type="button"
+                            onClick={() => setDetailEntry(entry)}
+                            className="mr-2 text-xs font-semibold text-ink-500 hover:underline"
+                          >
+                            상세
+                          </button>
                           {dirty ? (
                             <>
                               <button
@@ -1468,6 +1535,23 @@ export default function CardImport() {
         open={Boolean(viewerFiles)}
         onClose={() => setViewerFiles(null)}
         attachments={viewerFiles || []}
+      />
+
+      <EntryFormModal
+        open={Boolean(detailEntry)}
+        onClose={() => setDetailEntry(null)}
+        onSaved={() => {
+          setDetailEntry(null)
+          setReloadKey((k) => k + 1)
+        }}
+        entryType={detailEntry?.entry_type === 'purchase' ? 'purchase' : 'opex'}
+        source="card"
+        initial={detailEntry}
+        projects={regProjects}
+        profiles={regProfiles}
+        partnerNames={[]}
+        isAdmin={isAdmin}
+        userId={user?.id}
       />
 
       <p className="text-center text-xs leading-relaxed text-ink-400">
