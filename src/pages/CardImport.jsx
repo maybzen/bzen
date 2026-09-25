@@ -1187,7 +1187,7 @@ export default function CardImport() {
                 const map = new Map()
                 for (const e of visibleRegistered) {
                   const m = String(e.memo || '').match(/(법카|카드의정석)\s*([\d-]+)/)
-                  const label = m ? `${m[1]} ${m[2]}` : '기타'}
+                  const label = m ? `${m[1]} ${m[2]}` : '기타'
                   if (!map.has(label)) map.set(label, { label, count: 0, total: 0 })
                   const row = map.get(label)
                   row.count += 1
