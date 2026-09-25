@@ -22,6 +22,7 @@ const opt = (name, def) => {
 const FILE = opt('--file', '')
 const FROM = opt('--from', '2026-01-01')
 const TO = opt('--to', '2026-12-31')
+const SOURCE = opt('--source', 'manual')
 const COMMIT = args.includes('--commit')
 if (!FILE) {
   console.error('사용법: node scripts/import-entries.mjs --file <csv> [--from YYYY-MM-DD] [--to YYYY-MM-DD] [--commit]')
@@ -158,7 +159,10 @@ for (const r of lines.slice(1)) {
   const supply = Number(g('supply_amount')) || 0
   const vat = Number(g('vat_amount')) || 0
   const entry_type = g('entry_type')
-  if (!entry_date || !counterparty || !entry_type || supply + vat <= 0) {
+  const fx_currency = g('fx_currency') || ''
+  const fx_amount = Number(g('fx_amount')) || 0
+  const fx_fee = Number(g('fx_fee')) || 0
+  if (!entry_date || !counterparty || !entry_type || supply + vat === 0) {
     skipped.invalid += 1
     continue
   }
@@ -177,7 +181,7 @@ for (const r of lines.slice(1)) {
   if (hint && !proj) unmatched.add(hint)
   toInsert.push({
     entry_type,
-    source: 'manual',
+    source: SOURCE,
     entry_date,
     counterparty,
     description: g('description'),
@@ -187,6 +191,9 @@ for (const r of lines.slice(1)) {
     payment_method: g('payment_method') || '기타',
     memo: g('memo'),
     project_id: proj ? proj.id : null,
+    fx_currency,
+    fx_amount,
+    fx_fee,
     created_by: auth.user.id,
   })
 }

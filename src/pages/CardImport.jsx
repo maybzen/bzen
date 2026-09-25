@@ -35,6 +35,16 @@ const COMPANY_PRESETS = {
     // 제목행 자동 탐색 + 아래 열 사용 (외화 3종은 국내분 기준 최유력 위치)
     mapping: { date: 0, merchant: 8, amount: 9, memo: -1, currency: -1, foreign: 15, fee: -1, payable: 16 },
   },
+  woori3918: {
+    label: '우리은행 3918',
+    cardLabel: '법카 3918',
+    mapping: { date: 0, merchant: 8, amount: 9, memo: -1, currency: -1, foreign: 15, fee: -1, payable: 16 },
+  },
+  woori0854: {
+    label: '카드의정석 0854 (하이패스·후불)',
+    cardLabel: '카드의정석 0854',
+    mapping: { date: 0, merchant: 8, amount: 9, memo: -1, currency: -1, foreign: 15, fee: -1, payable: 16 },
+  },
 }
 
 /** 제목·반복 헤더 행 판별 (우리은행처럼 중간에 제목이 반복되는 양식용) */
@@ -257,8 +267,8 @@ export default function CardImport() {
   const [regCardFilter, setRegCardFilter] = useState('')
 
   const cardOf = (entry) => {
-    const m = String(entry.memo || '').match(/법카\s*([\d-]+)/)
-    return m ? `법카 ${m[1]}` : '기타'
+    const m = String(entry.memo || '').match(/(법카|카드의정석)\s*([\d-]+)/)
+    return m ? `${m[1]} ${m[2]}` : '기타'
   }
 
   const exportRegistered = () => {
@@ -1150,6 +1160,8 @@ export default function CardImport() {
                 <option value="">전체 카드</option>
                 <option value="법카 2381">법카 2381</option>
                 <option value="법카 3842">법카 3842</option>
+                <option value="법카 3918">법카 3918</option>
+                <option value="카드의정석 0854">카드의정석 0854</option>
                 <option value="기타">기타</option>
               </select>
               <button
@@ -1174,8 +1186,8 @@ export default function CardImport() {
               {(() => {
                 const map = new Map()
                 for (const e of visibleRegistered) {
-                  const m = String(e.memo || '').match(/법카\s*([\d-]+)/)
-                  const label = m ? `법카 ${m[1]}` : '기타'
+                  const m = String(e.memo || '').match(/(법카|카드의정석)\s*([\d-]+)/)
+                  const label = m ? `${m[1]} ${m[2]}` : '기타'}
                   if (!map.has(label)) map.set(label, { label, count: 0, total: 0 })
                   const row = map.get(label)
                   row.count += 1
