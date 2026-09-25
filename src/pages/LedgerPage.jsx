@@ -158,8 +158,28 @@ export default function LedgerPage({ type, source = 'manual', title, description
       g.vat += Number(e.vat_amount || 0)
       g.total += Number(e.total_amount || 0)
     }
-    return [...map.values()].sort((a, b) => a.name.localeCompare(b.name, 'ko'))
-  }, [base, isReport, profiles])
+    // 고정 슬롯: Z·B·G·S·N·H·J·M → 기타 → 미지정 (기간이 바뀌어도 순서 고정, 합계만 갱신)
+    const ORDER = ['이향란', '이보람', '권혜민', '박현정', '김상희', '김혜린', '박은영', '이정현']
+    const ordered = []
+    for (const nm of ORDER) {
+      const prof = profiles.find((p) => p.full_name === nm)
+      const key = prof ? prof.id : `name:${nm}`
+      const g = map.get(key) || { key, name: nm, n: 0, supply: 0, vat: 0, total: 0 }
+      ordered.push(g)
+    }
+    for (const key of showEx ? ['ex', '__none'] : ['__none']) {
+      const g = map.get(key) || {
+        key,
+        name: ownerNameByKey(key),
+        n: 0,
+        supply: 0,
+        vat: 0,
+        total: 0,
+      }
+      ordered.push(g)
+    }
+    return ordered
+  }, [base, isReport, profiles, showEx])
 
   const totals = useMemo(
     () =>
@@ -272,9 +292,8 @@ export default function LedgerPage({ type, source = 'manual', title, description
       {isReport && !lockedSelf && byPerson.length > 0 ? (
         <div className="card px-4 py-3.5">
           <p className="mb-2 text-xs font-semibold text-ink-500">직원별 소계 (클릭하면 해당 직원만 표시)</p>
-          <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-4">
+          <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-5">
             {byPerson.map((g) => {
-              const max = Math.max(1, ...byPerson.map((x) => x.total))
               const on = personFilter === g.key
               return (
                 <button
@@ -288,19 +307,10 @@ export default function LedgerPage({ type, source = 'manual', title, description
                   }`}
                 >
                   <p className={`text-sm font-bold ${on ? 'text-brand-700' : 'text-ink-900'}`}>{g.name}</p>
-                  <p className="mt-0.5 text-[11px] text-ink-500">{g.n}건</p>
-                  <p className="mt-1 font-num text-base font-extrabold tabular-nums text-ink-900">
+                  <p className="mt-0.5 font-num text-base font-extrabold tabular-nums text-ink-900">
                     {formatKRW(g.total)}원
                   </p>
-                  <p className="mt-0.5 font-num text-[11px] tabular-nums text-ink-500">
-                    공급 {formatKRW(g.supply)} · 부가 {formatKRW(g.vat)}
-                  </p>
-                  <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-ink-100">
-                    <div
-                      className="h-full rounded-full bg-brand-600"
-                      style={{ width: `${Math.max(4, Math.round((g.total / max) * 100))}%` }}
-                    />
-                  </div>
+                  <p className="mt-0.5 text-[11px] text-ink-500">{g.n}건</p>
                 </button>
               )
             })}
