@@ -9,12 +9,12 @@ function personName(profiles, id) {
   return p?.full_name || p?.email || '—'
 }
 
-/** 담당자 표기: 결의자 → 퇴사자 코드(메모의 N지결 등) → 기존 방식 순 */
+/** 담당자 표기: 결의자 → 기타(퇴사자 코드) → 기존 방식 순 */
 function ownerLabel(profiles, entry) {
   if (entry.requester_id) return personName(profiles, entry.requester_id)
   if (entry.source === 'expense_report') {
     const m = String(entry.memo || '').match(/([A-Z]+)\s*지결/)
-    if (m) return `퇴사자(${m[1]})`
+    if (m) return '기타'
     return '미지정'
   }
   return personName(profiles, entry.created_by)

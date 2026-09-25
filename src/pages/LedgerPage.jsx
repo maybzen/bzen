@@ -118,29 +118,36 @@ export default function LedgerPage({ type, source = 'manual', title, description
   const ownerKey = (e) => e.requester_id || (exCodeOf(e) ? 'ex' : '__none')
   const ownerNameByKey = (key) => {
     if (key === '__none') return '미지정'
-    if (key === 'ex' || key.startsWith('ex:')) return '퇴사자'
+    if (key === 'ex' || key.startsWith('ex:')) return '기타'
     return personName(key) || '미지정'
   }
   const ownerName = (e) => {
     if (e.requester_id) return ownerNameByKey(e.requester_id)
     const code = exCodeOf(e)
-    if (code) return `퇴사자(${code})`
+    if (code) return '기타'
     return '미지정'
   }
   /** 직원은 자기 결의만 봅니다 (관리자는 전체 + 직원별 전환) */
   const lockedSelf = isReport && !isAdmin && user?.id ? user.id : ''
   const effectiveFilter = lockedSelf || personFilter
+  /** 퇴사자분은 기본 숨김 (급여대장 반영 후에는 안 씀). 토글로 다시 볼 수 있음 */
+  const [showEx, setShowEx] = useState(false)
+  const base = useMemo(() => {
+    if (!isReport) return entries
+    if (showEx || lockedSelf) return entries
+    return entries.filter((e) => ownerKey(e) !== 'ex')
+  }, [entries, isReport, showEx, lockedSelf])
 
   /** 지출결의: 직원 필터 + 직원별 소계 (날짜가 아니라 사람 기준으로 봅니다) */
   const shown = useMemo(() => {
-    if (!isReport || !effectiveFilter) return entries
-    return entries.filter((e) => ownerKey(e) === effectiveFilter)
-  }, [entries, isReport, effectiveFilter])
+    if (!isReport || !effectiveFilter) return base
+    return base.filter((e) => ownerKey(e) === effectiveFilter)
+  }, [base, isReport, effectiveFilter])
 
   const byPerson = useMemo(() => {
     if (!isReport) return []
     const map = new Map()
-    for (const e of entries) {
+    for (const e of base) {
       const key = ownerKey(e)
       if (!map.has(key)) {
         map.set(key, { key, name: ownerNameByKey(key), n: 0, supply: 0, vat: 0, total: 0 })
@@ -152,7 +159,7 @@ export default function LedgerPage({ type, source = 'manual', title, description
       g.total += Number(e.total_amount || 0)
     }
     return [...map.values()].sort((a, b) => b.total - a.total)
-  }, [entries, isReport, profiles])
+  }, [base, isReport, profiles])
 
   const totals = useMemo(
     () =>
@@ -345,9 +352,20 @@ export default function LedgerPage({ type, source = 'manual', title, description
                     {p.full_name}
                   </option>
                 ))}
-                <option value="ex">퇴사자</option>
+                <option value="ex">기타(퇴사자)</option>
                 <option value="__none">미지정</option>
               </select>
+            ) : null}
+            {isReport && !lockedSelf ? (
+              <label className="flex shrink-0 cursor-pointer items-center gap-1.5 text-xs text-ink-500">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 accent-brand-600"
+                  checked={showEx}
+                  onChange={(e) => setShowEx(e.target.checked)}
+                />
+                퇴사자 포함
+              </label>
             ) : null}
 
             <button
