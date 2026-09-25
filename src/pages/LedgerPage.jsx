@@ -142,9 +142,13 @@ export default function LedgerPage({ type, source = 'manual', title, description
     const map = new Map()
     for (const e of entries) {
       const key = ownerKey(e)
-      if (!map.has(key)) map.set(key, { key, name: ownerNameByKey(key), n: 0, total: 0 })
+      if (!map.has(key)) {
+        map.set(key, { key, name: ownerNameByKey(key), n: 0, supply: 0, vat: 0, total: 0 })
+      }
       const g = map.get(key)
       g.n += 1
+      g.supply += Number(e.supply_amount || 0)
+      g.vat += Number(e.vat_amount || 0)
       g.total += Number(e.total_amount || 0)
     }
     return [...map.values()].sort((a, b) => b.total - a.total)
@@ -260,23 +264,39 @@ export default function LedgerPage({ type, source = 'manual', title, description
 
       {isReport && !lockedSelf && byPerson.length > 0 ? (
         <div className="card px-4 py-3.5">
-          <p className="mb-2 text-xs font-semibold text-ink-500">직원별 소계</p>
-          <div className="flex flex-wrap gap-2">
-            {byPerson.map((g) => (
-              <button
-                key={g.key}
-                type="button"
-                onClick={() => setPersonFilter((cur) => (cur === g.key ? '' : g.key))}
-                title="클릭하면 해당 직원만 표시됩니다"
-                className={`rounded-full border px-3 py-1.5 text-xs ${
-                  personFilter === g.key
-                    ? 'border-brand-600 bg-brand-50 font-semibold text-brand-700'
-                    : 'border-ink-200 text-ink-600'
-                }`}
-              >
-                {g.name} · {g.n}건 · {formatKRW(g.total)}원
-              </button>
-            ))}
+          <p className="mb-2 text-xs font-semibold text-ink-500">직원별 소계 (클릭하면 해당 직원만 표시)</p>
+          <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-4">
+            {byPerson.map((g) => {
+              const max = Math.max(1, ...byPerson.map((x) => x.total))
+              const on = personFilter === g.key
+              return (
+                <button
+                  key={g.key}
+                  type="button"
+                  onClick={() => setPersonFilter((cur) => (cur === g.key ? '' : g.key))}
+                  className={`rounded-xl border p-3 text-left transition ${
+                    on
+                      ? 'border-brand-600 bg-brand-50'
+                      : 'border-ink-200 bg-white hover:border-brand-300'
+                  }`}
+                >
+                  <p className={`text-sm font-bold ${on ? 'text-brand-700' : 'text-ink-900'}`}>{g.name}</p>
+                  <p className="mt-0.5 text-[11px] text-ink-500">{g.n}건</p>
+                  <p className="mt-1 font-num text-base font-extrabold tabular-nums text-ink-900">
+                    {formatKRW(g.total)}원
+                  </p>
+                  <p className="mt-0.5 font-num text-[11px] tabular-nums text-ink-500">
+                    공급 {formatKRW(g.supply)} · 부가 {formatKRW(g.vat)}
+                  </p>
+                  <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-ink-100">
+                    <div
+                      className="h-full rounded-full bg-brand-600"
+                      style={{ width: `${Math.max(4, Math.round((g.total / max) * 100))}%` }}
+                    />
+                  </div>
+                </button>
+              )
+            })}
           </div>
         </div>
       ) : null}
