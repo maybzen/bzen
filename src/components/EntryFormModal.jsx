@@ -199,30 +199,7 @@ export default function EntryFormModal({
           </Field>
 
           {isReport ? (
-            <Field label="결의번호" hint="비워두면 자동으로 비워둔 채 저장됩니다.">
-              <input
-                className="input"
-                placeholder={`지출-${(form.entry_date || todayISO()).replace(/-/g, '')}`}
-                value={form.doc_no}
-                onChange={set('doc_no')}
-              />
-            </Field>
-          ) : (
             <Field label="프로젝트" hint="프로젝트별 손익에 반영됩니다.">
-              <select className="input" value={form.project_id} onChange={set('project_id')}>
-                <option value="">선택 없음</option>
-                {projects.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                    {p.code ? ` (${p.code})` : ''}
-                  </option>
-                ))}
-              </select>
-            </Field>
-          )}
-
-          {isReport ? (
-            <Field label="프로젝트">
               <select className="input" value={form.project_id} onChange={set('project_id')}>
                 <option value="">선택 없음</option>
                 {projects.map((p) => (
