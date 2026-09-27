@@ -109,7 +109,7 @@ export default function EntryTable({
                       <span className="text-ink-300">—</span>
                     )}
                   </td>
-                  <td className="td max-w-[240px] truncate">
+                  <td className="td max-w-[150px] truncate">
                     {entry.description || <span className="text-ink-300">—</span>}
                   </td>
                   <td className="td num">{formatKRW(entry.supply_amount)}</td>

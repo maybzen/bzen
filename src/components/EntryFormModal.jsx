@@ -13,6 +13,20 @@ function toNumber(value) {
   return Number.isFinite(n) ? Math.round(n) : 0
 }
 
+/** 메모의 "· 이용자 XXX" 읽기/쓰기 (법인카드 화면과 같은 형식) */
+function memoUser(memo) {
+  const m = String(memo || '').match(/이용자\s+([^·]+)/)
+  return m ? m[1].trim() : ''
+}
+
+function withMemoUser(memo, user) {
+  const base = String(memo || '').replace(/\s*·\s*이용자\s+[^·]*/, '').trim()
+  const u = String(user || '').trim()
+  return u ? `${base} · 이용자 ${u}` : base
+}
+
+const CARD_USER_SUGGEST = ['ALL', 'B', 'E', 'G', 'H', 'J', 'L', 'M', 'N', 'S', 'Y', 'Z', 'SH', 'GC', 'PC']
+
 const LABELS = {
   sale: { party: '거래처', category: '매출 항목', amount: '매출액' },
   purchase: { party: '구매처', category: '매입 항목', amount: '매입액' },
@@ -61,6 +75,7 @@ export default function EntryFormModal({
         vat_amount: String(initial.vat_amount ?? 0),
         payment_method: initial.payment_method || '',
         memo: initial.memo || '',
+        card_user: memoUser(initial.memo),
         requester_id: initial.requester_id || userId || '',
       })
       setExisting(initial.attachments || [])
@@ -129,7 +144,7 @@ export default function EntryFormModal({
         supply_amount: supply,
         vat_amount: vat,
         payment_method: form.payment_method,
-        memo: form.memo.trim(),
+        memo: withMemoUser(form.memo, form.card_user),
         requester_id: isReport ? form.requester_id || userId : form.requester_id || null,
       }
 
@@ -367,6 +382,23 @@ export default function EntryFormModal({
             </select>
           </Field>
 
+          {entryType === 'opex' || entryType === 'purchase' ? (
+            <Field label="카드 이용자" hint="법인카드 결제 건의 이용자입니다. 여러 명이면 쉼표로 (예: B,G · 전체면 ALL)">
+              <input
+                className="input"
+                list="card-user-list"
+                placeholder="예: B,G 또는 ALL"
+                value={form.card_user}
+                onChange={set('card_user')}
+              />
+              <datalist id="card-user-list">
+                {CARD_USER_SUGGEST.map((c) => (
+                  <option key={c} value={c} />
+                ))}
+              </datalist>
+            </Field>
+          ) : null}
+
           <Field label="비고" className="sm:col-span-2">
             <textarea
               className="input min-h-[72px] resize-y"
@@ -450,6 +482,7 @@ function emptyForm(entryType, source, userId) {
     vat_amount: '',
     payment_method: '',
     memo: '',
+    card_user: '',
     requester_id: source === 'expense_report' ? userId || '' : '',
   }
 }
