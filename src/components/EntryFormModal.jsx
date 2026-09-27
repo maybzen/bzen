@@ -65,10 +65,10 @@ export default function EntryFormModal({
       })
       setExisting(initial.attachments || [])
     } else {
-      setForm(emptyForm(entryType, source, userId))
+      setForm({ ...emptyForm(entryType, source, userId), project_id: internalProjectId })
       setExisting([])
     }
-  }, [open, initial, entryType, source, userId])
+  }, [open, initial, entryType, source, userId, internalProjectId])
 
   const supply = toNumber(form.supply_amount)
   const vat = toNumber(form.vat_amount)
@@ -79,6 +79,12 @@ export default function EntryFormModal({
     if (form.category && !base.includes(form.category)) return [form.category, ...base]
     return base
   }, [entryType, form.category])
+
+  /** 신규 등록 시 프로젝트 미선택이면 비젠내부(공통)로 자동 지정 */
+  const internalProjectId = useMemo(
+    () => projects.find((p) => p.name === '비젠내부')?.id || '',
+    [projects],
+  )
 
   const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }))
 
