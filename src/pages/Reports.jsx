@@ -87,10 +87,28 @@ export default function Reports() {
   const projectRows = useMemo(
     () =>
       groupByProject(entries, projects)
-        .filter((r) => r.project)
+        .filter((r) => r.project && !r.project.is_hidden)
         .sort((a, b) => b.profit - a.profit),
     [entries, projects],
   )
+
+  /** 공통 운영(숨김 프로젝트) 합계 — 순위표와 분리 표시 */
+  const internalRow = useMemo(() => {
+    const internal = projects.filter((p) => p.is_hidden)
+    if (!internal.length) return null
+    const ids = new Set(internal.map((p) => p.id))
+    let sale = 0, purchase = 0, opex = 0, count = 0
+    for (const e of entries) {
+      if (!e.project_id || !ids.has(e.project_id)) continue
+      count += 1
+      const supply = Number(e.supply_amount || 0)
+      if (e.entry_type === 'sale') sale += supply
+      else if (e.entry_type === 'purchase') purchase += supply
+      else if (e.entry_type === 'opex') opex += supply
+    }
+    if (!count) return null
+    return { sale, purchase, opex, profit: sale - purchase - opex, count }
+  }, [entries, projects])
 
   const opexByCategory = useMemo(() => groupByCategory(entries, 'opex'), [entries])
   const purchaseByCategory = useMemo(() => groupByCategory(entries, 'purchase'), [entries])
@@ -408,6 +426,18 @@ export default function Reports() {
                         <td className="td num">{row.margin === null ? '—' : formatPercent(row.margin)}</td>
                       </tr>
                     ))}
+                    {internalRow ? (
+                      <tr className="bg-ink-50/50">
+                        <td className="td text-ink-500">공통 운영 (손익 순위 제외)</td>
+                        <td className="td num text-ink-500">{formatKRW(internalRow.sale)}</td>
+                        <td className="td num text-ink-500">{formatKRW(internalRow.purchase)}</td>
+                        <td className="td num text-ink-500">{formatKRW(internalRow.opex)}</td>
+                        <td className={`td num font-bold ${internalRow.profit >= 0 ? 'text-emerald-700' : 'text-loss'}`}>
+                          {formatKRW(internalRow.profit)}
+                        </td>
+                        <td className="td num text-ink-400">—</td>
+                      </tr>
+                    ) : null}
                   </tbody>
                 </table>
               </div>

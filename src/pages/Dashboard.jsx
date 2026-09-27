@@ -95,7 +95,7 @@ export default function Dashboard() {
   const trendData = useMemo(() => groupByMonth(trend, monthKeys), [trend, monthKeys])
 
   const projectRows = useMemo(() => {
-    const rows = groupByProject(current, projects).filter((r) => r.project)
+    const rows = groupByProject(current, projects).filter((r) => r.project && !r.project.is_hidden)
     return rows
       .slice()
       .sort((a, b) => b.profit - a.profit)

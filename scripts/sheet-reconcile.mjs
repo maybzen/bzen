@@ -54,7 +54,7 @@ const PROJMAP = {
   '(제안서)IMO': '2026년 IMO SMART-C Women 프로그램 용역',
   'Kiwigame': 'Kiwigame',
   '유니콘브릿지': '유니콘브릿지',
-  'FLY ASIA': 'FLY ASIA',
+  'FLY ASIA': 'FLY ASIA 2026',
 }
 let db = [], s = 0
 for (;;) {

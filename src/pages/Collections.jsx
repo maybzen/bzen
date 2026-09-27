@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import Icon from '../components/Icon'
 import { useToast } from '../components/Toast'
 import { ConfirmDialog, EmptyState, InlineAlert, LoadingBlock, PageHeader, StatCard } from '../components/ui'
@@ -10,7 +11,7 @@ import {
   listEntries,
   listProjects,
 } from '../lib/api'
-import { formatDateHuman, formatKRW, todayISO } from '../lib/format'
+import { formatDateHuman, formatKRW, formatPercent, todayISO } from '../lib/format'
 
 function isMissingTable(error) {
   const msg = String(error?.message || '')
@@ -53,26 +54,32 @@ export default function Collections() {
 
   const rows = useMemo(() => {
     const saleByProject = new Map()
+    const costByProject = new Map()
     for (const e of entries) {
-      if (e.entry_type !== 'sale' || !e.project_id) continue
-      saleByProject.set(e.project_id, (saleByProject.get(e.project_id) || 0) + Number(e.supply_amount || 0))
+      if (!e.project_id) continue
+      const supply = Number(e.supply_amount || 0)
+      if (e.entry_type === 'sale') saleByProject.set(e.project_id, (saleByProject.get(e.project_id) || 0) + supply)
+      else if (e.entry_type === 'purchase' || e.entry_type === 'opex') {
+        costByProject.set(e.project_id, (costByProject.get(e.project_id) || 0) + supply)
+      }
     }
     const colByProject = new Map()
-    let unassigned = 0
     for (const c of collections) {
-      const amt = Number(c.amount || 0)
-      if (c.project_id && colByProject.has(c.project_id)) colByProject.set(c.project_id, colByProject.get(c.project_id) + amt)
-      else if (c.project_id) colByProject.set(c.project_id, amt)
-      else unassigned += amt
+      if (c.project_id) colByProject.set(c.project_id, (colByProject.get(c.project_id) || 0) + Number(c.amount || 0))
     }
     return projects
+      .filter((p) => !p.is_hidden)
       .map((p) => {
         const contract = Number(p.contract_amount || 0)
         const collected = colByProject.get(p.id) || 0
+        const revenue = saleByProject.get(p.id) || 0
+        const cost = costByProject.get(p.id) || 0
+        const profit = revenue - cost
         return {
           project: p,
           contract,
-          revenue: saleByProject.get(p.id) || 0,
+          revenue,
+          margin: revenue ? (profit / revenue) * 100 : null,
           collected,
           due: contract - collected,
         }
@@ -166,6 +173,7 @@ export default function Collections() {
                       <th className="th">프로젝트</th>
                       <th className="th text-right">계약금액</th>
                       <th className="th text-right">매출(공급가)</th>
+                      <th className="th text-right">이익률</th>
                       <th className="th text-right">수금</th>
                       <th className="th text-right">미수금</th>
                       <th className="th w-28">수금률</th>
@@ -174,9 +182,17 @@ export default function Collections() {
                   <tbody className="divide-y divide-ink-100">
                     {rows.map((r) => (
                       <tr key={r.project.id} className="transition hover:bg-ink-50/60">
-                        <td className="td font-medium">{r.project.name}</td>
+                        <td className="td font-medium">
+                          <Link
+                            to={`/projects/${r.project.id}`}
+                            className="text-ink-800 hover:text-brand-700 hover:underline"
+                          >
+                            {r.project.name}
+                          </Link>
+                        </td>
                         <td className="td num">{r.contract ? `${formatKRW(r.contract)}` : '—'}</td>
                         <td className="td num text-ink-500">{formatKRW(r.revenue)}</td>
+                        <td className="td num">{r.margin === null ? '—' : formatPercent(r.margin)}</td>
                         <td className="td num text-emerald-700">{formatKRW(r.collected)}</td>
                         <td className={`td num font-bold ${r.contract && r.due !== 0 ? 'text-loss' : 'text-ink-500'}`}>
                           {r.contract ? formatKRW(r.due) : '—'}
