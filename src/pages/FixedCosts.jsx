@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
 import Icon from '../components/Icon'
 import { useToast } from '../components/Toast'
 import { EmptyState, LoadingBlock, PageHeader, StatCard } from '../components/ui'
@@ -26,7 +26,8 @@ export default function FixedCosts() {
       .then((rows) => {
         if (!alive) return
         setEntries(rows || [])
-        setItems(detectFixedCosts(rows || []))
+        // 고정비 감지에서는 급여(인건비) 제외 — 외주·업체 고정비만 봅니다
+        setItems(detectFixedCosts((rows || []).filter((e) => e.category !== '인건비')))
       })
       .catch((e) => toast.error(e.message))
       .finally(() => {
@@ -46,16 +47,29 @@ export default function FixedCosts() {
       if (e.entry_type !== 'opex' || e.category !== '인건비') continue
       const mk = monthKeyOf(e.entry_date)
       if (!mk) continue
-      map.set(mk, (map.get(mk) || 0) + Number(e.total_amount || 0))
+      if (!map.has(mk)) map.set(mk, { total: 0, byPerson: new Map() })
+      const row = map.get(mk)
+      const amt = Number(e.total_amount || 0)
+      row.total += amt
+      const name = (e.counterparty || '').trim() || '미지정'
+      row.byPerson.set(name, (row.byPerson.get(name) || 0) + amt)
     }
-    return [...map.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1)).slice(-12)
+    return [...map.entries()]
+      .sort((a, b) => (a[0] < b[0] ? -1 : 1))
+      .slice(-12)
+      .map(([mk, row]) => ({
+        mk,
+        total: row.total,
+        persons: [...row.byPerson.entries()].sort((a, b) => b[1] - a[1]),
+      }))
   }, [entries])
   const payrollAvg = useMemo(
-    () => (payrollByMonth.length ? Math.round(payrollByMonth.reduce((a, [, v]) => a + v, 0) / payrollByMonth.length) : 0),
+    () => (payrollByMonth.length ? Math.round(payrollByMonth.reduce((a, r) => a + r.total, 0) / payrollByMonth.length) : 0),
     [payrollByMonth],
   )
   const thisMonthKey = monthKey(new Date())
-  const thisMonthPayroll = payrollByMonth.find(([mk]) => mk === thisMonthKey)?.[1] || 0
+  const thisMonthPayroll = payrollByMonth.find((r) => r.mk === thisMonthKey)?.total || 0
+  const [openMonth, setOpenMonth] = useState(null)
 
   return (
     <div className="flex flex-col gap-5">
@@ -95,11 +109,29 @@ export default function FixedCosts() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-ink-100">
-                    {payrollByMonth.map(([mk, v]) => (
-                      <tr key={mk}>
-                        <td className="td font-medium">{monthLabel(mk)}</td>
-                        <td className="td num font-semibold">{formatKRW(v)}원</td>
-                      </tr>
+                    {payrollByMonth.map((r) => (
+                      <Fragment key={r.mk}>
+                        <tr
+                          className="cursor-pointer transition hover:bg-ink-50/60"
+                          onClick={() => setOpenMonth((v) => (v === r.mk ? null : r.mk))}
+                        >
+                          <td className="td font-medium">
+                            <span className="mr-1.5 inline-block text-ink-400">
+                              <Icon name={openMonth === r.mk ? 'chevron-down' : 'chevron-right'} size={13} />
+                            </span>
+                            {monthLabel(r.mk)}
+                          </td>
+                          <td className="td num font-semibold">{formatKRW(r.total)}원</td>
+                        </tr>
+                        {openMonth === r.mk
+                          ? r.persons.map(([name, v]) => (
+                              <tr key={`${r.mk}-${name}`} className="bg-ink-50/50">
+                                <td className="td pl-9 text-ink-600">{name}</td>
+                                <td className="td num text-ink-700">{formatKRW(v)}원</td>
+                              </tr>
+                            ))
+                          : null}
+                      </Fragment>
                     ))}
                   </tbody>
                 </table>
