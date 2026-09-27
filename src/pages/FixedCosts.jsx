@@ -130,20 +130,32 @@ export default function FixedCosts() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-ink-100">
-                    {payrollByMonth.map((r) => (
-                      <Fragment key={r.mk}>
-                        <tr
-                          className="cursor-pointer transition hover:bg-ink-50/60"
-                          onClick={() => setOpenMonth((v) => (v === r.mk ? null : r.mk))}
-                        >
-                          <td className="td font-medium">
-                            <span className="mr-1.5 inline-block text-ink-400">
-                              <Icon name={openMonth === r.mk ? 'chevron-down' : 'chevron-right'} size={13} />
-                            </span>
-                            {monthLabel(r.mk)}
-                          </td>
-                          <td className="td num font-semibold">{formatKRW(r.total)}원</td>
-                        </tr>
+                    {payrollByMonth.map((r) => {
+                      const [y, m] = r.mk.split('-').map(Number)
+                      const from = `${r.mk}-01`
+                      const to = monthEnd(new Date(y, m, 0))
+                      return (
+                        <Fragment key={r.mk}>
+                          <tr className="transition hover:bg-ink-50/60">
+                            <td className="td font-medium">
+                              <button
+                                type="button"
+                                onClick={() => setOpenMonth((v) => (v === r.mk ? null : r.mk))}
+                                className="mr-1.5 inline-block rounded p-0.5 align-middle text-ink-400 transition hover:bg-ink-100 hover:text-ink-700"
+                                aria-label={openMonth === r.mk ? '접기' : '펼치기'}
+                              >
+                                <Icon name={openMonth === r.mk ? 'chevron-down' : 'chevron-right'} size={13} />
+                              </button>
+                              <Link
+                                to={`/expenses?search=${encodeURIComponent('인건비')}&from=${from}&to=${to}`}
+                                className="hover:text-brand-700 hover:underline"
+                                title="운영비 내역 보기"
+                              >
+                                {monthLabel(r.mk)}
+                              </Link>
+                            </td>
+                            <td className="td num font-semibold">{formatKRW(r.total)}원</td>
+                          </tr>
                         {openMonth === r.mk
                           ? r.persons.map(([name, v]) => (
                               <tr key={`${r.mk}-${name}`} className="bg-ink-50/50">
@@ -212,7 +224,15 @@ export default function FixedCosts() {
                   <tbody className="divide-y divide-ink-100">
                     {items.map((f) => (
                       <tr key={f.name} className="transition hover:bg-ink-50/60">
-                        <td className="td font-medium text-ink-900">{f.name}</td>
+                        <td className="td font-medium text-ink-900">
+                          <Link
+                            to={`/expenses?search=${encodeURIComponent(f.name)}`}
+                            className="hover:text-brand-700 hover:underline"
+                            title="운영비 내역 보기"
+                          >
+                            {f.name}
+                          </Link>
+                        </td>
                         <td className="td num font-bold">{formatKRW(f.avg)}</td>
                         <td className="td num">{f.months}개월</td>
                         <td className="td num text-ink-500">
