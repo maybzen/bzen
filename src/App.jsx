@@ -7,20 +7,55 @@ import { ToastProvider } from './components/Toast'
 import { AuthProvider, useAuth } from './auth/AuthContext'
 import { useStaffPermissions } from './lib/permissions'
 
+/**
+ * 배포 직후 낡은 index.html이 이미 지워진 청크를 요청하면(404)
+ * 한 번만 새로고침해서 새 파일을 받습니다.
+ */
+function lazyWithRetry(factory) {
+  const KEY = 'bzen.chunk-retry'
+  return lazy(async () => {
+    try {
+      const mod = await factory()
+      try {
+        window.sessionStorage.removeItem(KEY)
+      } catch {
+        /* 무시 */
+      }
+      return mod
+    } catch (error) {
+      let retried = ''
+      try {
+        retried = window.sessionStorage.getItem(KEY) || ''
+      } catch {
+        /* 무시 */
+      }
+      if (!retried) {
+        try {
+          window.sessionStorage.setItem(KEY, '1')
+        } catch {
+          /* 무시 */
+        }
+        window.location.reload()
+      }
+      throw error
+    }
+  })
+}
+
 // 화면별 분할 로딩: 첫 화면은 가볍게, 각 메뉴는 들어갈 때 받아옵니다.
-const Login = lazy(() => import('./pages/Login'))
-const Dashboard = lazy(() => import('./pages/Dashboard'))
-const LedgerPage = lazy(() => import('./pages/LedgerPage'))
-const CardImport = lazy(() => import('./pages/CardImport'))
-const Partners = lazy(() => import('./pages/Partners'))
-const FixedCosts = lazy(() => import('./pages/FixedCosts'))
-const Projects = lazy(() => import('./pages/Projects'))
-const ProjectDetail = lazy(() => import('./pages/ProjectDetail'))
-const Reports = lazy(() => import('./pages/Reports'))
-const Tax = lazy(() => import('./pages/Tax'))
-const Collections = lazy(() => import('./pages/Collections'))
-const Users = lazy(() => import('./pages/Users'))
-const Settings = lazy(() => import('./pages/Settings'))
+const Login = lazyWithRetry(() => import('./pages/Login'))
+const Dashboard = lazyWithRetry(() => import('./pages/Dashboard'))
+const LedgerPage = lazyWithRetry(() => import('./pages/LedgerPage'))
+const CardImport = lazyWithRetry(() => import('./pages/CardImport'))
+const Partners = lazyWithRetry(() => import('./pages/Partners'))
+const FixedCosts = lazyWithRetry(() => import('./pages/FixedCosts'))
+const Projects = lazyWithRetry(() => import('./pages/Projects'))
+const ProjectDetail = lazyWithRetry(() => import('./pages/ProjectDetail'))
+const Reports = lazyWithRetry(() => import('./pages/Reports'))
+const Tax = lazyWithRetry(() => import('./pages/Tax'))
+const Collections = lazyWithRetry(() => import('./pages/Collections'))
+const Users = lazyWithRetry(() => import('./pages/Users'))
+const Settings = lazyWithRetry(() => import('./pages/Settings'))
 
 function Splash() {
   return (
