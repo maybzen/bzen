@@ -14,6 +14,7 @@ import { listEntries, listProjects } from '../lib/api'
  */
 export default function FixedCosts() {
   const toast = useToast()
+  const navigate = useNavigate()
   const [loading, setLoading] = useState(true)
   const [items, setItems] = useState([])
   const [entries, setEntries] = useState([])
@@ -219,16 +220,13 @@ export default function FixedCosts() {
                   </thead>
                   <tbody className="divide-y divide-ink-100">
                     {items.map((f) => (
-                      <tr key={f.name} className="transition hover:bg-ink-50/60">
-                        <td className="td font-medium text-ink-900">
-                          <Link
-                            to={`/expenses?search=${encodeURIComponent(f.name)}&from=2026-01-01&to=${todayISO()}`}
-                            className="hover:text-brand-700 hover:underline"
-                            title="운영비 내역 보기"
-                          >
-                            {f.name}
-                          </Link>
-                        </td>
+                      <tr
+                        key={f.name}
+                        className="cursor-pointer transition hover:bg-ink-50/60"
+                        onClick={() => navigate(`/expenses?search=${encodeURIComponent(f.name)}&from=2026-01-01&to=${todayISO()}`)}
+                        title="운영비 내역 보기"
+                      >
+                        <td className="td font-medium text-ink-900">{f.name}</td>
                         <td className="td num font-bold">{formatKRW(f.avg)}</td>
                         <td className="td num">{f.months}개월</td>
                         <td className="td num text-ink-500">
