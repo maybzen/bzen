@@ -20,6 +20,12 @@ function ownerLabel(profiles, entry) {
   return personName(profiles, entry.created_by)
 }
 
+/** 법인카드 이용자: 메모의 "· 이용자 XXX" 에서 추출 */
+function cardUser(entry) {
+  const m = String(entry.memo || '').match(/이용자\s+([^·]+)/)
+  return m ? m[1].trim() : ''
+}
+
 export default function EntryTable({
   entries = [],
   projects = [],
@@ -114,6 +120,9 @@ export default function EntryTable({
                   </td>
                   <td className="td max-w-[110px] truncate text-xs text-ink-500">
                     {ownerLabel(profiles, entry)}
+                    {cardUser(entry) ? (
+                      <span className="block truncate text-[11px] text-brand-700">카드 {cardUser(entry)}</span>
+                    ) : null}
                   </td>
                   <td className="td">
                     {canEdit ? (
@@ -187,6 +196,7 @@ export default function EntryTable({
                     {entry.counterparty || '—'}
                     {project ? ` · ${project.name}` : ''}
                     {entry.source === 'expense_report' ? ` · ${ownerLabel(profiles, entry)}` : ''}
+                    {cardUser(entry) ? ` · 카드 ${cardUser(entry)}` : ''}
                   </p>
                 </div>
                 <div className="shrink-0 text-right">
