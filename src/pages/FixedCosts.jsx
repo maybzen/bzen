@@ -165,7 +165,8 @@ export default function FixedCosts() {
                             ))
                           : null}
                       </Fragment>
-                    ))}
+                    )
+                    })}
                   </tbody>
                 </table>
               </div>
