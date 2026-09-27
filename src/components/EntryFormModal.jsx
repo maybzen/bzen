@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import Icon from './Icon'
+import CardUserSelect from './CardUserSelect'
 import { Field, InlineAlert, Modal, Spinner } from './ui'
 import { useToast } from './Toast'
 import { CATEGORIES, ENTRY_META, PAYMENT_METHODS, categoryHint, suggestCategory } from '../lib/constants'
@@ -24,8 +25,6 @@ function withMemoUser(memo, user) {
   const u = String(user || '').trim()
   return u ? `${base} · 이용자 ${u}` : base
 }
-
-const CARD_USER_SUGGEST = ['ALL', 'B', 'E', 'G', 'H', 'J', 'L', 'M', 'N', 'S', 'Y', 'Z', 'SH', 'GC', 'PC']
 
 const LABELS = {
   sale: { party: '거래처', category: '매출 항목', amount: '매출액' },
@@ -383,19 +382,12 @@ export default function EntryFormModal({
           </Field>
 
           {entryType === 'opex' || entryType === 'purchase' ? (
-            <Field label="카드 이용자" hint="법인카드 결제 건의 이용자입니다. 여러 명이면 쉼표로 (예: B,G · 전체면 ALL)">
-              <input
-                className="input"
-                list="card-user-list"
-                placeholder="예: B,G 또는 ALL"
+            <Field label="카드 이용자" hint="여러 명이면 체크, 목록에 없으면 기타에 직접 입력">
+              <CardUserSelect
                 value={form.card_user}
-                onChange={set('card_user')}
+                onChange={(v) => setForm((f) => ({ ...f, card_user: v }))}
+                allowCustom
               />
-              <datalist id="card-user-list">
-                {CARD_USER_SUGGEST.map((c) => (
-                  <option key={c} value={c} />
-                ))}
-              </datalist>
             </Field>
           ) : null}
 

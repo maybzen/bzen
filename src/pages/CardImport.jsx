@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Icon from '../components/Icon'
 import EntryFormModal from '../components/EntryFormModal'
+import CardUserSelect from '../components/CardUserSelect'
 import PeriodPicker, { usePeriod } from '../components/PeriodPicker'
 import { AttachmentCell, AttachmentModal } from '../components/Attachments'
 import { useToast } from '../components/Toast'
 import { ConfirmDialog, EmptyState, Field, InlineAlert, LoadingBlock, PageHeader, StatCard } from '../components/ui'
 import { useAuth } from '../auth/AuthContext'
-import { CATEGORIES, ENTRY_META, CARD_USERS, cardUserName, categoryHint, suggestCategory } from '../lib/constants'
+import { CATEGORIES, ENTRY_META, cardUserName, categoryHint, suggestCategory } from '../lib/constants'
 import { downloadTextFile, parseAmount, parseCSV, toCSV } from '../lib/csv'
 import { formatKRW, toISODate } from '../lib/format'
 import { detectFixedCosts } from '../lib/summary'
@@ -157,72 +158,6 @@ function fmtFx(currency, amount) {
   if (!amount) return ''
   const n = Number(amount) || 0
   return `${currency || ''} ${n.toLocaleString('en-US', { maximumFractionDigits: 2 })}`.trim()
-}
-
-/** 법인카드 이용자 다중 선택 (ALL은 단독) */
-function UserMultiSelect({ value, onChange }) {
-  const [open, setOpen] = useState(false)
-  const codes = String(value || '')
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean)
-
-  const toggle = (code) => {
-    let next
-    if (code === 'ALL') {
-      next = codes.length === 1 && codes[0] === 'ALL' ? [] : ['ALL']
-    } else {
-      const withoutAll = codes.filter((c) => c !== 'ALL')
-      next = withoutAll.includes(code) ? withoutAll.filter((c) => c !== code) : [...withoutAll, code]
-    }
-    // 표시 순서대로 정렬
-    const order = CARD_USERS.map((u) => u.code)
-    next.sort((a, b) => order.indexOf(a) - order.indexOf(b))
-    onChange(next.join(','))
-  }
-
-  const label = codes.length
-    ? codes.map((c) => (cardUserName(c) ? `${c} ${cardUserName(c)}` : c)).join(', ')
-    : '선택'
-
-  return (
-    <span className="relative inline-block">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        title={label}
-        className="input w-auto max-w-[130px] truncate py-1 text-left text-xs"
-      >
-        {codes.join(',') || '—'}
-      </button>
-      {open ? (
-        <>
-          <button
-            type="button"
-            aria-label="닫기"
-            className="fixed inset-0 z-40 cursor-default"
-            onClick={() => setOpen(false)}
-          />
-          <span className="absolute left-0 top-full z-50 mt-1 flex max-h-56 w-44 flex-col gap-0.5 overflow-auto rounded-lg border border-ink-200 bg-white p-1.5 shadow-pop">
-            {CARD_USERS.map((u) => (
-              <label
-                key={u.code}
-                className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-xs hover:bg-ink-50"
-              >
-                <input
-                  type="checkbox"
-                  className="h-3.5 w-3.5 accent-brand-600"
-                  checked={codes.includes(u.code)}
-                  onChange={() => toggle(u.code)}
-                />
-                <span className="font-bold text-ink-800">{u.code}</span>
-              </label>
-            ))}
-          </span>
-        </>
-      ) : null}
-    </span>
-  )
 }
 
 export default function CardImport() {
@@ -1071,7 +1006,7 @@ export default function CardImport() {
                       </select>
                     </td>
                     <td className="td">
-                      <UserMultiSelect value={r.cardUser} onChange={(v) => setRow(r.key, { cardUser: v })} />
+                      <CardUserSelect value={r.cardUser} onChange={(v) => setRow(r.key, { cardUser: v })} />
                     </td>
                     <td className="td">
                       <select
@@ -1427,7 +1362,7 @@ export default function CardImport() {
                           </select>
                         </td>
                         <td className="td">
-                          <UserMultiSelect
+                          <CardUserSelect
                             value={cardUser}
                             onChange={(v) => setCell(entry.id, { cardUser: v })}
                           />
