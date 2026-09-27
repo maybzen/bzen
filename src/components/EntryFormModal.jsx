@@ -58,6 +58,12 @@ export default function EntryFormModal({
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
+  /** 신규 등록 시 프로젝트 미선택이면 비젠내부(공통)로 자동 지정 (effect보다 먼저 선언) */
+  const internalProjectId = useMemo(
+    () => projects.find((p) => p.name === '비젠내부')?.id || '',
+    [projects],
+  )
+
   useEffect(() => {
     if (!open) return
     setError('')
@@ -94,12 +100,6 @@ export default function EntryFormModal({
     if (form.category && !base.includes(form.category)) return [form.category, ...base]
     return base
   }, [entryType, form.category])
-
-  /** 신규 등록 시 프로젝트 미선택이면 비젠내부(공통)로 자동 지정 */
-  const internalProjectId = useMemo(
-    () => projects.find((p) => p.name === '비젠내부')?.id || '',
-    [projects],
-  )
 
   const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }))
 
