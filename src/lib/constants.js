@@ -188,7 +188,7 @@ export const PARTNER_GROUPS = [
 export const CARD_USERS = [
   { code: 'ALL', name: '전체' },
   { code: 'Z', name: '이향란' },
-  { code: 'B', name: '이보람 팀장님' },
+  { code: 'B', name: '이보람 팀장' },
   { code: 'G', name: '권혜민 대리' },
   { code: 'S', name: '박현정' },
   { code: 'N', name: '김상희' },
