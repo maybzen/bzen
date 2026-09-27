@@ -84,6 +84,30 @@ export function deleteProject(id) {
 }
 
 /* ------------------------------------------------------------------ */
+/* 수금 (프로젝트별 입금 내역)                                           */
+/* ------------------------------------------------------------------ */
+
+export function listCollections() {
+  return unwrap(
+    supabase
+      .from('collections')
+      .select('*')
+      .order('collected_on', { ascending: false })
+      .order('created_at', { ascending: false }),
+  )
+}
+
+export function createCollection(payload, userId) {
+  return unwrap(
+    supabase.from('collections').insert({ ...payload, created_by: userId }).select().single(),
+  )
+}
+
+export function deleteCollection(id) {
+  return unwrap(supabase.from('collections').delete().eq('id', id))
+}
+
+/* ------------------------------------------------------------------ */
 /* 장부 (매출 / 매입 / 운영비 / 지출결의)                                */
 /* ------------------------------------------------------------------ */
 

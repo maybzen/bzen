@@ -19,13 +19,14 @@ export const NAV = [
   { to: '/fixed-costs', label: '고정비', icon: 'coins', perm: 'fixed' },
   { to: '/reports', label: '보고서', icon: 'chart', perm: 'reports' },
   { to: '/tax', label: '세금', icon: 'calendar', perm: 'tax' },
+  { to: '/collections', label: '수금', icon: 'card', perm: 'collections' },
   { to: '/users', label: '계정관리', icon: 'users', adminOnly: true },
   { to: '/settings', label: '설정', icon: 'settings', base: true },
 ]
 
 const NAV_GROUPS = [
   { title: '장부', items: ['/dashboard', '/sales', '/purchases', '/expenses', '/cards', '/expense-reports'] },
-  { title: '분석', items: ['/projects', '/partners', '/fixed-costs', '/reports', '/tax'] },
+  { title: '분석', items: ['/projects', '/partners', '/fixed-costs', '/reports', '/tax', '/collections'] },
   { title: '관리', items: ['/users', '/settings'] },
 ]
 
