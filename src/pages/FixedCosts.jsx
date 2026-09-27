@@ -1,8 +1,8 @@
-import { Fragment, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import Icon from '../components/Icon'
 import { useToast } from '../components/Toast'
-import { EmptyState, LoadingBlock, PageHeader, StatCard } from '../components/ui'
+import { EmptyState, LoadingBlock, PageHeader, SegmentedControl, StatCard } from '../components/ui'
 import { formatKRW, monthEnd, monthKey, monthKeyOf, monthLabel, toISODate } from '../lib/format'
 import { detectFixedCosts } from '../lib/summary'
 import { listEntries, listProjects } from '../lib/api'
@@ -72,7 +72,7 @@ export default function FixedCosts() {
   )
   const thisMonthKey = monthKey(new Date())
   const thisMonthPayroll = payrollByMonth.find((r) => r.mk === thisMonthKey)?.total || 0
-  const [openMonth, setOpenMonth] = useState(null)
+  const [tab, setTab] = useState('fixed')
 
   /** 공통(비젠내부) 월별 지출 — 프로젝트 미지정분이 모이는 곳 */
   const internalByMonth = useMemo(() => {
@@ -116,64 +116,59 @@ export default function FixedCosts() {
             />
           </div>
 
-          {payrollByMonth.length ? (
+          <div className="card px-4 py-3">
+            <SegmentedControl
+              size="sm"
+              value={tab}
+              onChange={setTab}
+              options={[
+                { key: 'fixed', label: `고정비 (${items.length})` },
+                { key: 'payroll', label: '월별급여' },
+                { key: 'internal', label: '공통월별지출' },
+              ]}
+            />
+          </div>
+
+          {tab === 'payroll' && payrollByMonth.length ? (
             <section className="card overflow-hidden">
               <header className="border-b border-ink-200 px-4 py-3.5">
-                <h2 className="text-sm font-bold text-ink-900">월별 급여 추이 (최근 12개월)</h2>
+                <h2 className="text-sm font-bold text-ink-900">월별 급여 (최근 12개월)</h2>
               </header>
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[420px] border-collapse text-xs">
-                  <thead className="bg-ink-50/70">
-                    <tr>
-                      <th className="th">월</th>
-                      <th className="th text-right">급여 합계</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-ink-100">
-                    {payrollByMonth.map((r) => {
-                      const [y, m] = r.mk.split('-').map(Number)
-                      const from = `${r.mk}-01`
-                      const to = monthEnd(new Date(y, m, 0))
-                      return (
-                        <Fragment key={r.mk}>
-                          <tr className="transition hover:bg-ink-50/60">
-                            <td className="td font-medium">
-                              <button
-                                type="button"
-                                onClick={() => setOpenMonth((v) => (v === r.mk ? null : r.mk))}
-                                className="mr-1.5 inline-block rounded p-0.5 align-middle text-ink-400 transition hover:bg-ink-100 hover:text-ink-700"
-                                aria-label={openMonth === r.mk ? '접기' : '펼치기'}
-                              >
-                                <Icon name={openMonth === r.mk ? 'chevron-down' : 'chevron-right'} size={13} />
-                              </button>
-                              <Link
-                                to={`/expenses?search=${encodeURIComponent('인건비')}&from=${from}&to=${to}`}
-                                className="hover:text-brand-700 hover:underline"
-                                title="운영비 내역 보기"
-                              >
-                                {monthLabel(r.mk)}
-                              </Link>
-                            </td>
-                            <td className="td num font-semibold">{formatKRW(r.total)}원</td>
-                          </tr>
-                        {openMonth === r.mk
-                          ? r.persons.map(([name, v]) => (
-                              <tr key={`${r.mk}-${name}`} className="bg-ink-50/50">
-                                <td className="td pl-9 text-ink-600">{name}</td>
-                                <td className="td num text-ink-700">{formatKRW(v)}원</td>
-                              </tr>
-                            ))
-                          : null}
-                      </Fragment>
-                    )
-                    })}
-                  </tbody>
-                </table>
+              <div className="grid grid-cols-2 gap-2.5 p-4 sm:grid-cols-3 xl:grid-cols-4">
+                {payrollByMonth.map((r) => {
+                  const [y, m] = r.mk.split('-').map(Number)
+                  const from = `${r.mk}-01`
+                  const to = monthEnd(new Date(y, m, 0))
+                  return (
+                    <Link
+                      key={r.mk}
+                      to={`/expenses?search=${encodeURIComponent('인건비')}&from=${from}&to=${to}`}
+                      className="group rounded-xl border border-ink-200 px-3.5 py-3 transition hover:border-brand-300 hover:shadow-card"
+                    >
+                      <p className="text-xs font-semibold text-ink-500">{monthLabel(r.mk)}</p>
+                      <p className="mt-1 font-num text-base font-extrabold tabular-nums tracking-tight text-ink-900">
+                        {formatKRW(r.total)}
+                        <span className="text-xs font-semibold text-ink-400">원</span>
+                      </p>
+                      <div className="mt-1.5 flex flex-col gap-0.5">
+                        {r.persons.slice(0, 3).map(([name, v]) => (
+                          <p key={name} className="flex items-baseline justify-between gap-2 text-[11px] text-ink-500">
+                            <span className="truncate">{name}</span>
+                            <span className="shrink-0 font-num tabular-nums">{formatKRW(v)}</span>
+                          </p>
+                        ))}
+                        {r.persons.length > 3 ? (
+                          <p className="text-[11px] text-ink-400">외 {r.persons.length - 3}명</p>
+                        ) : null}
+                      </div>
+                    </Link>
+                  )
+                })}
               </div>
             </section>
           ) : null}
 
-          {internalByMonth.length ? (
+          {tab === 'internal' && internalByMonth.length ? (
             <section className="card overflow-hidden">
               <header className="flex flex-wrap items-center justify-between gap-2 border-b border-ink-200 px-4 py-3.5">
                 <h2 className="text-sm font-bold text-ink-900">공통(비젠내부) 월별 지출</h2>
@@ -210,7 +205,7 @@ export default function FixedCosts() {
             </section>
           ) : null}
 
-          {items.length ? (
+          {tab === 'fixed' && items.length ? (
             <div className="card overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[560px] border-collapse text-xs">
@@ -249,13 +244,13 @@ export default function FixedCosts() {
                 기준: 최근 12개월 · 3개월 이상 등장 · 월 합계 편차 35% 이내. 자료가 쌓일수록 정확해집니다.
               </p>
             </div>
-          ) : (
+          ) : tab === 'fixed' ? (
             <EmptyState
               icon="coins"
               title="감지된 고정비가 없습니다"
               description="자료가 3개월 이상 쌓이면 자동으로 잡힙니다."
             />
-          )}
+          ) : null}
         </>
       )}
     </div>
