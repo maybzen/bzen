@@ -210,7 +210,19 @@ export default function EntryFormModal({
                 ))}
               </select>
             </Field>
-          ) : null}
+          ) : (
+            <Field label="프로젝트" hint="비우면 공통비용으로 잡힙니다.">
+              <select className="input" value={form.project_id} onChange={set('project_id')}>
+                <option value="">선택 없음 (공통)</option>
+                {projects.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                    {p.code ? ` (${p.code})` : ''}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          )}
 
           <Field label={labels.party}>
             <input
