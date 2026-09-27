@@ -60,6 +60,15 @@ export default function LedgerPage({ type, source = 'manual', title, description
     if (searchParams.get('new') !== null) setFormOpen(true)
     const q = searchParams.get('search')
     if (q) setSearch(q)
+    // 외부 딥링크: ?project=<id>&from=YYYY-MM-DD&to=YYYY-MM-DD
+    const qp = searchParams.get('project')
+    if (qp) setProjectFilter(qp)
+    const from = searchParams.get('from')
+    const to = searchParams.get('to')
+    if (from && to) {
+      period.setPreset('custom')
+      period.setCustom({ from, to })
+    }
   }, [searchParams])
 
   useEffect(() => {

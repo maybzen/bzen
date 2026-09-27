@@ -1,8 +1,9 @@
 import { Fragment, useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import Icon from '../components/Icon'
 import { useToast } from '../components/Toast'
 import { EmptyState, LoadingBlock, PageHeader, StatCard } from '../components/ui'
-import { formatKRW, monthKey, monthKeyOf, monthLabel, toISODate } from '../lib/format'
+import { formatKRW, monthEnd, monthKey, monthKeyOf, monthLabel, toISODate } from '../lib/format'
 import { detectFixedCosts } from '../lib/summary'
 import { listEntries, listProjects } from '../lib/api'
 
@@ -167,32 +168,31 @@ export default function FixedCosts() {
                   월 평균 <strong className="font-num tabular-nums text-brand-700">{formatKRW(internalAvg)}원</strong>
                 </p>
               </header>
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[420px] border-collapse text-xs">
-                  <thead className="bg-ink-50/70">
-                    <tr>
-                      <th className="th">월</th>
-                      <th className="th text-right">지출 합계</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-ink-100">
-                    {internalByMonth.map(([mk, v]) => (
-                      <tr key={mk}>
-                        <td className="td font-medium">{monthLabel(mk)}</td>
-                        <td className="td num font-semibold">{formatKRW(v)}원</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                  <tfoot className="border-t border-ink-200 bg-ink-50/80">
-                    <tr>
-                      <td className="td font-bold">월 평균 ({internalByMonth.length}개월)</td>
-                      <td className="td num font-extrabold text-brand-700">{formatKRW(internalAvg)}원</td>
-                    </tr>
-                  </tfoot>
-                </table>
+              <div className="grid grid-cols-2 gap-2.5 p-4 sm:grid-cols-3 xl:grid-cols-4">
+                {internalByMonth.map(([mk, v]) => {
+                  const [y, m] = mk.split('-').map(Number)
+                  const from = `${mk}-01`
+                  const to = monthEnd(new Date(y, m, 0))
+                  return (
+                    <Link
+                      key={mk}
+                      to={`/expenses?project=${internalId}&from=${from}&to=${to}`}
+                      className="group rounded-xl border border-ink-200 px-3.5 py-3 transition hover:border-brand-300 hover:shadow-card"
+                    >
+                      <p className="text-xs font-semibold text-ink-500">{monthLabel(mk)}</p>
+                      <p className="mt-1 font-num text-base font-extrabold tabular-nums tracking-tight text-ink-900">
+                        {formatKRW(v)}
+                        <span className="text-xs font-semibold text-ink-400">원</span>
+                      </p>
+                      <p className="mt-1 text-[11px] font-semibold text-brand-700 opacity-0 transition group-hover:opacity-100">
+                        내역 보기 →
+                      </p>
+                    </Link>
+                  )
+                })}
               </div>
               <p className="border-t border-ink-100 px-4 py-3 text-xs leading-relaxed text-ink-500">
-                프로젝트 미지정분은 모두 여기로 모입니다. 달별 상세는 운영비 메뉴에서 프로젝트 필터(비젠내부)로 보세요.
+                프로젝트 미지정분은 모두 여기로 모입니다. 카드를 누르면 운영비 내역으로 이동합니다.
               </p>
             </section>
           ) : null}
