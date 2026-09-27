@@ -26,6 +26,7 @@ import {
   previousPeriod,
 } from '../lib/format'
 import { groupByMonth, groupByProject, summarize } from '../lib/summary'
+import { TaxAlertBanner } from './Tax'
 
 export default function Dashboard() {
   const { isAdmin, profile } = useAuth()
@@ -140,6 +141,8 @@ export default function Dashboard() {
       >
         <PeriodPicker period={period} />
       </PageHeader>
+
+      <TaxAlertBanner />
 
       {loading ? (
         <LoadingBlock />
@@ -458,6 +461,8 @@ function StaffHome({ period, loading, stats, current, projects, profiles, attach
       <PageHeader title="내 지출결의" description="직원 계정에는 본인이 등록한 내역만 표시됩니다.">
         <PeriodPicker period={period} />
       </PageHeader>
+
+      <TaxAlertBanner />
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
         <StatCard label="지출 합계 (부가세 포함)" value={costs} tone="opex" icon="coins" />
