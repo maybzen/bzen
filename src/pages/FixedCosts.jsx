@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import Icon from '../components/Icon'
 import { useToast } from '../components/Toast'
 import { EmptyState, LoadingBlock, PageHeader, SegmentedControl, StatCard } from '../components/ui'
-import { formatKRW, monthEnd, monthKey, monthKeyOf, monthLabel, toISODate } from '../lib/format'
+import { formatKRW, monthEnd, monthKey, monthKeyOf, monthLabel, todayISO, toISODate } from '../lib/format'
 import { detectFixedCosts } from '../lib/summary'
 import { listEntries, listProjects } from '../lib/api'
 
@@ -222,7 +222,7 @@ export default function FixedCosts() {
                       <tr key={f.name} className="transition hover:bg-ink-50/60">
                         <td className="td font-medium text-ink-900">
                           <Link
-                            to={`/expenses?search=${encodeURIComponent(f.name)}`}
+                            to={`/expenses?search=${encodeURIComponent(f.name)}&from=2026-01-01&to=${todayISO()}`}
                             className="hover:text-brand-700 hover:underline"
                             title="운영비 내역 보기"
                           >
