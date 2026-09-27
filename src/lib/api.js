@@ -137,7 +137,8 @@ export async function listEntries({
     if (projectId) q = q.eq('project_id', projectId)
     if (source) q = q.eq('source', source)
     if (search && search.trim()) {
-      const s = `%${search.trim().replace(/[%,()]/g, '')}%`
+      // 괄호·공백 등은 와일드카드로 바꿔 검색 (예: 현대자동차(주)본사 → DB의 괄호 포함 표기와 매칭)
+      const s = `%${search.trim().replace(/[\s%,()]+/g, '%')}%`
       q = q.or(
         `counterparty.ilike.${s},description.ilike.${s},category.ilike.${s},doc_no.ilike.${s},memo.ilike.${s}`,
       )
