@@ -65,17 +65,19 @@ export default function Collections() {
       else if (c.project_id) colByProject.set(c.project_id, amt)
       else unassigned += amt
     }
-    return projects.map((p) => {
-      const contract = Number(p.contract_amount || 0)
-      const collected = colByProject.get(p.id) || 0
-      return {
-        project: p,
-        contract,
-        revenue: saleByProject.get(p.id) || 0,
-        collected,
-        due: contract - collected,
-      }
-    })
+    return projects
+      .map((p) => {
+        const contract = Number(p.contract_amount || 0)
+        const collected = colByProject.get(p.id) || 0
+        return {
+          project: p,
+          contract,
+          revenue: saleByProject.get(p.id) || 0,
+          collected,
+          due: contract - collected,
+        }
+      })
+      .sort((a, b) => String(b.project.start_date || '').localeCompare(String(a.project.start_date || '')))
   }, [projects, entries, collections])
 
   const withContract = rows.filter((r) => r.contract > 0)
