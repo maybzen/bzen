@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import Icon from '../components/Icon'
 import { useToast } from '../components/Toast'
 import { EmptyState, LoadingBlock, PageHeader, SegmentedControl, StatCard } from '../components/ui'
