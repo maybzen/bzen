@@ -2,6 +2,13 @@ import { todayISO } from './format'
 
 const STORE_KEY = 'bzen.tax.v1'
 
+/** 인수인계 기준일: 이 날짜 이전 납부기한은 이전 담당자 처리분으로 표시 */
+export const INCHARGE_FROM = '2026-09-01'
+
+export function isPrior(due) {
+  return String(due) < INCHARGE_FROM
+}
+
 export const TAX_TYPES = {
   vat: { label: '부가세', chip: 'bg-brand-50 text-brand-700' },
   withholding: { label: '원천세', chip: 'bg-amber-50 text-amber-700' },
@@ -130,9 +137,10 @@ export function checkProgress(state, deadline) {
   return { done, total: docs.length }
 }
 
-/** 임박(앞으로 60일) + 최근 마감(지난 14일, 미완료만) */
+/** 임박(앞으로 60일) + 최근 마감(지난 14일, 미완료만). 인수인계 이전분 제외 */
 export function getUpcoming(deadlines, today = todayISO(), state = null) {
   return deadlines.filter((d) => {
+    if (isPrior(d.due)) return false
     if (isDone(state, d.id)) return false
     const n = dayDiff(today, d.due)
     return n >= -14 && n <= 60

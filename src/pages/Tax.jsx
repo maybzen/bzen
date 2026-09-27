@@ -17,6 +17,7 @@ import {
   dayDiff,
   getUpcoming,
   isDone,
+  isPrior,
   loadTaxState,
   saveTaxState,
   setTaxDone,
@@ -25,6 +26,9 @@ import {
 } from '../lib/tax'
 
 function statusChip(deadline, state, today) {
+  if (isPrior(deadline.due)) {
+    return <span className="chip bg-ink-100 text-ink-400">이전 담당</span>
+  }
   if (isDone(state, deadline.id)) {
     return <span className="chip bg-emerald-50 text-emerald-700">완료</span>
   }
@@ -40,10 +44,11 @@ function DeadlineCard({ deadline, state, today, open, onToggleOpen, onToggleChec
   const docs = TAX_DOCS[deadline.type] || []
   const progress = checkProgress(state, deadline)
   const done = isDone(state, deadline.id)
+  const prior = isPrior(deadline.due)
   const checks = state?.[deadline.id]?.checks || {}
 
   return (
-    <div className={`card overflow-hidden ${done ? 'opacity-75' : ''}`}>
+    <div className={`card overflow-hidden ${done || prior ? 'opacity-75' : ''}`}>
       <button
         type="button"
         onClick={onToggleOpen}
