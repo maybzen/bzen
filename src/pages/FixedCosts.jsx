@@ -4,7 +4,7 @@ import { useToast } from '../components/Toast'
 import { EmptyState, LoadingBlock, PageHeader, StatCard } from '../components/ui'
 import { formatKRW, monthKey, monthKeyOf, monthLabel, toISODate } from '../lib/format'
 import { detectFixedCosts } from '../lib/summary'
-import { listEntries } from '../lib/api'
+import { listEntries, listProjects } from '../lib/api'
 
 /**
  * 고정비 현황 (별도 메뉴).
@@ -16,18 +16,20 @@ export default function FixedCosts() {
   const [loading, setLoading] = useState(true)
   const [items, setItems] = useState([])
   const [entries, setEntries] = useState([])
+  const [internalId, setInternalId] = useState('')
 
   useEffect(() => {
     let alive = true
     setLoading(true)
     const now = new Date()
     const from = toISODate(new Date(now.getFullYear(), now.getMonth() - 11, 1))
-    listEntries({ from, to: toISODate(now), maxRows: 20000 })
-      .then((rows) => {
+    Promise.all([listEntries({ from, to: toISODate(now), maxRows: 20000 }), listProjects()])
+      .then(([rows, projectRows]) => {
         if (!alive) return
         setEntries(rows || [])
         // 고정비 감지에서는 급여(인건비) 제외 — 외주·업체 고정비만 봅니다
         setItems(detectFixedCosts((rows || []).filter((e) => e.category !== '인건비')))
+        setInternalId((projectRows || []).find((p) => p.name === '비젠내부')?.id || '')
       })
       .catch((e) => toast.error(e.message))
       .finally(() => {
@@ -70,6 +72,24 @@ export default function FixedCosts() {
   const thisMonthKey = monthKey(new Date())
   const thisMonthPayroll = payrollByMonth.find((r) => r.mk === thisMonthKey)?.total || 0
   const [openMonth, setOpenMonth] = useState(null)
+
+  /** 공통(비젠내부) 월별 지출 — 프로젝트 미지정분이 모이는 곳 */
+  const internalByMonth = useMemo(() => {
+    if (!internalId) return []
+    const map = new Map()
+    for (const e of entries) {
+      if (e.project_id !== internalId) continue
+      if (e.entry_type !== 'purchase' && e.entry_type !== 'opex') continue
+      const mk = monthKeyOf(e.entry_date)
+      if (!mk) continue
+      map.set(mk, (map.get(mk) || 0) + Number(e.total_amount || 0))
+    }
+    return [...map.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1)).slice(-12)
+  }, [entries, internalId])
+  const internalAvg = useMemo(
+    () => (internalByMonth.length ? Math.round(internalByMonth.reduce((a, [, v]) => a + v, 0) / internalByMonth.length) : 0),
+    [internalByMonth],
+  )
 
   return (
     <div className="flex flex-col gap-5">
@@ -136,6 +156,44 @@ export default function FixedCosts() {
                   </tbody>
                 </table>
               </div>
+            </section>
+          ) : null}
+
+          {internalByMonth.length ? (
+            <section className="card overflow-hidden">
+              <header className="flex flex-wrap items-center justify-between gap-2 border-b border-ink-200 px-4 py-3.5">
+                <h2 className="text-sm font-bold text-ink-900">공통(비젠내부) 월별 지출</h2>
+                <p className="text-xs text-ink-500">
+                  월 평균 <strong className="font-num tabular-nums text-brand-700">{formatKRW(internalAvg)}원</strong>
+                </p>
+              </header>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[420px] border-collapse text-xs">
+                  <thead className="bg-ink-50/70">
+                    <tr>
+                      <th className="th">월</th>
+                      <th className="th text-right">지출 합계</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-ink-100">
+                    {internalByMonth.map(([mk, v]) => (
+                      <tr key={mk}>
+                        <td className="td font-medium">{monthLabel(mk)}</td>
+                        <td className="td num font-semibold">{formatKRW(v)}원</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot className="border-t border-ink-200 bg-ink-50/80">
+                    <tr>
+                      <td className="td font-bold">월 평균 ({internalByMonth.length}개월)</td>
+                      <td className="td num font-extrabold text-brand-700">{formatKRW(internalAvg)}원</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+              <p className="border-t border-ink-100 px-4 py-3 text-xs leading-relaxed text-ink-500">
+                프로젝트 미지정분은 모두 여기로 모입니다. 달별 상세는 운영비 메뉴에서 프로젝트 필터(비젠내부)로 보세요.
+              </p>
             </section>
           ) : null}
 
