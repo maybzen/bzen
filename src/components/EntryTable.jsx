@@ -634,6 +634,16 @@ export default function EntryTable({
                   <AttachmentCell attachments={files} onOpen={onOpenAttachments} />
                   {canEdit ? (
                     <div className="flex items-center gap-1">
+                      {onSlip ? (
+                        <button
+                          type="button"
+                          onClick={() => onSlip?.(entry)}
+                          className="btn-ghost px-2.5 py-1.5 text-xs"
+                          title={slipEntryIds?.has?.(entry.id) ? '명세서 보기·수정' : '명세서 작성'}
+                        >
+                          명세서{slipEntryIds?.has?.(entry.id) ? ' ✓' : ''}
+                        </button>
+                      ) : null}
                       <button type="button" onClick={() => onEdit?.(entry)} className="btn-ghost px-2.5 py-1.5 text-xs">
                         <Icon name="pencil" size={13} />
                         수정

@@ -662,7 +662,7 @@ function SlipModal({ open, onClose, onSaved, entry, ym, initial, reportRows, pro
       open={open}
       onClose={saving ? undefined : onClose}
       title={`${name} · ${ym.slice(0, 4)}년 ${Number(ym.slice(5))}월 급여명세서`}
-      subtitle={`장부 합계 ${formatKRW(entry.total_amount)}원 · 저장하면 급여분 ${formatKRW(bookAmount)}원(실지급 ${formatKRW(net)} − 지출결의 ${formatKRW(expensePay)})으로 맞춰집니다.`}
+      subtitle={`귀속 ${ym.slice(0, 4)}년 ${Number(ym.slice(5))}월 · 지급일 ${entry.entry_date || '—'} · 장부 합계 ${formatKRW(entry.total_amount)}원 · 저장하면 급여분 ${formatKRW(bookAmount)}원(실지급 ${formatKRW(net)} − 지출결의 ${formatKRW(expensePay)})으로 맞춰집니다.`}
       size="lg"
       footer={
         <>
@@ -775,7 +775,9 @@ const PAYROLL_TEMPLATE = ['일자', '성명', '급여', '적요', '메모']
  * 급여대장 CSV 파싱 → 장부 행 변환 (순수 함수, 검증 스크립트에서 씁니다).
  * 같은 귀속월·같은 성명은 1건이 원칙이라 이미 등록된 성명은 건너뜁니다.
  */
-export function buildPayrollRows(parsed, { existingNames = new Set(), defaultProjectId = null, userId = null } = {}) {
+export function buildPayrollRows(parsed, { existingNames = new Set(), defaultProjectId = null, userId = null, ym = '' } = {}) {
+  // 적요가 비면 보고 있는 달(귀속월)의 "N월 급여"로 둡니다. 지급일 기준이 아닙니다.
+  const attrLabel = ym ? `${Number(String(ym).slice(5))}월 급여` : ''
   const header = parsed[0].map((h) => String(h).trim())
   const indexOf = (name) => header.indexOf(name)
   const iDate = indexOf('일자')
@@ -806,7 +808,7 @@ export function buildPayrollRows(parsed, { existingNames = new Set(), defaultPro
       description:
         indexOf('적요') >= 0 && String(raw[indexOf('적요')] || '').trim()
           ? String(raw[indexOf('적요')] || '').trim()
-          : `${Number(date.slice(5, 7))}월 급여`,
+          : attrLabel || `${Number(date.slice(5, 7))}월 급여`,
       supply_amount: Math.round(pay),
       vat_amount: 0,
       memo: indexOf('메모') >= 0 ? String(raw[indexOf('메모')] || '').trim() : '',
@@ -853,6 +855,7 @@ function PayrollImportModal({ open, onClose, onDone, ym, defaultProjectId, exist
         existingNames,
         defaultProjectId,
         userId,
+        ym,
       })
 
       if (!out.length && !skip.length) throw new Error('등록할 행을 찾지 못했습니다.')
