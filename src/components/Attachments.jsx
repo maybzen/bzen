@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Icon from './Icon'
 import { Modal, Spinner } from './ui'
 import { getAttachmentUrl } from '../lib/api'
@@ -29,6 +29,21 @@ function PreviewItem({ file }) {
   const [url, setUrl] = useState('')
   const [loading, setLoading] = useState(false)
   const toast = useToast()
+  const showThumb = isImage(file.mime_type, file.file_name)
+
+  /* 이미지는 미리보기 썸네일을 미리 불러옵니다 */
+  useEffect(() => {
+    if (!showThumb || !file.file_path) return
+    let alive = true
+    getAttachmentUrl(file.file_path)
+      .then((signed) => {
+        if (alive) setUrl(signed)
+      })
+      .catch(() => {})
+    return () => {
+      alive = false
+    }
+  }, [showThumb, file.file_path])
 
   const open = async () => {
     if (url) {
@@ -49,9 +64,18 @@ function PreviewItem({ file }) {
 
   return (
     <li className="flex items-center gap-3 rounded-lg border border-ink-200 px-3 py-2.5">
-      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-ink-100 text-ink-500">
-        <Icon name={isImage(file.mime_type, file.file_name) ? 'image' : 'file'} size={17} />
-      </span>
+      <button
+        type="button"
+        onClick={open}
+        className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-ink-100 text-ink-500"
+        title="크게 보기"
+      >
+        {showThumb && url ? (
+          <img src={url} alt={file.file_name} className="h-full w-full object-cover" />
+        ) : (
+          <Icon name={showThumb ? 'image' : 'file'} size={17} />
+        )}
+      </button>
       <span className="min-w-0 flex-1">
         <span className="block truncate text-sm font-semibold text-ink-800">{file.file_name}</span>
         <span className="block text-xs text-ink-500">

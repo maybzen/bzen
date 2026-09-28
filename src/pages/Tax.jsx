@@ -167,10 +167,9 @@ function DeadlineCard({
                   ) : null}
                   <label className={`btn-ghost cursor-pointer px-2.5 py-1.5 text-xs ${uploading ? 'pointer-events-none opacity-50' : ''}`}>
                     <Icon name="upload" size={14} />
-                    {uploading ? '올리는 중…' : 'PDF 등록'}
+                    {uploading ? '올리는 중…' : '파일 등록'}
                     <input
                       type="file"
-                      accept=".pdf,application/pdf"
                       className="hidden"
                       disabled={uploading}
                       onChange={(e) => {

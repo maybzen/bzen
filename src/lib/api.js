@@ -382,6 +382,32 @@ export async function getPartnerDocUrl(filePath, expiresIn = 3600) {
 }
 
 /* ------------------------------------------------------------------ */
+/* 휴무대장 (연차·대휴·동계휴가·보건휴가·경조사)                              */
+/* ------------------------------------------------------------------ */
+
+export function listLeaveEntries() {
+  return unwrap(
+    supabase
+      .from('leave_entries')
+      .select('*')
+      .order('entry_date', { ascending: false })
+      .order('created_at', { ascending: false })
+      .limit(5000),
+  )
+}
+
+export function createLeaveEntry(payload, userId) {
+  const row = { ...payload, created_by: userId }
+  delete row.id
+  delete row.created_at
+  return unwrap(supabase.from('leave_entries').insert(row).select().single())
+}
+
+export function deleteLeaveEntry(id) {
+  return unwrap(supabase.from('leave_entries').delete().eq('id', id))
+}
+
+/* ------------------------------------------------------------------ */
 /* 설정                                                               */
 /* ------------------------------------------------------------------ */
 

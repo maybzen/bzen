@@ -23,6 +23,7 @@ export const PERM_DEFS = [
   { key: 'reports', label: '보고서' },
   { key: 'tax', label: '세금관리' },
   { key: 'collections', label: '수금관리' },
+  { key: 'leaves', label: '휴무대장' },
 ]
 
 export const PERM_LABEL = Object.fromEntries(PERM_DEFS.map((p) => [p.key, p.label]))
