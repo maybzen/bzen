@@ -165,6 +165,7 @@ export function sanitizeEntry(payload) {
 }
 
 export function createEntry(payload, userId) {
+  // RLS가 created_by = 로그인 계정을 강제하므로 항상 로그인 계정으로 기록합니다.
   const row = sanitizeEntry({ ...payload, created_by: userId })
   return unwrap(supabase.from('entries').insert(row).select().single())
 }

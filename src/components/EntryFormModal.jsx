@@ -84,6 +84,7 @@ export default function EntryFormModal({
         memo: initial.memo || '',
         card_user: memoUser(initial.memo),
         requester_id: initial.requester_id || userId || '',
+        author_id: initial.created_by || userId || '',
       })
       setExisting(initial.attachments || [])
     } else {
@@ -147,6 +148,9 @@ export default function EntryFormModal({
         payment_method: form.payment_method,
         memo: withMemoUser(form.memo, form.card_user),
         requester_id: isReport ? form.requester_id || userId : form.requester_id || null,
+        // 등록자(작성자) 수정은 기존 내역만. 관리자가 바꿀 수 있고, 입사 전 자료 정정용입니다.
+        // 신규 등록은 RLS가 created_by = 로그인 계정으로 강제하므로 키를 보내지 않습니다.
+        ...(isAdmin && initial?.id ? { created_by: form.author_id || null } : {}),
       }
 
       let record
@@ -383,6 +387,20 @@ export default function EntryFormModal({
             )}
           </Field>
 
+          {isAdmin && initial?.id ? (
+            <Field label="등록자" hint="입사 전 자료 등 작성자가 다르면 여기서 바로잡습니다.">
+              <select className="input" value={form.author_id} onChange={set('author_id')}>
+                <option value="">미지정</option>
+                {profiles.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.full_name || p.email}
+                    {p.department ? ` · ${p.department}` : ''}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          ) : null}
+
           <Field label={isReport ? '지출수단' : '결제수단'}>
             <select className="input" value={form.payment_method} onChange={set('payment_method')}>
               <option value="">선택 안 함</option>
@@ -489,5 +507,6 @@ function emptyForm(entryType, source, userId) {
     memo: '',
     card_user: '',
     requester_id: source === 'expense_report' ? userId || '' : '',
+    author_id: userId || '',
   }
 }

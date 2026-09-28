@@ -454,6 +454,7 @@ export default function LedgerPage({ type, source = 'manual', title, description
             categories={CATEGORIES[type] || []}
             onSaveRow={handleSaveRow}
             onBulkDelete={isAdmin ? setRemovingMany : undefined}
+            canChangeAuthor={isAdmin}
           />
         )}
       </div>
