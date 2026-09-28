@@ -34,9 +34,26 @@ export default function FixedCosts() {
   const toast = useToast()
   const navigate = useNavigate()
   const [loading, setLoading] = useState(true)
-  const [items, setItems] = useState([])
   const [entries, setEntries] = useState([])
   const [internalId, setInternalId] = useState('')
+  const [excluded, setExcluded] = useState(() => {
+    try {
+      const raw = localStorage.getItem('bzen.fixed.excluded.v1')
+      if (!raw) return ['영일미디어', 'BT애드']
+      const parsed = JSON.parse(raw)
+      return Array.isArray(parsed) ? parsed : []
+    } catch {
+      return []
+    }
+  })
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('bzen.fixed.excluded.v1', JSON.stringify(excluded))
+    } catch {
+      /* 저장 실패 무시 */
+    }
+  }, [excluded])
 
   useEffect(() => {
     let alive = true
@@ -47,8 +64,6 @@ export default function FixedCosts() {
       .then(([rows, projectRows]) => {
         if (!alive) return
         setEntries(rows || [])
-        // 고정비 감지에서는 급여(인건비) 제외 — 외주·업체 고정비만 봅니다
-        setItems(detectFixedCosts((rows || []).filter((e) => e.category !== '인건비')))
         setInternalId((projectRows || []).find((p) => p.name === '비젠내부')?.id || '')
       })
       .catch((e) => toast.error(e.message))
@@ -59,6 +74,13 @@ export default function FixedCosts() {
       alive = false
     }
   }, [toast])
+
+
+  /* 고정비 감지에서는 급여(인건비) 제외 — 외주·업체 고정비만 봅니다 */
+  const items = useMemo(
+    () => detectFixedCosts((entries || []).filter((e) => e.category !== '인건비'), { exclude: excluded }),
+    [entries, excluded],
+  )
 
   const monthlyAvg = useMemo(() => items.reduce((a, f) => a + f.avg, 0), [items])
 
@@ -306,6 +328,7 @@ export default function FixedCosts() {
                       <th className="th text-right">월 평균</th>
                       <th className="th text-right">감지 개월</th>
                       <th className="th text-right">최근 금액</th>
+                      <th className="th w-20">관리</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-ink-100">
@@ -322,6 +345,19 @@ export default function FixedCosts() {
                         <td className="td num text-ink-500">
                           {formatKRW(f.last)} <span className="text-ink-400">({monthLabel(f.lastMonth)})</span>
                         </td>
+                        <td className="td">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setExcluded((prev) => (prev.includes(f.name) ? prev : [...prev, f.name]))
+                              toast.success(`'${f.name}'을(를) 고정비에서 제외했습니다.`)
+                            }}
+                            className="text-xs font-semibold text-ink-400 hover:text-loss hover:underline"
+                          >
+                            제외
+                          </button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -331,6 +367,24 @@ export default function FixedCosts() {
                 <Icon name="info" size={13} className="mr-1 inline text-ink-400" />
                 기준: 최근 12개월 · 3개월 이상 등장 · 월 합계 편차 35% 이내. 자료가 쌓일수록 정확해집니다.
               </p>
+              {excluded.length ? (
+                <div className="border-t border-ink-100 px-4 py-3">
+                  <p className="mb-2 text-xs font-bold text-ink-600">제외된 거래처 {excluded.length}곳</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {excluded.map((name) => (
+                      <button
+                        key={name}
+                        type="button"
+                        onClick={() => setExcluded((prev) => prev.filter((n) => n !== name))}
+                        className="chip bg-ink-100 text-ink-600 transition hover:bg-emerald-50 hover:text-emerald-700"
+                        title="클릭하면 복원됩니다"
+                      >
+                        {name} ×
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
             </div>
           ) : tab === 'fixed' ? (
             <EmptyState

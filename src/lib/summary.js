@@ -130,7 +130,7 @@ export function groupByCounterparty(entries, type) {
  * 같은 거래처가 여러 달에 걸쳐 비슷한 금액으로 나오면 고정비로 봅니다.
  * 기준: 최근 12개월 중 3개월 이상 등장 + 월 합계 편차(CV) 35% 이내
  */
-export function detectFixedCosts(entries, { months = 12, minMonths = 3, maxCV = 0.35 } = {}) {
+export function detectFixedCosts(entries, { months = 12, minMonths = 3, maxCV = 0.35, exclude = [] } = {}) {
   const now = new Date()
   const fromKey = monthKey(new Date(now.getFullYear(), now.getMonth() - (months - 1), 1))
   const perName = new Map()
@@ -145,6 +145,7 @@ export function detectFixedCosts(entries, { months = 12, minMonths = 3, maxCV = 
   }
   const out = []
   for (const [name, byMonth] of perName) {
+    if (exclude.includes(name)) continue
     const totals = [...byMonth.values()]
     if (byMonth.size < minMonths) continue
     const avg = totals.reduce((a, v) => a + v, 0) / totals.length
