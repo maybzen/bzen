@@ -131,6 +131,54 @@ export function upsertSlip(payload, userId) {
 }
 
 /* ------------------------------------------------------------------ */
+/* 자금관리 (계좌·대출·카드 마스터 + 잔고 스냅샷. 관리자 전용)              */
+/* ------------------------------------------------------------------ */
+
+const FUND_TABLES = ['fund_accounts', 'fund_loans', 'fund_cards', 'fund_snapshots']
+
+function fundTable(table) {
+  if (!FUND_TABLES.includes(table)) throw new Error('허용되지 않은 테이블입니다.')
+  return table
+}
+
+export function listFundRows(table) {
+  const orderKey = table === 'fund_snapshots' ? 'snap_date' : 'sort_order'
+  return unwrap(
+    supabase
+      .from(fundTable(table))
+      .select('*')
+      .order(orderKey, { ascending: table === 'fund_snapshots' ? false : true }),
+  )
+}
+
+export function saveFundRow(table, row, userId) {
+  const clean = { ...row, updated_at: new Date().toISOString() }
+  delete clean.id
+  delete clean.created_at
+  if (row.id) {
+    return unwrap(supabase.from(fundTable(table)).update(clean).eq('id', row.id).select().single())
+  }
+  return unwrap(
+    supabase.from(fundTable(table)).insert({ ...clean, created_by: userId }).select().single(),
+  )
+}
+
+export function deleteFundRow(table, id) {
+  return unwrap(supabase.from(fundTable(table)).delete().eq('id', id))
+}
+
+export function upsertSnapshot(snapDate, balances, memo, userId) {
+  const row = {
+    snap_date: snapDate,
+    balances,
+    memo: memo || '',
+    created_by: userId,
+    updated_at: new Date().toISOString(),
+  }
+  return unwrap(supabase.from('fund_snapshots').upsert(row, { onConflict: 'snap_date' }).select().single())
+}
+
+/* ------------------------------------------------------------------ */
 /* 장부 (매출 / 매입 / 운영비 / 지출결의)                                */
 /* ------------------------------------------------------------------ */
 
