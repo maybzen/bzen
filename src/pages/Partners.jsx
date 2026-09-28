@@ -4,7 +4,7 @@ import PartnerFormModal from '../components/PartnerFormModal'
 import { useToast } from '../components/Toast'
 import { ConfirmDialog, EmptyState, InlineAlert, LoadingBlock, PageHeader, StatCard } from '../components/ui'
 import { useAuth } from '../auth/AuthContext'
-import { PARTNER_GROUPS } from '../lib/constants'
+import { PARTNER_GROUPS, suggestPartnerGroup } from '../lib/constants'
 import { downloadTextFile, toCSV } from '../lib/csv'
 import {
   deletePartner,
@@ -282,6 +282,10 @@ export default function Partners() {
                   const bizNo = memoBizNo(p.memo)
                   const accounts = memoAccounts(p.memo)
                   const closed = (p.status || '정상') === '폐업'
+                  const groupSuggest =
+                    !p.group_name || p.group_name === '기타'
+                      ? suggestPartnerGroup(p.name, p.memo)
+                      : null
                   const openDetail = () =>
                     isAdmin ? (setEditing(p), setFormOpen(true)) : setViewing(p)
                   return (
@@ -339,6 +343,18 @@ export default function Partners() {
                         ) : (
                           <span className="chip bg-ink-100 text-ink-600">{p.group_name || '기타'}</span>
                         )}
+                        {isAdmin && groupSuggest && groupSuggest !== '기타' ? (
+                          <span className="mt-1 block text-[11px] text-ink-500">
+                            추천: <strong className="text-ink-700">{groupSuggest}</strong>{' '}
+                            <button
+                              type="button"
+                              className="font-bold text-brand-700 hover:underline"
+                              onClick={() => saveGroup(p, groupSuggest)}
+                            >
+                              적용
+                            </button>
+                          </span>
+                        ) : null}
                       </td>
                       <td className="td max-w-[200px]">
                         <button
