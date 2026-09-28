@@ -5,6 +5,7 @@ import { useToast } from '../components/Toast'
 import { ConfirmDialog, EmptyState, InlineAlert, LoadingBlock, PageHeader, StatCard } from '../components/ui'
 import { useAuth } from '../auth/AuthContext'
 import { PARTNER_GROUPS, suggestPartnerGroup } from '../lib/constants'
+import { supabase } from '../lib/supabase'
 import { downloadTextFile, toCSV } from '../lib/csv'
 import {
   deletePartner,
@@ -49,7 +50,7 @@ export default function Partners() {
   const [tableState, setTableState] = useState('checking')
   const [search, setSearch] = useState('')
   const [groupFilter, setGroupFilter] = useState('')
-  const [statusFilter, setStatusFilter] = useState('active')
+  const [statusFilter, setStatusFilter] = useState('all')
   const [sortKey, setSortKey] = useState('name')
   const [reloadKey, setReloadKey] = useState(0)
 
@@ -60,7 +61,16 @@ export default function Partners() {
   const [busy, setBusy] = useState(false)
   const [customGroupId, setCustomGroupId] = useState(null)
   const [customGroupValue, setCustomGroupValue] = useState('')
-  const [pendingGroups, setPendingGroups] = useState({})
+  const [pendingGroups, setPendingGroups] = useState(() => {
+    /* 새로고침·재로그인해도 담아둔 목록이 날아가지 않도록 브라우저에 보관 */
+    try {
+      const raw = localStorage.getItem('bzen.pendingGroups.v1')
+      const parsed = raw ? JSON.parse(raw) : {}
+      return parsed && typeof parsed === 'object' ? parsed : {}
+    } catch {
+      return {}
+    }
+  })
   const [savingAll, setSavingAll] = useState(false)
   const pendingCount = Object.keys(pendingGroups).length
 
@@ -79,21 +89,50 @@ export default function Partners() {
     })
   }
 
+  useEffect(() => {
+    try {
+      localStorage.setItem('bzen.pendingGroups.v1', JSON.stringify(pendingGroups))
+    } catch {
+      /* 저장 실패 무시 */
+    }
+  }, [pendingGroups])
+
   const saveAllGroups = async () => {
     const ids = Object.keys(pendingGroups)
     if (!ids.length) return
+    /* 세션 만료면 서버가 전부를 거부하므로 먼저 확인 */
+    const {
+      data: { session: current },
+    } = await supabase.auth.getSession()
+    if (!current) {
+      toast.error('로그인이 만료되었습니다. 다시 로그인해 주세요. (담아둔 목록은 유지됩니다)')
+      return
+    }
     setSavingAll(true)
-    try {
-      for (const id of ids) {
+    const ok = []
+    const fail = []
+    for (const id of ids) {
+      try {
         const saved = await updatePartner(id, { group_name: pendingGroups[id] })
         setPartners((list) => list.map((p) => (p.id === id ? { ...p, ...saved } : p)))
+        ok.push(id)
+      } catch (e) {
+        fail.push({ id, name: partners.find((p) => p.id === id)?.name || id, message: e.message })
       }
-      setPendingGroups({})
-      toast.success(`${ids.length}건의 구분을 저장했습니다.`)
-    } catch (error) {
-      toast.error(error.message)
-    } finally {
-      setSavingAll(false)
+    }
+    setPendingGroups((prev) => {
+      const n = { ...prev }
+      for (const id of ok) delete n[id]
+      return n
+    })
+    setSavingAll(false)
+    if (fail.length) {
+      const names = fail.slice(0, 3).map((f) => f.name).join(', ')
+      const loginHint =
+        ok.length === 0 ? ' 로그아웃 후 다시 로그인해 보세요.' : ''
+      toast.error(`${fail.length}건 실패(${names}${fail.length > 3 ? ' 외' : ''}): ${fail[0].message}.${loginHint}`)
+    } else {
+      toast.success(`${ok.length}건의 구분을 저장했습니다.`)
     }
   }
 
@@ -110,6 +149,15 @@ export default function Partners() {
         setTableState('ready')
         const master = await listPartners()
         setPartners(master || [])
+        /* 목록에 없는 id가 담겨 있으면 정리 */
+        const alive = new Set((master || []).map((p) => p.id))
+        setPendingGroups((prev) => {
+          const keys = Object.keys(prev).filter((id) => alive.has(id))
+          if (keys.length === Object.keys(prev).length) return prev
+          const n = {}
+          for (const id of keys) n[id] = prev[id]
+          return n
+        })
         const ids = (master || []).map((p) => p.id)
         if (ids.length) {
           const docs = await listPartnerDocs(ids).catch(() => [])
