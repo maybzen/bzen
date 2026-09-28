@@ -9,9 +9,18 @@ import {
   deleteCollection,
   listCollections,
   listEntries,
+  listPartners,
   listProjects,
 } from '../lib/api'
 import { formatDateHuman, formatKRW, formatPercent, todayISO } from '../lib/format'
+
+/* 법인격 표기 차이((주)·주식회사 등)를 무시하고 거래처명을 비교합니다 */
+function normVendor(name) {
+  return String(name || '')
+    .replace(/\s+/g, '')
+    .replace(/\(주\)|\(재\)|\(사\)|주식회사|㈜/g, '')
+    .toLowerCase()
+}
 
 function isMissingTable(error) {
   const msg = String(error?.message || '')
@@ -26,6 +35,7 @@ export default function Collections() {
   const [projects, setProjects] = useState([])
   const [entries, setEntries] = useState([])
   const [collections, setCollections] = useState([])
+  const [partners, setPartners] = useState([])
   const [formOpen, setFormOpen] = useState(false)
   const [viewTab, setViewTab] = useState('project')
   const [form, setForm] = useState({ project_id: '', counterparty: '', collected_on: todayISO(), amount: '', memo: '' })
@@ -35,10 +45,11 @@ export default function Collections() {
   const load = async () => {
     setLoading(true)
     try {
-      const [p, e, c] = await Promise.all([listProjects(), listEntries({}), listCollections()])
+      const [p, e, c, pt] = await Promise.all([listProjects(), listEntries({}), listCollections(), listPartners().catch(() => [])])
       setProjects(p || [])
       setEntries(e || [])
       setCollections(c || [])
+      setPartners(pt || [])
       setMissingTable(false)
     } catch (err) {
       if (isMissingTable(err)) setMissingTable(true)
@@ -93,12 +104,12 @@ export default function Collections() {
   const totalCollected = collections.reduce((a, c) => a + Number(c.amount || 0), 0)
   const thisMonth = todayISO().slice(0, 7)
 
-  /* 거래처별: 매출(합계) 대비 수금·잔금 + 매입(합계) */
+  /* 거래처별: 매출(합계) 대비 수금·잔금 + 매입(합계) + 미지급(확정잔액) */
   const vendorRows = useMemo(() => {
     const map = new Map()
     const bump = (name, key, v) => {
       const n = (name || '').trim() || '미지정'
-      if (!map.has(n)) map.set(n, { name: n, revenue: 0, collected: 0, purchase: 0 })
+      if (!map.has(n)) map.set(n, { name: n, revenue: 0, collected: 0, purchase: 0, payable: 0 })
       map.get(n)[key] += Number(v || 0)
     }
     for (const e of entries) {
@@ -108,11 +119,36 @@ export default function Collections() {
     for (const c of collections) {
       bump(c.counterparty, 'collected', c.amount)
     }
-    return [...map.values()]
-      .map((r) => ({ ...r, due: r.revenue - r.collected }))
-      .sort((a, b) => b.due - a.due)
-  }, [entries, collections])
+    // 거래처 확정 미지급잔액 연동 (법인격 표기 차이는 정규화로 흡수)
+    const byNorm = new Map()
+    for (const [n, r] of map) {
+      const k = normVendor(n)
+      if (!byNorm.has(k)) byNorm.set(k, [])
+      byNorm.get(k).push(r)
+    }
+    const matched = new Set()
+    for (const p of partners) {
+      const bal = Number(p.payable_balance || 0)
+      if (!bal) continue
+      const hit = (byNorm.get(normVendor(p.name)) || [])[0]
+      if (hit) {
+        hit.payable += bal
+        matched.add(p.name)
+      }
+    }
+    const rows = [...map.values()].map((r) => ({ ...r, due: r.revenue - r.collected }))
+    // 장부명과 다른 이름으로 확정된 잔액(예: 트윈스조명↔트윈스라이팅)은 별도 행으로 표시
+    for (const p of partners) {
+      const bal = Number(p.payable_balance || 0)
+      if (!bal || matched.has(p.name)) continue
+      const hit = (byNorm.get(normVendor(p.name)) || [])[0]
+      if (hit) continue
+      rows.push({ name: p.name, revenue: 0, collected: 0, purchase: 0, payable: bal, due: 0 })
+    }
+    return rows.sort((a, b) => b.due - a.due || b.payable - a.payable)
+  }, [entries, collections, partners])
   const vendorDue = vendorRows.reduce((a, r) => a + Math.max(0, r.due), 0)
+  const payableTotal = useMemo(() => (partners || []).reduce((a, p) => a + Number(p.payable_balance || 0), 0), [partners])
   const monthCollected = collections
     .filter((c) => String(c.collected_on || '').startsWith(thisMonth))
     .reduce((a, c) => a + Number(c.amount || 0), 0)
@@ -177,8 +213,9 @@ export default function Collections() {
         <LoadingBlock />
       ) : (
         <>
-          <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 xl:grid-cols-5">
             <StatCard label="미수금 합계" value={totalDue} tone={totalDue > 0 ? 'loss' : 'profit'} icon="coins" hint="계약 − 수금 (계약 있는 프로젝트)" />
+            <StatCard label="미지급금 합계" value={payableTotal} tone={payableTotal > 0 ? 'loss' : 'profit'} icon="card" hint="외주 확정잔액 (9/28 확인)" />
             <StatCard label="이번달 수금" value={monthCollected} tone="sale" icon="trending-up" />
             <StatCard label="전체 수금" value={totalCollected} tone="neutral" icon="chart" hint={`${collections.length}건`} />
             <StatCard label="계약 프로젝트" value={String(withContract.length)} unit="건" tone="neutral" icon="folder" />
@@ -210,7 +247,7 @@ export default function Collections() {
             {viewTab === 'project' ? (
               rows.length ? (
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[680px] border-collapse">
+                <table className="w-full min-w-[760px] border-collapse">
                   <thead className="bg-ink-50/70">
                     <tr>
                       <th className="th">프로젝트</th>
@@ -259,7 +296,7 @@ export default function Collections() {
             )
             ) : vendorRows.length ? (
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[680px] border-collapse">
+                <table className="w-full min-w-[760px] border-collapse">
                   <thead className="bg-ink-50/70">
                     <tr>
                       <th className="th">거래처</th>
@@ -267,6 +304,7 @@ export default function Collections() {
                       <th className="th text-right">수금</th>
                       <th className="th text-right">잔금</th>
                       <th className="th text-right">매입(합계)</th>
+                      <th className="th text-right">미지급(확정)</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-ink-100">
@@ -286,6 +324,9 @@ export default function Collections() {
                           {formatKRW(r.due)}
                         </td>
                         <td className="td num text-ink-500">{formatKRW(r.purchase)}</td>
+                        <td className={`td num font-bold ${r.payable > 0 ? 'text-loss' : 'text-ink-300'}`}>
+                          {r.payable ? formatKRW(r.payable) : '—'}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
