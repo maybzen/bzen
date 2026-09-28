@@ -76,7 +76,7 @@ function saveHomeChecks(checks) {
 import { TaxAlertBanner } from './Tax'
 
 export default function Dashboard() {
-  const { isAdmin, profile } = useAuth()
+  const { isAdmin, profile, user } = useAuth()
   const { perms } = useStaffPermissions(profile)
   const toast = useToast()
   const period = usePeriod('thisMonth', 'bzen.period.dashboard')
@@ -173,6 +173,15 @@ export default function Dashboard() {
       ])
       const ql = q.toLowerCase()
       const match = (...vals) => vals.some((v) => String(v || '').toLowerCase().includes(ql))
+      // 직원에게는 남의 지출결의(개인 지출)를 검색 결과에서 뺍니다
+      const visibleEntries = isAdmin
+        ? entryRows || []
+        : (entryRows || []).filter(
+            (e) =>
+              e.source !== 'expense_report' ||
+              e?.created_by === user?.id ||
+              e?.requester_id === user?.id,
+          )
       setResults({
         q,
         projects: (projectRows || [])
@@ -181,7 +190,7 @@ export default function Dashboard() {
         partners: (partnerRows || [])
           .filter((p) => match(p.name, p.contact_person, p.phone, p.phone_main, p.email, p.memo))
           .slice(0, 7),
-        entries: (entryRows || []).slice(0, 10),
+        entries: visibleEntries.slice(0, 10),
         collections: (collectionRows || [])
           .filter((c) => match(c.counterparty, c.memo))
           .slice(0, 7),
@@ -275,13 +284,22 @@ export default function Dashboard() {
     { name: '운영비', value: stats.opex.supply, color: '#e11d48' },
   ]
 
+  /* 직원 홈은 본인 내역만: 전사 공유(RLS 확대) 후에도 대시보드 숫자는 본인 기준 유지 */
+  const ownEntries = useMemo(
+    () =>
+      isAdmin
+        ? current
+        : current.filter((e) => e?.created_by === user?.id || e?.requester_id === user?.id),
+    [isAdmin, current, user],
+  )
+
   if (!isAdmin) {
     return (
       <StaffHome
         period={period}
         loading={loading}
-        stats={stats}
-        current={current}
+        stats={summarize(ownEntries)}
+        current={ownEntries}
         projects={projects}
         profiles={profiles}
         attachmentsByEntry={attachmentsByEntry}

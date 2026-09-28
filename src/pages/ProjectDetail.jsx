@@ -46,7 +46,8 @@ export default function ProjectDetail() {
     try {
       const [projectRows, entryRows, profileRows] = await Promise.all([
         listProjects(),
-        listEntries({ projectId: id }),
+        // 직원에게는 남의 지출결의(개인 지출)가 보이지 않게 제외합니다
+        listEntries({ projectId: id, ...(!isAdmin ? { excludeSource: 'expense_report' } : {}) }),
         listProfiles(),
       ])
       const found = projectRows.find((p) => p.id === id)
@@ -66,7 +67,7 @@ export default function ProjectDetail() {
     } finally {
       setLoading(false)
     }
-  }, [id, toast])
+  }, [id, isAdmin, toast])
 
   useEffect(() => {
     load()

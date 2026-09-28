@@ -95,6 +95,8 @@ export default function LedgerPage({ type, source = 'manual', title, description
           // 매출·매입·운영비 장부는 카드 일괄등록분(source='card')까지 함께 보여줍니다.
           // 지출결의(source='expense_report')는 그대로 분리 표시합니다.
           ...(source !== 'manual' ? { source } : {}),
+          // 직원에게는 남의 지출결의(개인 지출)가 보이지 않게 제외합니다
+          ...(!isAdmin && !isReport ? { excludeSource: 'expense_report' } : {}),
           projectId: projectFilter || undefined,
           search: debounced,
         }),

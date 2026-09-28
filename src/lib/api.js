@@ -196,6 +196,7 @@ export async function listEntries({
   types,
   projectId,
   source,
+  excludeSource,
   search,
   maxRows = 20000,
 } = {}) {
@@ -215,6 +216,7 @@ export async function listEntries({
     if (types && types.length) q = q.in('entry_type', types)
     if (projectId) q = q.eq('project_id', projectId)
     if (source) q = q.eq('source', source)
+    if (excludeSource) q = q.neq('source', excludeSource)
     if (search && search.trim()) {
       // 괄호·공백 등은 와일드카드로 바꿔 검색 (예: 현대자동차(주)본사 → DB의 괄호 포함 표기와 매칭)
       const s = `%${search.trim().replace(/[\s%,()]+/g, '%')}%`
