@@ -71,6 +71,11 @@ export default function LedgerPage({ type, source = 'manual', title, description
       period.setPreset('custom')
       period.setCustom({ from, to })
     }
+    // 대시보드 검색에서 넘어올 때: 기간 전체로 봅니다 (?period=all)
+    if (searchParams.get('period') === 'all') {
+      period.setPreset('custom')
+      period.setCustom({ from: '', to: '' })
+    }
   }, [searchParams])
 
   useEffect(() => {

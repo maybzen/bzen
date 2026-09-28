@@ -10,7 +10,9 @@ import { useAuth } from '../auth/AuthContext'
 import { useStaffPermissions } from '../lib/permissions'
 import {
   listAttachments,
+  listCollections,
   listEntries,
+  listPartners,
   listProfiles,
   listProjects,
 } from '../lib/api'
@@ -27,25 +29,48 @@ import {
 } from '../lib/format'
 import { groupByMonth, groupByProject, summarize } from '../lib/summary'
 
-/* 홈페이지 확인 필요 목록 (체크 상태는 브라우저에 저장, 목록 교체 시 키 상향) */
-const HOME_ALERTS = [
-  '스완메이드 99.7만원×2회 — 우리가 받을 돈인지 증빙 확인',
-  '윤호식 직접지급 매입근거 확인 (5/8 1,298만·7/9 1,100만·8/14 167만 / 브이오디오 매입 913만원과 차이)',
-  '김영일 761만원 (8/28 KCCV 지급) 매입근거 확인',
-  'KCCV 매출·매입 재등록 (카드-프로젝트 연결·통장·기간 대조)',
-  '비버웍스 입금 93만원 성격 확인',
-  '대출 원리금 원금·이자 분리 (금진 확인)',
-  'PG 수수료 중복 의혹 (~15만원)',
-  '매입내역 탭 이름 알려주기',
+/* 홈페이지 확인 필요 목록 (브라우저에 저장, 관리자 수정 가능) */
+const HOME_ALERTS_DEFAULT = [
+  { id: 'yoon', text: '윤호식 직접지급 매입근거 확인 (5/8 1,298만·7/9 1,100만·8/14 167만 / 브이오디오 매입 913만원과 차이)' },
+  { id: 'beaver', text: '비버웍스 입금 93만원 성격 확인' },
+  { id: 'loan', text: '대출 원리금 원금·이자 분리 (금진 확인)' },
+  { id: 'pg', text: 'PG 수수료 중복 의혹 (~15만원)' },
 ]
+
+function loadHomeItems() {
+  try {
+    const raw = localStorage.getItem('bzen.home.alerts.items.v3')
+    const parsed = raw ? JSON.parse(raw) : null
+    if (Array.isArray(parsed) && parsed.every((x) => x && typeof x.id === 'string')) return parsed
+  } catch {
+    /* 무시 */
+  }
+  return HOME_ALERTS_DEFAULT
+}
 
 function loadHomeChecks() {
   try {
-    const raw = localStorage.getItem('bzen.home.alerts.v2')
+    const raw = localStorage.getItem('bzen.home.alerts.done.v3')
     const parsed = raw ? JSON.parse(raw) : {}
     return parsed && typeof parsed === 'object' ? parsed : {}
   } catch {
     return {}
+  }
+}
+
+function saveHomeItems(items) {
+  try {
+    localStorage.setItem('bzen.home.alerts.items.v3', JSON.stringify(items))
+  } catch {
+    /* 저장 실패 무시 */
+  }
+}
+
+function saveHomeChecks(checks) {
+  try {
+    localStorage.setItem('bzen.home.alerts.done.v3', JSON.stringify(checks))
+  } catch {
+    /* 저장 실패 무시 */
   }
 }
 import { TaxAlertBanner } from './Tax'
@@ -65,24 +90,54 @@ export default function Dashboard() {
   const [profiles, setProfiles] = useState([])
   const [attachmentsByEntry, setAttachmentsByEntry] = useState({})
   const [showRecent, setShowRecent] = useState(false)
+  const [query, setQuery] = useState('')
+  const [searching, setSearching] = useState(false)
+  const [results, setResults] = useState(null)
+  const [homeItems, setHomeItems] = useState(() => loadHomeItems())
   const [homeChecks, setHomeChecks] = useState(() => loadHomeChecks())
   const [showDone, setShowDone] = useState(false)
+  const [newAlert, setNewAlert] = useState('')
 
-  const toggleHomeCheck = (i) => {
+  const toggleHomeCheck = (id) => {
     setHomeChecks((prev) => {
       const next = { ...prev }
-      if (next[i]) delete next[i]
-      else next[i] = true
-      try {
-        localStorage.setItem('bzen.home.alerts.v2', JSON.stringify(next))
-      } catch {
-        /* 저장 실패 무시 */
-      }
+      if (next[id]) delete next[id]
+      else next[id] = true
+      saveHomeChecks(next)
       return next
     })
   }
-  const homeOpen = HOME_ALERTS.filter((_, i) => !homeChecks[i])
-  const homeDone = HOME_ALERTS.filter((_, i) => homeChecks[i])
+
+  const addHomeAlert = (e) => {
+    e.preventDefault()
+    const text = newAlert.trim()
+    if (!text) return
+    const id = `a${Date.now().toString(36)}`
+    setHomeItems((prev) => {
+      const next = [...prev, { id, text }]
+      saveHomeItems(next)
+      return next
+    })
+    setNewAlert('')
+  }
+
+  const removeHomeAlert = (id) => {
+    setHomeItems((prev) => {
+      const next = prev.filter((x) => x.id !== id)
+      saveHomeItems(next)
+      return next
+    })
+    setHomeChecks((prev) => {
+      if (!prev[id]) return prev
+      const next = { ...prev }
+      delete next[id]
+      saveHomeChecks(next)
+      return next
+    })
+  }
+
+  const homeOpen = homeItems.filter((x) => !homeChecks[x.id])
+  const homeDone = homeItems.filter((x) => homeChecks[x.id])
   const [alertsOpen, setAlertsOpen] = useState(() => {
     try {
       return localStorage.getItem('bzen.home.alerts.open.v1') !== '0'
@@ -99,6 +154,50 @@ export default function Dashboard() {
       }
       return !v
     })
+  }
+
+  const canSee = (perm) => isAdmin || perms.includes(perm)
+
+  /* 전체 검색: 프로젝트·거래처·장부·수금을 한 번에 찾아 메뉴로 연결합니다 */
+  const runSearch = async (e) => {
+    e?.preventDefault()
+    const q = query.trim()
+    if (!q) return
+    setSearching(true)
+    try {
+      const [entryRows, projectRows, partnerRows, collectionRows] = await Promise.all([
+        listEntries({ search: q, maxRows: 60 }),
+        listProjects(),
+        canSee('partners') ? listPartners().catch(() => []) : Promise.resolve([]),
+        canSee('collections') ? listCollections().catch(() => []) : Promise.resolve([]),
+      ])
+      const ql = q.toLowerCase()
+      const match = (...vals) => vals.some((v) => String(v || '').toLowerCase().includes(ql))
+      setResults({
+        q,
+        projects: (projectRows || [])
+          .filter((p) => !p.is_hidden && match(p.name, p.client, p.venue, p.memo))
+          .slice(0, 7),
+        partners: (partnerRows || [])
+          .filter((p) => match(p.name, p.contact_person, p.phone, p.phone_main, p.email, p.memo))
+          .slice(0, 7),
+        entries: (entryRows || []).slice(0, 10),
+        collections: (collectionRows || [])
+          .filter((c) => match(c.counterparty, c.memo))
+          .slice(0, 7),
+      })
+    } catch (error) {
+      toast.error(error.message)
+    } finally {
+      setSearching(false)
+    }
+  }
+
+  const entryTarget = (e) => {
+    if (e.source === 'expense_report') return { to: 'expense-reports', perm: 'expense-reports' }
+    if (e.entry_type === 'sale') return { to: 'sales', perm: 'sales' }
+    if (e.entry_type === 'purchase') return { to: 'purchases', perm: 'purchases' }
+    return { to: 'expenses', perm: 'expenses' }
   }
 
   const monthKeys = useMemo(() => lastMonthKeys(12), [])
@@ -196,8 +295,142 @@ export default function Dashboard() {
         title={`안녕하세요, ${profile?.full_name || '관리자'}님`}
         description="회사 전체 숫자를 요약해 보여드립니다."
       >
+        <form onSubmit={runSearch} className="relative flex-1 sm:max-w-xs">
+          <Icon
+            name="search"
+            size={16}
+            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-400"
+          />
+          <input
+            className="input pl-9"
+            placeholder="전체 검색 (거래처·프로젝트·금액·적요)"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+        </form>
         <PeriodPicker period={period} />
       </PageHeader>
+
+      {results ? (
+        <section className="card overflow-hidden">
+          <header className="flex items-center justify-between gap-2 border-b border-ink-200 px-4 py-3">
+            <h2 className="text-sm font-bold text-ink-900">
+              “{results.q}” 검색 결과
+              <span className="ml-1.5 font-medium text-ink-500">
+                프로젝트 {results.projects.length} · 거래처 {results.partners.length} · 장부 {results.entries.length} · 수금 {results.collections.length}
+              </span>
+            </h2>
+            <button
+              type="button"
+              onClick={() => {
+                setResults(null)
+                setQuery('')
+              }}
+              className="btn-ghost shrink-0 !px-2 !py-1 text-xs"
+            >
+              <Icon name="close" size={14} />
+              닫기
+            </button>
+          </header>
+          {searching ? (
+            <LoadingBlock />
+          ) : (
+            <div className="grid grid-cols-1 gap-0 divide-y divide-ink-100 lg:grid-cols-2 lg:divide-x">
+              <div className="flex flex-col gap-4 p-4">
+                {canSee('projects') && results.projects.length ? (
+                  <div>
+                    <p className="mb-1.5 text-xs font-bold text-ink-500">프로젝트</p>
+                    <ul className="flex flex-col gap-1">
+                      {results.projects.map((p) => (
+                        <li key={p.id}>
+                          <Link to={`/projects/${p.id}`} className="text-sm font-semibold text-brand-700 hover:underline">
+                            {p.name}
+                          </Link>
+                          <span className="ml-1.5 text-xs text-ink-400">{p.client || ''}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+                {canSee('partners') && results.partners.length ? (
+                  <div>
+                    <p className="mb-1.5 text-xs font-bold text-ink-500">거래처</p>
+                    <ul className="flex flex-col gap-1">
+                      {results.partners.map((p) => (
+                        <li key={p.id}>
+                          <Link
+                            to={`/partners?search=${encodeURIComponent(p.name)}`}
+                            className="text-sm font-semibold text-brand-700 hover:underline"
+                          >
+                            {p.name}
+                          </Link>
+                          <span className="ml-1.5 text-xs text-ink-400">{p.contact_person || ''}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+                {canSee('collections') && results.collections.length ? (
+                  <div>
+                    <p className="mb-1.5 text-xs font-bold text-ink-500">수금 입금</p>
+                    <ul className="flex flex-col gap-1">
+                      {results.collections.map((c) => (
+                        <li key={c.id} className="text-sm">
+                          <Link
+                            to={c.counterparty ? `/collections?vendor=${encodeURIComponent(c.counterparty)}` : '/collections'}
+                            className="font-semibold text-brand-700 hover:underline"
+                          >
+                            {c.counterparty || '미지정'}
+                          </Link>
+                          <span className="ml-1.5 text-xs tabular-nums text-ink-500">
+                            {formatKRW(c.amount)}원 · {formatDateHuman(c.collected_on)}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+              </div>
+              <div className="p-4">
+                {results.entries.length ? (
+                  <div>
+                    <p className="mb-1.5 text-xs font-bold text-ink-500">장부 (전체 기간)</p>
+                    <ul className="flex flex-col gap-1">
+                      {results.entries.map((en) => {
+                        const t = entryTarget(en)
+                        const label = `${en.counterparty || en.description || '(내용 없음)'}`
+                        const sub = (
+                          <span className="ml-1.5 text-xs tabular-nums text-ink-500">
+                            {formatKRW(en.total_amount)}원 · {formatDateHuman(en.entry_date)}
+                          </span>
+                        )
+                        return (
+                          <li key={en.id} className="text-sm">
+                            {canSee(t.perm) ? (
+                              <Link
+                                to={`/${t.to}?search=${encodeURIComponent(query.trim())}&period=all`}
+                                className="font-semibold text-brand-700 hover:underline"
+                              >
+                                {label}
+                              </Link>
+                            ) : (
+                              <span className="font-semibold text-ink-800">{label}</span>
+                            )}
+                            {sub}
+                          </li>
+                        )
+                      })}
+                    </ul>
+                  </div>
+                ) : null}
+                {!results.projects.length && !results.partners.length && !results.entries.length && !results.collections.length ? (
+                  <EmptyState icon="search" title="검색 결과가 없습니다" description="다른 단어로 검색해 보세요." />
+                ) : null}
+              </div>
+            </div>
+          )}
+        </section>
+      ) : null}
 
       <TaxAlertBanner />
 
@@ -289,24 +522,47 @@ export default function Dashboard() {
                 <span className="shrink-0 text-[11px] text-ink-500">하나씩 확인되면 체크하세요</span>
               </header>
               {alertsOpen ? (
+              <>
               <ul className="divide-y divide-ink-100">
-                {HOME_ALERTS.map((text, i) =>
-                  homeChecks[i] ? null : (
-                    <li key={text}>
+                {homeOpen.map((item) => (
+                  <li key={item.id} className="flex items-start gap-1 px-4 py-2.5 transition hover:bg-ink-50/60">
+                    <button
+                      type="button"
+                      onClick={() => toggleHomeCheck(item.id)}
+                      className="flex min-w-0 flex-1 items-start gap-2.5 text-left"
+                    >
+                      <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border border-ink-300 bg-white text-transparent">
+                        <Icon name="check" size={13} strokeWidth={2.6} />
+                      </span>
+                      <span className="text-sm text-ink-800">{item.text}</span>
+                    </button>
+                    {isAdmin ? (
                       <button
                         type="button"
-                        onClick={() => toggleHomeCheck(i)}
-                        className="flex w-full items-start gap-2.5 px-4 py-2.5 text-left transition hover:bg-ink-50/60"
+                        onClick={() => removeHomeAlert(item.id)}
+                        className="shrink-0 rounded-md p-1 text-ink-300 transition hover:bg-rose-50 hover:text-loss"
+                        aria-label="삭제"
                       >
-                        <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border border-ink-300 bg-white text-transparent">
-                          <Icon name="check" size={13} strokeWidth={2.6} />
-                        </span>
-                        <span className="text-sm text-ink-800">{text}</span>
+                        <Icon name="trash" size={14} />
                       </button>
-                    </li>
-                  ),
-                )}
+                    ) : null}
+                  </li>
+                ))}
               </ul>
+              {isAdmin ? (
+                <form onSubmit={addHomeAlert} className="flex items-center gap-2 border-t border-ink-100 px-4 py-2.5">
+                  <input
+                    className="input flex-1 py-1.5 text-xs"
+                    placeholder="확인할 일 추가"
+                    value={newAlert}
+                    onChange={(e) => setNewAlert(e.target.value)}
+                  />
+                  <button type="submit" className="btn-ghost shrink-0 !px-2.5 !py-1.5 text-xs" disabled={!newAlert.trim()}>
+                    추가
+                  </button>
+                </form>
+              ) : null}
+              </>
               ) : null}
             </section>
           ) : null}
@@ -326,23 +582,31 @@ export default function Dashboard() {
               </button>
               {showDone ? (
                 <ul className="divide-y divide-ink-100 border-t border-ink-100">
-                  {HOME_ALERTS.map((text, i) =>
-                    homeChecks[i] ? (
-                      <li key={text}>
+                  {homeDone.map((item) => (
+                    <li key={item.id} className="flex items-start gap-1 px-4 py-2.5 transition hover:bg-ink-50/60">
+                      <button
+                        type="button"
+                        onClick={() => toggleHomeCheck(item.id)}
+                        className="flex min-w-0 flex-1 items-start gap-2.5 text-left"
+                        title="클릭하면 미완료로 되돌립니다"
+                      >
+                        <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-emerald-600 text-white">
+                          <Icon name="check" size={13} strokeWidth={2.6} />
+                        </span>
+                        <span className="text-sm text-ink-400 line-through">{item.text}</span>
+                      </button>
+                      {isAdmin ? (
                         <button
                           type="button"
-                          onClick={() => toggleHomeCheck(i)}
-                          className="flex w-full items-start gap-2.5 px-4 py-2.5 text-left transition hover:bg-ink-50/60"
-                          title="클릭하면 미완료로 되돌립니다"
+                          onClick={() => removeHomeAlert(item.id)}
+                          className="shrink-0 rounded-md p-1 text-ink-300 transition hover:bg-rose-50 hover:text-loss"
+                          aria-label="삭제"
                         >
-                          <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-emerald-600 text-white">
-                            <Icon name="check" size={13} strokeWidth={2.6} />
-                          </span>
-                          <span className="text-sm text-ink-400 line-through">{text}</span>
+                          <Icon name="trash" size={14} />
                         </button>
-                      </li>
-                    ) : null,
-                  )}
+                      ) : null}
+                    </li>
+                  ))}
                 </ul>
               ) : null}
             </section>

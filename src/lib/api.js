@@ -115,6 +115,10 @@ export function deleteCollection(id) {
   return unwrap(supabase.from('collections').delete().eq('id', id))
 }
 
+export function updateCollection(id, patch) {
+  return unwrap(supabase.from('collections').update(patch).eq('id', id).select().single())
+}
+
 /* ------------------------------------------------------------------ */
 /* 급여명세서 (월별 breakdown. migration_payroll_slips.sql 1회 실행 후 사용) */
 /* ------------------------------------------------------------------ */

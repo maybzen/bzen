@@ -91,6 +91,26 @@ export default function Layout() {
   const [drawer, setDrawer] = useState(false)
   const [menu, setMenu] = useState(false)
   const [profileMenu, setProfileMenu] = useState(false)
+  /* 사이드바 그룹 접기 (브라우저에 저장) */
+  const [folded, setFolded] = useState(() => {
+    try {
+      const parsed = JSON.parse(localStorage.getItem('bzen.nav.folded') || '{}')
+      return parsed && typeof parsed === 'object' ? parsed : {}
+    } catch {
+      return {}
+    }
+  })
+  const toggleGroup = (title) => {
+    setFolded((prev) => {
+      const next = { ...prev, [title]: !prev[title] }
+      try {
+        localStorage.setItem('bzen.nav.folded', JSON.stringify(next))
+      } catch {
+        /* 저장 실패 무시 */
+      }
+      return next
+    })
+  }
   const [company, setCompany] = useState(DEFAULT_COMPANY)
   const menuRef = useRef(null)
 
@@ -149,12 +169,19 @@ export default function Layout() {
         {NAV_GROUPS.map((group) => {
           const items = visible.filter((v) => group.items.includes(v.to))
           if (!items.length) return null
+          const isFolded = Boolean(folded[group.title])
           return (
-            <div key={group.title} className="mb-4">
-              <p className="px-3 pb-1.5 text-[10px] font-bold uppercase tracking-widest text-ink-500">
+            <div key={group.title} className="mb-3">
+              <button
+                type="button"
+                onClick={() => toggleGroup(group.title)}
+                className="flex w-full items-center justify-between px-3 pb-1.5 text-[10px] font-bold uppercase tracking-widest text-ink-500 transition hover:text-white"
+                aria-expanded={!isFolded}
+              >
                 {group.title}
-              </p>
-              <NavList items={items} onNavigate={onNavigate} />
+                <Icon name={isFolded ? 'chevron-right' : 'chevron-down'} size={12} />
+              </button>
+              {isFolded ? null : <NavList items={items} onNavigate={onNavigate} />}
             </div>
           )
         })}

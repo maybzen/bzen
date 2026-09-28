@@ -12,6 +12,7 @@ import {
   listPartners,
   listProfiles,
   listProjects,
+  updateCollection,
 } from '../lib/api'
 import { formatDateHuman, formatKRW, formatPercent, normalizeVendorName, todayISO } from '../lib/format'
 
@@ -46,6 +47,7 @@ export default function Collections() {
     return p?.full_name || p?.email || ''
   }
   const [formOpen, setFormOpen] = useState(false)
+  const [editing, setEditing] = useState(null)
   const [viewTab, setViewTab] = useState('project')
   const [form, setForm] = useState({ project_id: '', counterparty: '', collected_on: todayISO(), amount: '', memo: '' })
   const [saving, setSaving] = useState(false)
@@ -218,6 +220,24 @@ export default function Collections() {
     return collections.filter((c) => ids.has(c.id))
   }, [collections, focusRow])
 
+  const openNew = () => {
+    setEditing(null)
+    setForm({ project_id: '', counterparty: '', collected_on: todayISO(), amount: '', memo: '' })
+    setFormOpen(true)
+  }
+
+  const openEdit = (c) => {
+    setEditing(c)
+    setForm({
+      project_id: c.project_id || '',
+      counterparty: c.counterparty || '',
+      collected_on: c.collected_on || todayISO(),
+      amount: String(c.amount ?? ''),
+      memo: c.memo || '',
+    })
+    setFormOpen(true)
+  }
+
   const handleSave = async (e) => {
     e.preventDefault()
     const amount = Math.round(Number(String(form.amount).replace(/[^0-9.-]/g, '')) || 0)
@@ -225,18 +245,22 @@ export default function Collections() {
     if (amount <= 0) return toast.error('입금액을 입력해 주세요.')
     setSaving(true)
     try {
-      await createCollection(
-        {
-          project_id: form.project_id || null,
-          counterparty: form.counterparty.trim(),
-          collected_on: form.collected_on,
-          amount,
-          memo: form.memo.trim(),
-        },
-        user?.id,
-      )
-      toast.success('입금을 등록했습니다.')
+      const payload = {
+        project_id: form.project_id || null,
+        counterparty: form.counterparty.trim(),
+        collected_on: form.collected_on,
+        amount,
+        memo: form.memo.trim(),
+      }
+      if (editing?.id) {
+        await updateCollection(editing.id, payload)
+        toast.success('입금 내역을 수정했습니다.')
+      } else {
+        await createCollection(payload, user?.id)
+        toast.success('입금을 등록했습니다.')
+      }
       setFormOpen(false)
+      setEditing(null)
       setForm({ project_id: '', counterparty: '', collected_on: todayISO(), amount: '', memo: '' })
       load()
     } catch (err) {
@@ -262,7 +286,7 @@ export default function Collections() {
     <div className="flex flex-col gap-5">
       <PageHeader title="수금·미수금" description="프로젝트 계약금 대비 입금액을 관리합니다.">
         {isAdmin && !missingTable ? (
-          <button type="button" className="btn-primary" onClick={() => setFormOpen(true)}>
+          <button type="button" className="btn-primary" onClick={openNew}>
             <Icon name="plus" size={16} />
             입금 등록
           </button>
@@ -470,14 +494,24 @@ export default function Collections() {
                       {formatKRW(c.amount)}원
                     </span>
                     {isAdmin ? (
-                      <button
-                        type="button"
-                        onClick={() => setRemoving(c)}
-                        className="shrink-0 rounded-md p-1.5 text-ink-400 transition hover:bg-rose-50 hover:text-loss"
-                        aria-label="삭제"
-                      >
-                        <Icon name="trash" size={14} />
-                      </button>
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => openEdit(c)}
+                          className="shrink-0 rounded-md p-1.5 text-ink-400 transition hover:bg-brand-50 hover:text-brand-700"
+                          aria-label="수정"
+                        >
+                          <Icon name="pencil" size={14} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setRemoving(c)}
+                          className="shrink-0 rounded-md p-1.5 text-ink-400 transition hover:bg-rose-50 hover:text-loss"
+                          aria-label="삭제"
+                        >
+                          <Icon name="trash" size={14} />
+                        </button>
+                      </>
                     ) : null}
                   </li>
                 ))}
@@ -499,12 +533,20 @@ export default function Collections() {
 
       {formOpen ? (
         <div className="fixed inset-0 z-[70] flex items-end justify-center sm:items-center sm:p-6">
-          <div className="absolute inset-0 bg-ink-900/50" onClick={() => !saving && setFormOpen(false)} />
+          <div
+            className="absolute inset-0 bg-ink-900/50"
+            onClick={() => {
+              if (!saving) {
+                setFormOpen(false)
+                setEditing(null)
+              }
+            }}
+          />
           <form
             onSubmit={handleSave}
             className="relative z-10 w-full animate-fade-in rounded-t-2xl bg-white p-5 shadow-pop sm:max-w-md sm:rounded-2xl"
           >
-            <h2 className="text-base font-bold text-ink-900">입금 등록</h2>
+            <h2 className="text-base font-bold text-ink-900">{editing?.id ? '입금 수정' : '입금 등록'}</h2>
             <div className="mt-4 flex flex-col gap-4">
               <label className="label">
                 프로젝트
@@ -562,7 +604,15 @@ export default function Collections() {
               </label>
             </div>
             <div className="mt-5 flex justify-end gap-2">
-              <button type="button" className="btn-ghost" onClick={() => setFormOpen(false)} disabled={saving}>
+              <button
+                type="button"
+                className="btn-ghost"
+                onClick={() => {
+                  setFormOpen(false)
+                  setEditing(null)
+                }}
+                disabled={saving}
+              >
                 취소
               </button>
               <button type="submit" className="btn-primary" disabled={saving}>
