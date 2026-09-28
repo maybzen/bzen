@@ -153,7 +153,7 @@ export default function ProjectFormModal({ open, onClose, onSaved, initial, prof
           <input type="date" className="input" value={form.end_date} onChange={set('end_date')} />
         </Field>
 
-        <Field label="계약 금액" hint="부가세 별도 기준으로 입력해 주세요.">
+        <Field label="계약 금액" hint="부가세 포함 합계 기준으로 입력해 주세요.">
           <input
             className="input num text-left"
             inputMode="numeric"

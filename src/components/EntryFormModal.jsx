@@ -51,6 +51,7 @@ export default function EntryFormModal({
   const isReport = source === 'expense_report'
 
   const [form, setForm] = useState(() => emptyForm(entryType, source, userId))
+  const [totalDraft, setTotalDraft] = useState('')
   const [files, setFiles] = useState([])
   const [existing, setExisting] = useState([])
   const [removed, setRemoved] = useState([])
@@ -68,6 +69,7 @@ export default function EntryFormModal({
     setError('')
     setFiles([])
     setRemoved([])
+    setTotalDraft('')
     if (initial) {
       setForm({
         doc_no: initial.doc_no || '',
@@ -334,12 +336,23 @@ export default function EntryFormModal({
               </div>
             </Field>
 
-            <Field label="합계">
-              <div className="flex h-[42px] items-center justify-end rounded-lg border border-ink-200 bg-white px-3">
-                <span className="font-num text-sm font-extrabold tabular-nums text-ink-900">
-                  {formatKRW(total)}원
-                </span>
-              </div>
+            <Field label="합계" hint="합계를 치면 공급가액·부가세로 자동 분리됩니다">
+              <input
+                className="input num text-left"
+                inputMode="numeric"
+                placeholder={String(total || '')}
+                value={totalDraft}
+                onFocus={() => setTotalDraft(String(total || ''))}
+                onChange={(e) => {
+                  const raw = e.target.value
+                  setTotalDraft(raw)
+                  const t = toNumber(raw)
+                  if (!t) return
+                  const supply = Math.round(t / 1.1)
+                  setForm((f) => ({ ...f, supply_amount: String(supply), vat_amount: String(t - supply) }))
+                }}
+                onBlur={() => setTotalDraft('')}
+              />
             </Field>
           </div>
         </div>

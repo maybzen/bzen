@@ -27,6 +27,7 @@ export default function Collections() {
   const [entries, setEntries] = useState([])
   const [collections, setCollections] = useState([])
   const [formOpen, setFormOpen] = useState(false)
+  const [viewTab, setViewTab] = useState('project')
   const [form, setForm] = useState({ project_id: '', counterparty: '', collected_on: todayISO(), amount: '', memo: '' })
   const [saving, setSaving] = useState(false)
   const [removing, setRemoving] = useState(null)
@@ -91,6 +92,26 @@ export default function Collections() {
   const totalDue = withContract.reduce((a, r) => a + r.due, 0)
   const totalCollected = collections.reduce((a, c) => a + Number(c.amount || 0), 0)
   const thisMonth = todayISO().slice(0, 7)
+
+  /* 거래처별: 매출(합계) 대비 수금·잔금 */
+  const vendorRows = useMemo(() => {
+    const map = new Map()
+    const bump = (name, key, v) => {
+      const n = (name || '').trim() || '미지정'
+      if (!map.has(n)) map.set(n, { name: n, revenue: 0, collected: 0 })
+      map.get(n)[key] += Number(v || 0)
+    }
+    for (const e of entries) {
+      if (e.entry_type === 'sale') bump(e.counterparty, 'revenue', e.total_amount)
+    }
+    for (const c of collections) {
+      bump(c.counterparty, 'collected', c.amount)
+    }
+    return [...map.values()]
+      .map((r) => ({ ...r, due: r.revenue - r.collected }))
+      .sort((a, b) => b.due - a.due)
+  }, [entries, collections])
+  const vendorDue = vendorRows.reduce((a, r) => a + Math.max(0, r.due), 0)
   const monthCollected = collections
     .filter((c) => String(c.collected_on || '').startsWith(thisMonth))
     .reduce((a, c) => a + Number(c.amount || 0), 0)
@@ -163,10 +184,30 @@ export default function Collections() {
           </div>
 
           <section className="card overflow-hidden">
-            <header className="border-b border-ink-200 px-4 py-3.5">
-              <h2 className="text-sm font-bold text-ink-900">프로젝트별 수금 현황</h2>
+            <header className="flex flex-wrap items-center justify-between gap-2 border-b border-ink-200 px-4 py-3.5">
+              <h2 className="text-sm font-bold text-ink-900">
+                {viewTab === 'project' ? '프로젝트별 수금 현황' : '거래처별 수금 현황'}
+              </h2>
+              <div className="inline-flex flex-wrap gap-1 rounded-lg bg-ink-100 p-1">
+                {[
+                  { key: 'project', label: '프로젝트별' },
+                  { key: 'vendor', label: '거래처별' },
+                ].map((t) => (
+                  <button
+                    key={t.key}
+                    type="button"
+                    onClick={() => setViewTab(t.key)}
+                    className={`rounded-md px-2.5 py-1 text-xs font-semibold transition ${
+                      t.key === viewTab ? 'bg-white text-ink-900 shadow-sm' : 'text-ink-500 hover:text-ink-800'
+                    }`}
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
             </header>
-            {rows.length ? (
+            {viewTab === 'project' ? (
+              rows.length ? (
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[680px] border-collapse">
                   <thead className="bg-ink-50/70">
@@ -214,6 +255,34 @@ export default function Collections() {
               </div>
             ) : (
               <EmptyState icon="folder" title="프로젝트가 없습니다" />
+            )
+            ) : vendorRows.length ? (
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[560px] border-collapse">
+                  <thead className="bg-ink-50/70">
+                    <tr>
+                      <th className="th">거래처</th>
+                      <th className="th text-right">매출(합계)</th>
+                      <th className="th text-right">수금</th>
+                      <th className="th text-right">잔금</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-ink-100">
+                    {vendorRows.map((r) => (
+                      <tr key={r.name} className="transition hover:bg-ink-50/60">
+                        <td className="td font-medium">{r.name}</td>
+                        <td className="td num text-ink-500">{formatKRW(r.revenue)}</td>
+                        <td className="td num text-emerald-700">{formatKRW(r.collected)}</td>
+                        <td className={`td num font-bold ${r.due > 0 ? 'text-loss' : 'text-ink-500'}`}>
+                          {formatKRW(r.due)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <EmptyState icon="building" title="거래처 내역이 없습니다" />
             )}
           </section>
 
