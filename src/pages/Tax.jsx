@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import Icon from '../components/Icon'
+import { AttachmentModal } from '../components/Attachments'
 import { useToast } from '../components/Toast'
 import { InlineAlert, LoadingBlock, PageHeader } from '../components/ui'
 import { useAuth } from '../auth/AuthContext'
 import { useStaffPermissions } from '../lib/permissions'
-import { listEntries } from '../lib/api'
+import { listAttachments, listEntries, uploadAttachment } from '../lib/api'
 import { downloadTextFile, toCSV } from '../lib/csv'
 import { formatKRW, todayISO } from '../lib/format'
 import {
@@ -25,8 +26,21 @@ import {
   vatEstimateByFiling,
 } from '../lib/tax'
 
-function statusChip(deadline, state, today) {
-  if (isPrior(deadline.due)) {
+const FILTER_TABS = [
+  { key: 'all', label: '전체' },
+  { key: 'vat', label: '부가세' },
+  { key: 'withholding', label: '원천세' },
+  { key: 'insurance', label: '4대보험' },
+  { key: 'corp', label: '법인세·지방세' },
+]
+
+function matchTaxFilter(deadline, filter) {
+  if (filter === 'all') return true
+  if (filter === 'corp') return deadline.type === 'corporate' || deadline.type === 'local'
+  return deadline.type === filter
+}
+
+function statusChip(deadline, state, today) {  if (isPrior(deadline.due)) {
     return <span className="chip bg-ink-100 text-ink-400">이전 담당</span>
   }
   if (isDone(state, deadline.id)) {
@@ -39,12 +53,46 @@ function statusChip(deadline, state, today) {
   return <span className="chip bg-ink-100 text-ink-600">{dDayLabel(deadline.due, today)}</span>
 }
 
-function DeadlineCard({ deadline, state, today, open, onToggleOpen, onToggleCheck, onToggleDone, onExport }) {
+function DeadlineCard({
+  deadline,
+  state,
+  today,
+  open,
+  onToggleOpen,
+  onToggleCheck,
+  onToggleDone,
+  onExport,
+  insuranceEntry,
+  insuranceFiles,
+  uploading,
+  onUploadInsurance,
+  onOpenInsuranceFiles,
+}) {
   const type = TAX_TYPES[deadline.type]
-  const docs = TAX_DOCS[deadline.type] || []
-  const progress = checkProgress(state, deadline)
   const done = isDone(state, deadline.id)
   const prior = isPrior(deadline.due)
+
+  /* 원천세는 납부확인만: 펼침·체크리스트 없이 한 줄로 */
+  if (deadline.type === 'withholding') {
+    return (
+      <div className={`card flex items-center gap-3 px-4 py-2.5 ${done || prior ? 'opacity-75' : ''}`}>
+        <span className="w-20 shrink-0 text-xs font-semibold text-ink-500">{deadline.period}</span>
+        <span className="min-w-0 flex-1 truncate text-sm text-ink-800">납부기한 {deadline.due}</span>
+        {statusChip(deadline, state, today)}
+        <button
+          type="button"
+          onClick={() => onToggleDone(deadline.id, !done)}
+          className="shrink-0 rounded-lg p-1.5 text-ink-400 transition hover:bg-emerald-50 hover:text-emerald-700"
+          title={done ? '완료 취소' : '납부확인'}
+        >
+          <Icon name="check" size={16} strokeWidth={2.4} className={done ? 'text-emerald-600' : ''} />
+        </button>
+      </div>
+    )
+  }
+
+  const docs = TAX_DOCS[deadline.type] || []
+  const progress = checkProgress(state, deadline)
   const checks = state?.[deadline.id]?.checks || {}
 
   return (
@@ -101,6 +149,43 @@ function DeadlineCard({ deadline, state, today, open, onToggleOpen, onToggleChec
               </li>
             ))}
           </ul>
+          {deadline.type === 'insurance' ? (
+            <div className="mt-3 rounded-lg border border-ink-200 bg-ink-50/60 px-3 py-2.5">
+              {insuranceEntry ? (
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs font-semibold text-ink-600">
+                    고지서 PDF {insuranceFiles?.length ? `${insuranceFiles.length}건` : '없음'}
+                  </span>
+                  {insuranceFiles?.length ? (
+                    <button
+                      type="button"
+                      className="btn-ghost px-2.5 py-1.5 text-xs"
+                      onClick={() => onOpenInsuranceFiles(insuranceFiles)}
+                    >
+                      보기
+                    </button>
+                  ) : null}
+                  <label className={`btn-ghost cursor-pointer px-2.5 py-1.5 text-xs ${uploading ? 'pointer-events-none opacity-50' : ''}`}>
+                    <Icon name="upload" size={14} />
+                    {uploading ? '올리는 중…' : 'PDF 등록'}
+                    <input
+                      type="file"
+                      accept=".pdf,application/pdf"
+                      className="hidden"
+                      disabled={uploading}
+                      onChange={(e) => {
+                        const f = e.target.files?.[0]
+                        e.target.value = ''
+                        if (f) onUploadInsurance(insuranceEntry.id, f)
+                      }}
+                    />
+                  </label>
+                </div>
+              ) : (
+                <p className="text-xs text-ink-500">장부에 이 달 회사부담분이 없습니다.</p>
+              )}
+            </div>
+          ) : null}
           <div className="mt-3 flex flex-wrap gap-2">
             <button
               type="button"
@@ -124,7 +209,7 @@ function DeadlineCard({ deadline, state, today, open, onToggleOpen, onToggleChec
 }
 
 export default function Tax() {
-  const { profile } = useAuth()
+  const { profile, user } = useAuth()
   const toast = useToast()
   const thisYear = Number(todayISO().slice(0, 4))
   const [year, setYear] = useState(thisYear)
@@ -132,6 +217,10 @@ export default function Tax() {
   const [entries, setEntries] = useState([])
   const [state, setState] = useState(() => loadTaxState())
   const [openId, setOpenId] = useState(null)
+  const [taxFilter, setTaxFilter] = useState('all')
+  const [attachmentsByEntry, setAttachmentsByEntry] = useState({})
+  const [uploading, setUploading] = useState(false)
+  const [viewerFiles, setViewerFiles] = useState(null)
   const today = todayISO()
 
   useEffect(() => {
@@ -146,7 +235,21 @@ export default function Tax() {
       listEntries({ from: `${year}-01-01`, to: `${year}-12-31` }),
     ])
       .then(([prev, cur]) => {
-        if (mounted) setEntries([...(prev || []), ...(cur || [])])
+        if (!mounted) return
+        const all = [...(prev || []), ...(cur || [])]
+        setEntries(all)
+        const insIds = all.filter((e) => e.counterparty === '국민건강보험공단').map((e) => e.id)
+        listAttachments(insIds)
+          .then((files) => {
+            if (!mounted) return
+            const map = {}
+            for (const f of files || []) {
+              if (!map[f.entry_id]) map[f.entry_id] = []
+              map[f.entry_id].push(f)
+            }
+            setAttachmentsByEntry(map)
+          })
+          .catch(() => {})
       })
       .catch((e) => {
         if (mounted) toast.error(e.message)
@@ -162,6 +265,47 @@ export default function Tax() {
   const deadlines = useMemo(() => buildTaxCalendar(year), [year])
   const upcoming = useMemo(() => getUpcoming(deadlines, today, state), [deadlines, today, state])
   const vatRows = useMemo(() => vatEstimateByFiling(entries, year), [entries, year])
+  const scheduleList = useMemo(() => deadlines.filter((d) => matchTaxFilter(d, taxFilter)), [deadlines, taxFilter])
+
+  /* 4대보험 회사부담분 장부(월별) — 고지서 PDF 첨부 대상 */
+  const insuranceByMonth = useMemo(() => {
+    const map = new Map()
+    for (const e of entries || []) {
+      if (e.counterparty !== '국민건강보험공단') continue
+      const key = String(e.entry_date || '').slice(0, 7)
+      if (key && !map.has(key)) map.set(key, e)
+    }
+    return map
+  }, [entries])
+
+  const insuranceProps = (deadline) => {
+    if (deadline.type !== 'insurance') return {}
+    const entry = insuranceByMonth.get(String(deadline.due).slice(0, 7))
+    return {
+      insuranceEntry: entry,
+      insuranceFiles: entry ? attachmentsByEntry[entry.id] || [] : [],
+      uploading,
+      onUploadInsurance: uploadInsurance,
+      onOpenInsuranceFiles: setViewerFiles,
+    }
+  }
+
+  const uploadInsurance = async (entryId, file) => {
+    if (!user?.id) {
+      toast.error('로그인이 필요합니다.')
+      return
+    }
+    setUploading(true)
+    try {
+      const row = await uploadAttachment(entryId, file, user.id)
+      setAttachmentsByEntry((prev) => ({ ...prev, [entryId]: [...(prev[entryId] || []), row] }))
+      toast.success('고지서를 등록했습니다.')
+    } catch (e) {
+      toast.error(e.message)
+    } finally {
+      setUploading(false)
+    }
+  }
 
   const toggleCheck = (id, i) => setState((s) => toggleTaxCheck(s, id, i))
   const toggleDone = (id, done) => {
@@ -252,6 +396,7 @@ export default function Tax() {
                   onToggleCheck={toggleCheck}
                   onToggleDone={toggleDone}
                   onExport={exportFiling}
+                  {...insuranceProps(d)}
                 />
               ))
             )}
@@ -298,10 +443,28 @@ export default function Tax() {
 
           {/* 3. 연간 일정 */}
           <section className="flex flex-col gap-3">
-            <h2 className="text-sm font-bold text-ink-900">{year}년 전체 일정</h2>
-            {deadlines
-              .filter((d) => d.type !== 'withholding')
-              .map((d) => (
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 className="text-sm font-bold text-ink-900">{year}년 전체 일정</h2>
+              <div className="inline-flex flex-wrap gap-1 rounded-lg bg-ink-100 p-1">
+                {FILTER_TABS.map((t) => (
+                  <button
+                    key={t.key}
+                    type="button"
+                    onClick={() => setTaxFilter(t.key)}
+                    className={`rounded-md px-2.5 py-1 text-xs font-semibold transition ${
+                      t.key === taxFilter ? 'bg-white text-ink-900 shadow-sm' : 'text-ink-500 hover:text-ink-800'
+                    }`}
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {(taxFilter === 'all' || taxFilter === 'withholding') && (
+              <p className="text-xs text-ink-500">원천세(매월 10일)는 납부확인 체크만으로 충분합니다.</p>
+            )}
+            {scheduleList.length ? (
+              scheduleList.map((d) => (
                 <DeadlineCard
                   key={d.id}
                   deadline={d}
@@ -312,38 +475,12 @@ export default function Tax() {
                   onToggleCheck={toggleCheck}
                   onToggleDone={toggleDone}
                   onExport={exportFiling}
+                  {...insuranceProps(d)}
                 />
-              ))}
-            <div className="card overflow-hidden">
-              <header className="border-b border-ink-200 px-4 py-3.5">
-                <h3 className="text-sm font-bold text-ink-900">원천세 (매월 10일)</h3>
-                <p className="mt-0.5 text-xs text-ink-500">전월 급여·외주 지급분. 반기납부 승인 사업장은 1·7월만.</p>
-              </header>
-              <ul className="divide-y divide-ink-100">
-                {deadlines
-                  .filter((d) => d.type === 'withholding')
-                  .map((d) => (
-                    <li key={d.id} className="flex items-center gap-3 px-4 py-2.5">
-                      <span className="w-20 shrink-0 text-xs font-semibold text-ink-500">{d.period}</span>
-                      <span className="min-w-0 flex-1 truncate text-sm text-ink-800">납부기한 {d.due}</span>
-                      {statusChip(d, state, today)}
-                      <button
-                        type="button"
-                        onClick={() => toggleDone(d.id, !isDone(state, d.id))}
-                        className="shrink-0 rounded-lg p-1.5 text-ink-400 transition hover:bg-emerald-50 hover:text-emerald-700"
-                        title={isDone(state, d.id) ? '완료 취소' : '완료로 표시'}
-                      >
-                        <Icon
-                          name="check"
-                          size={16}
-                          strokeWidth={2.4}
-                          className={isDone(state, d.id) ? 'text-emerald-600' : ''}
-                        />
-                      </button>
-                    </li>
-                  ))}
-              </ul>
-            </div>
+              ))
+            ) : (
+              <p className="card px-4 py-6 text-center text-xs text-ink-400">해당 종류의 일정이 없습니다.</p>
+            )}
           </section>
 
           <p className="pb-2 text-center text-xs text-ink-400">
@@ -352,6 +489,13 @@ export default function Tax() {
           </p>
         </>
       )}
+
+      <AttachmentModal
+        open={Boolean(viewerFiles)}
+        onClose={() => setViewerFiles(null)}
+        attachments={viewerFiles || []}
+        title="고지서 PDF"
+      />
     </div>
   )
 }
