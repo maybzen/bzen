@@ -171,14 +171,8 @@ export default function App() {
                 </Guard>
               }
             />
-            <Route
-              path="/cards"
-              element={
-                <Guard perm="cards">
-                  <CardImport />
-                </Guard>
-              }
-            />
+            {/* 법인카드는 자금관리 안으로 이동. 옛 주소는 자금관리 카드 탭으로 보냅니다. */}
+            <Route path="/cards" element={<Navigate to="/funds?tab=cards" replace />} />
 
             <Route
               path="/expense-reports"

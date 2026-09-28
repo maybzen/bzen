@@ -13,7 +13,6 @@ export const NAV = [
   { to: '/purchases', label: '매입', icon: 'cart', perm: 'purchases' },
   { to: '/collections', label: '수금관리', icon: 'card', perm: 'collections' },
   { to: '/expenses', label: '운영비', icon: 'receipt', perm: 'expenses' },
-  { to: '/cards', label: '법인카드', icon: 'card', perm: 'cards' },
   { to: '/expense-reports', label: '지출결의', icon: 'coins', perm: 'expense-reports' },
   { to: '/projects', label: '프로젝트', icon: 'folder', perm: 'projects' },
   { to: '/partners', label: '거래처', icon: 'building', perm: 'partners' },
@@ -28,7 +27,7 @@ export const NAV = [
 ]
 
 const NAV_GROUPS = [
-  { title: '장부', items: ['/dashboard', '/sales', '/purchases', '/collections', '/expenses', '/cards', '/expense-reports'] },
+  { title: '장부', items: ['/dashboard', '/sales', '/purchases', '/collections', '/expenses', '/expense-reports'] },
   { title: '사업', items: ['/projects', '/partners'] },
   { title: '인사·급여', items: ['/fixed-costs', '/payroll', '/leaves'] },
   { title: '세금·정산', items: ['/tax', '/reports'] },

@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import Icon from './Icon'
 import { Field, InlineAlert, Modal, Spinner } from './ui'
 import { useToast } from './Toast'
-import { PARTNER_GROUPS, suggestPartnerGroup } from '../lib/constants'
+import { ENTRY_META, PARTNER_GROUPS, suggestPartnerGroup } from '../lib/constants'
 import {
   PARTNER_DOC_TYPES,
   createPartner,
@@ -13,7 +14,7 @@ import {
   updatePartner,
   uploadPartnerDoc,
 } from '../lib/api'
-import { formatDateTime, formatFileSize } from '../lib/format'
+import { formatDateHuman, formatDateTime, formatFileSize, formatKRW, normalizeVendorName } from '../lib/format'
 
 const EMPTY = {
   name: '',
@@ -165,7 +166,7 @@ function DocPreview({ doc }) {
   )
 }
 
-export default function PartnerFormModal({ open, onClose, onSaved, initial, readOnly = false, userId }) {
+export default function PartnerFormModal({ open, onClose, onSaved, initial, readOnly = false, userId, ledger = null }) {
   const toast = useToast()
   const [form, setForm] = useState(EMPTY)
   const [saving, setSaving] = useState(false)
@@ -276,6 +277,47 @@ export default function PartnerFormModal({ open, onClose, onSaved, initial, read
   }
 
   const docsByType = (type) => docs.filter((d) => (d.doc_type || 'other') === type)
+
+  /* 거래내역: 법인격 표기 차이 무시하고 이름으로 매칭합니다 */
+  const ledgerInfo = useMemo(() => {
+    if (!ledger || !partnerId) return null
+    const target = normalizeVendorName(initial?.name)
+    if (!target) return null
+    const same = (v) => normalizeVendorName(v) === target
+    const matched = (ledger.entries || []).filter((e) => same(e.counterparty))
+    const cols = (ledger.collections || []).filter((c) => same(c.counterparty))
+    let sale = 0
+    let purchase = 0
+    for (const e of matched) {
+      if (e.entry_type === 'sale') sale += Number(e.total_amount || 0)
+      else if (e.entry_type === 'purchase' || e.entry_type === 'opex') purchase += Number(e.total_amount || 0)
+    }
+    const collected = cols.reduce((a, c) => a + Number(c.amount || 0), 0)
+    const recent = [
+      ...matched.map((e) => ({
+        key: `e-${e.id}`,
+        date: e.entry_date,
+        label: e.entry_type === 'sale' ? '매출' : e.entry_type === 'purchase' ? '매입' : '운영비',
+        text: e.description || e.category || '',
+        amount: Number(e.total_amount || 0),
+        to:
+          e.source === 'expense_report'
+            ? `/expense-reports?search=${encodeURIComponent(e.counterparty || '')}&period=all`
+            : `/${e.entry_type === 'sale' ? 'sales' : e.entry_type === 'purchase' ? 'purchases' : 'expenses'}?search=${encodeURIComponent(e.counterparty || '')}&period=all`,
+      })),
+      ...cols.map((c) => ({
+        key: `c-${c.id}`,
+        date: c.collected_on,
+        label: '수금',
+        text: c.memo || '',
+        amount: Number(c.amount || 0),
+        to: `/collections?vendor=${encodeURIComponent(c.counterparty || '')}`,
+      })),
+    ]
+      .sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')))
+      .slice(0, 8)
+    return { sale, purchase, collected, count: matched.length + cols.length, recent }
+  }, [ledger, partnerId, initial?.name])
 
   return (
     <Modal
@@ -414,6 +456,71 @@ export default function PartnerFormModal({ open, onClose, onSaved, initial, read
           />
         </Field>
       </form>
+
+      {/* 거래내역 */}
+      {ledgerInfo ? (
+        <div className="mt-5 border-t border-ink-100 pt-4">
+          <h3 className="text-sm font-bold text-ink-900">거래내역</h3>
+          <p className="mt-0.5 text-xs text-ink-500">
+            장부·수금에 남은 이름으로 묶어 보여줍니다. 수금 잔금 관리용입니다.
+          </p>
+          {ledgerInfo.count ? (
+            <>
+              <dl className="mt-3 grid grid-cols-3 gap-2 rounded-lg bg-ink-50/80 p-3 text-center">
+                <div>
+                  <dt className="text-[11px] font-semibold text-ink-500">매출(합계)</dt>
+                  <dd className="mt-0.5 font-num text-sm font-bold tabular-nums text-ink-900">
+                    {formatKRW(ledgerInfo.sale)}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-[11px] font-semibold text-ink-500">매입·비용(합계)</dt>
+                  <dd className="mt-0.5 font-num text-sm font-bold tabular-nums text-ink-900">
+                    {formatKRW(ledgerInfo.purchase)}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-[11px] font-semibold text-ink-500">수금</dt>
+                  <dd className="mt-0.5 font-num text-sm font-bold tabular-nums text-emerald-700">
+                    {formatKRW(ledgerInfo.collected)}
+                  </dd>
+                </div>
+              </dl>
+              <ul className="mt-2 flex flex-col divide-y divide-ink-100">
+                {ledgerInfo.recent.map((r) => (
+                  <li key={r.key} className="flex items-center gap-2 py-2 text-xs">
+                    <span className="w-20 shrink-0 font-semibold text-ink-500">{formatDateHuman(r.date)}</span>
+                    <span
+                      className={`shrink-0 rounded px-1.5 py-0.5 text-[11px] font-bold ${
+                        r.label === '수금'
+                          ? 'bg-emerald-50 text-emerald-700'
+                          : r.label === '매출'
+                            ? 'bg-brand-50 text-brand-700'
+                            : 'bg-ink-100 text-ink-600'
+                      }`}
+                    >
+                      {r.label}
+                    </span>
+                    <Link
+                      to={r.to}
+                      className="min-w-0 flex-1 truncate text-ink-700 hover:text-brand-700 hover:underline"
+                    >
+                      {r.text || '(내용 없음)'}
+                    </Link>
+                    <span className="shrink-0 font-num font-bold tabular-nums text-ink-900">
+                      {formatKRW(r.amount)}원
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : (
+            <p className="mt-3 rounded-lg bg-ink-50 px-3 py-2.5 text-xs text-ink-400">
+              이 이름으로 잡힌 장부·수금 내역이 없습니다.
+            </p>
+          )}
+        </div>
+      ) : null}
 
       {/* 서류 */}
       <div className="mt-5 border-t border-ink-100 pt-4">

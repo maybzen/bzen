@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
+import CardImport from './CardImport'
 import Icon from '../components/Icon'
 import { useToast } from '../components/Toast'
-import { ConfirmDialog, EmptyState, Field, LoadingBlock, Modal, PageHeader, StatCard } from '../components/ui'
+import { ConfirmDialog, EmptyState, Field, LoadingBlock, Modal, PageHeader, SegmentedControl, StatCard } from '../components/ui'
 import { useAuth } from '../auth/AuthContext'
 import { formatKRW, todayISO } from '../lib/format'
 import { deleteFundRow, listFundRows, saveFundRow, upsertSnapshot } from '../lib/api'
@@ -54,6 +56,16 @@ export default function Funds() {
   const [removing, setRemoving] = useState(null)
   const [busy, setBusy] = useState(false)
   const [snapOpen, setSnapOpen] = useState(false)
+  /* 자금현황 | 법인카드 내역 탭 (?tab=cards 지원) */
+  const [searchParams, setSearchParams] = useSearchParams()
+  const tab = searchParams.get('tab') === 'cards' ? 'cards' : 'overview'
+  const setTab = (t) => {
+    if (t === 'cards') setSearchParams({ tab: 'cards' }, { replace: true })
+    else {
+      searchParams.delete('tab')
+      setSearchParams(searchParams, { replace: true })
+    }
+  }
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -123,9 +135,18 @@ export default function Funds() {
     <div className="flex flex-col gap-5">
       <PageHeader
         title="자금관리"
-        description="계좌·대출·카드 현황과 잔고 스냅샷입니다. 거래내역은 장부·법인카드에서 봅니다."
+        description="계좌·대출·카드 현황과 잔고 스냅샷입니다. 카드 이용내역은 법인카드 탭에서 올립니다."
       >
-        {isAdmin ? (
+        <SegmentedControl
+          size="sm"
+          value={tab}
+          onChange={setTab}
+          options={[
+            { key: 'overview', label: '자금현황' },
+            { key: 'cards', label: '법인카드 내역' },
+          ]}
+        />
+        {isAdmin && tab === 'overview' ? (
           <button type="button" className="btn-primary" onClick={() => setSnapOpen(true)}>
             <Icon name="plus" size={16} />
             잔고 기록
@@ -133,7 +154,9 @@ export default function Funds() {
         ) : null}
       </PageHeader>
 
-      {loading ? (
+      {tab === 'cards' ? (
+        <CardImport embed />
+      ) : loading ? (
         <LoadingBlock />
       ) : (
         <>

@@ -12,6 +12,7 @@ import { formatKRW, normalizeVendorName } from '../lib/format'
 import {
   deletePartner,
   listCollections,
+  listEntries,
   listPartnerDocs,
   listPartners,
   listProfiles,
@@ -53,6 +54,8 @@ export default function Partners() {
   const [docsByPartner, setDocsByPartner] = useState({})
   const [collections, setCollections] = useState([])
   const [profiles, setProfiles] = useState([])
+  /* 거래처 모달의 거래내역용 (모달 열 때 1회 로드) */
+  const [ledger, setLedger] = useState(null)
   const profileName = (id) => {
     if (!id) return ''
     const p = profiles.find((x) => x.id === id)
@@ -202,6 +205,22 @@ export default function Partners() {
   useEffect(() => {
     load()
   }, [load, reloadKey])
+
+  /* 거래처 상세·수정을 열 때 거래내역을 함께 가져옵니다 (수금 잔금 확인용) */
+  useEffect(() => {
+    if (!formOpen && !viewing) return
+    let alive = true
+    Promise.all([listEntries({ maxRows: 20000 }), listCollections().catch(() => [])])
+      .then(([entryRows, collectionRows]) => {
+        if (alive) setLedger({ entries: entryRows || [], collections: collectionRows || [] })
+      })
+      .catch(() => {
+        if (alive) setLedger({ entries: [], collections: [] })
+      })
+    return () => {
+      alive = false
+    }
+  }, [formOpen, viewing])
 
   const groupOptions = useMemo(() => {
     const custom = [...new Set(partners.map((p) => p.group_name).filter((g) => g && !PARTNER_GROUPS.includes(g)))]
@@ -591,6 +610,7 @@ export default function Partners() {
         onSaved={() => setReloadKey((k) => k + 1)}
         initial={editing}
         userId={user?.id}
+        ledger={ledger}
       />
 
       <PartnerFormModal
@@ -599,6 +619,7 @@ export default function Partners() {
         initial={viewing}
         readOnly
         userId={user?.id}
+        ledger={ledger}
       />
 
       <ConfirmDialog

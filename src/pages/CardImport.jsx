@@ -160,7 +160,7 @@ function fmtFx(currency, amount) {
   return `${currency || ''} ${n.toLocaleString('en-US', { maximumFractionDigits: 2 })}`.trim()
 }
 
-export default function CardImport() {
+export default function CardImport({ embed = false } = {}) {
   const { isAdmin, user } = useAuth()
   const toast = useToast()
   const period = usePeriod('thisMonth', 'bzen.period.cards')
@@ -857,12 +857,14 @@ export default function CardImport() {
 
   return (
     <div className="flex flex-col gap-5">
-      <PageHeader title="법인카드" description="카드사 이용내역 파일을 올려 장부에 일괄 등록합니다.">
-        <button type="button" className="btn-ghost" onClick={exportRegistered}>
-          <Icon name="download" size={16} />
-          목록 내보내기
-        </button>
-      </PageHeader>
+      {embed ? null : (
+        <PageHeader title="법인카드" description="카드사 이용내역 파일을 올려 장부에 일괄 등록합니다.">
+          <button type="button" className="btn-ghost" onClick={exportRegistered}>
+            <Icon name="download" size={16} />
+            목록 내보내기
+          </button>
+        </PageHeader>
+      )}
 
       <div className="card p-5">
         <div className="flex flex-wrap items-center gap-2">
