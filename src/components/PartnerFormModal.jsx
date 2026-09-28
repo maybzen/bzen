@@ -212,8 +212,8 @@ export default function PartnerFormModal({ open, onClose, onSaved, initial, read
   const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }))
 
   const groupSuggest = useMemo(
-    () => (readOnly ? null : suggestPartnerGroup(form.name, form.memo)),
-    [readOnly, form.name, form.memo],
+    () => (readOnly ? null : suggestPartnerGroup(form.name, `${form.memo} ${form.group_name}`)),
+    [readOnly, form.name, form.memo, form.group_name],
   )
 
   const submit = async (e) => {
