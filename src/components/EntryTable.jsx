@@ -10,22 +10,25 @@ function personName(profiles, id) {
   return p?.full_name || p?.email || '—'
 }
 
-/** 작성자 표기: 결의자 → 등록자 → 카드 이용자 → 미지정 순 */
+/**
+ * 작성자 표기: 실제 쓴 사람 우선.
+ * 결의자(지출자) → 메모의 이용자(E·SH 같은 퇴사자/외부인 포함) → 등록자(입력한 사람) → 미지정 순
+ */
+function memoUser(entry) {
+  const m = String(entry.memo || '').match(/이용자\s+([^·]+)/)
+  return m ? m[1].trim() : ''
+}
+
 function ownerLabel(profiles, entry) {
   if (entry.requester_id) return personName(profiles, entry.requester_id)
+  if (memoUser(entry)) return memoUser(entry)
   if (entry.created_by) return personName(profiles, entry.created_by)
-  if (cardUser(entry)) return cardUser(entry)
-  if (entry.source === 'expense_report') {
-    const m = String(entry.memo || '').match(/([A-Z]+)\s*지결/)
-    if (m) return '기타'
-  }
   return '미지정'
 }
 
 /** 법인카드 이용자: 메모의 "· 이용자 XXX" 에서 추출 */
 function cardUser(entry) {
-  const m = String(entry.memo || '').match(/이용자\s+([^·]+)/)
-  return m ? m[1].trim() : ''
+  return memoUser(entry)
 }
 
 export default function EntryTable({
@@ -560,7 +563,6 @@ export default function EntryTable({
                       <p className="mt-0.5 truncate text-xs text-ink-500">
                         {entry.counterparty || '—'}
                         {` · 작성자 ${ownerLabel(profiles, entry)}`}
-                        {cardUser(entry) ? ` · 이용자 ${cardUser(entry)}` : ''}
                       </p>
                     </div>
                   </div>
