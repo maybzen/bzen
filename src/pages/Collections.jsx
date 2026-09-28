@@ -104,48 +104,55 @@ export default function Collections() {
   const totalCollected = collections.reduce((a, c) => a + Number(c.amount || 0), 0)
   const thisMonth = todayISO().slice(0, 7)
 
-  /* 거래처별: 매출(합계) 대비 수금·잔금 + 매입(합계) + 미지급(확정잔액) */
+  /* 거래처별: 주거래처 15곳만 표시 (매출·수금·매입 + 미지급 확정잔액) */
+  const FOCUS_VENDORS = [
+    { label: '에이플러스', names: ['에이플러스무대', '에이플러스'] },
+    { label: '영일미디어', names: ['영일미디어'] },
+    { label: '브이오디오', names: ['브이오디오'] },
+    { label: '티에스엠', names: ['티에스엠(주)부산지점', 'TSM', '티엠스엠(주)부산지점'] },
+    { label: '트윈스라이팅', names: ['트윈스라이팅', '트윈스조명'] },
+    { label: '블루컴', names: ['블루컴'] },
+    { label: '윤커뮤니케이션', names: ['윤커뮤니케이션', '윤컴 / 윤커뮤니케이션'] },
+    { label: '이웃사촌', names: ['이웃사촌'] },
+    { label: '마이스커뮤니케이션', names: ['마이스커뮤니케이션'] },
+    { label: '프렉스', names: ['프렉스'] },
+    { label: '스마일콘텐츠', names: ['스마일콘텐츠'] },
+    { label: '밴타고', names: ['밴타고'] },
+    { label: '스튜디오감', names: ['스튜디오감'] },
+    { label: 'BT애드', names: ['BT애드'] },
+    { label: '위치팩토리', names: ['위치팩토리', '위치펙토리'] },
+  ]
   const vendorRows = useMemo(() => {
-    const map = new Map()
-    const bump = (name, key, v) => {
-      const n = (name || '').trim() || '미지정'
-      if (!map.has(n)) map.set(n, { name: n, revenue: 0, collected: 0, purchase: 0, payable: 0 })
-      map.get(n)[key] += Number(v || 0)
+    const canonByNorm = new Map()
+    FOCUS_VENDORS.forEach((f) => f.names.forEach((n) => canonByNorm.set(normVendor(n), f.label)))
+    const map = new Map(
+      FOCUS_VENDORS.map((f) => [f.label, { name: f.label, revenue: 0, collected: 0, purchase: 0, payable: 0 }]),
+    )
+    const rowFor = (name) => {
+      const n = (name || '').trim()
+      if (!n || n === '미지정') return null
+      const hit = canonByNorm.get(normVendor(n))
+      return hit ? map.get(hit) : null
     }
     for (const e of entries) {
-      if (e.entry_type === 'sale') bump(e.counterparty, 'revenue', e.total_amount)
-      else if (e.entry_type === 'purchase') bump(e.counterparty, 'purchase', e.total_amount)
+      const row = rowFor(e.counterparty)
+      if (!row) continue
+      if (e.entry_type === 'sale') row.revenue += Number(e.total_amount || 0)
+      else if (e.entry_type === 'purchase') row.purchase += Number(e.total_amount || 0)
     }
     for (const c of collections) {
-      bump(c.counterparty, 'collected', c.amount)
+      const row = rowFor(c.counterparty)
+      if (row) row.collected += Number(c.amount || 0)
     }
-    // 거래처 확정 미지급잔액 연동 (법인격 표기 차이는 정규화로 흡수)
-    const byNorm = new Map()
-    for (const [n, r] of map) {
-      const k = normVendor(n)
-      if (!byNorm.has(k)) byNorm.set(k, [])
-      byNorm.get(k).push(r)
-    }
-    const matched = new Set()
+    // 거래처 확정 미지급잔액 연동
     for (const p of partners) {
-      const bal = Number(p.payable_balance || 0)
-      if (!bal) continue
-      const hit = (byNorm.get(normVendor(p.name)) || [])[0]
-      if (hit) {
-        hit.payable += bal
-        matched.add(p.name)
-      }
+      const row = rowFor(p.name)
+      if (row) row.payable += Number(p.payable_balance || 0)
     }
-    const rows = [...map.values()].map((r) => ({ ...r, due: r.revenue - r.collected }))
-    // 장부명과 다른 이름으로 확정된 잔액(예: 트윈스조명↔트윈스라이팅)은 별도 행으로 표시
-    for (const p of partners) {
-      const bal = Number(p.payable_balance || 0)
-      if (!bal || matched.has(p.name)) continue
-      const hit = (byNorm.get(normVendor(p.name)) || [])[0]
-      if (hit) continue
-      rows.push({ name: p.name, revenue: 0, collected: 0, purchase: 0, payable: bal, due: 0 })
-    }
-    return rows.sort((a, b) => b.due - a.due || b.payable - a.payable)
+    return FOCUS_VENDORS.map((f) => {
+      const r = map.get(f.label)
+      return { ...r, due: r.revenue - r.collected }
+    })
   }, [entries, collections, partners])
   const vendorDue = vendorRows.reduce((a, r) => a + Math.max(0, r.due), 0)
   const payableTotal = useMemo(() => (partners || []).reduce((a, p) => a + Number(p.payable_balance || 0), 0), [partners])
