@@ -199,11 +199,25 @@ export default function CardImport() {
   const [regMonthFilter, setRegMonthFilter] = useState('')
   const [monthlyTotals, setMonthlyTotals] = useState([])
   const [monthlyLoading, setMonthlyLoading] = useState(false)
+  const [showMonthly, setShowMonthly] = useState(false)
+  const [monthlyCard, setMonthlyCard] = useState('all')
   const monthlyRef = useRef(null)
 
-  const scrollToMonthly = () => {
-    monthlyRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  const openMonthly = () => {
+    setShowMonthly(true)
+    window.setTimeout(() => {
+      monthlyRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }, 60)
   }
+
+  /* 월별창 카드 필터 선택지: 전체카드 + 실제 사용 카드 */
+  const monthlyCardOptions = useMemo(() => {
+    const set = new Set()
+    for (const g of monthlyTotals || []) {
+      for (const c of g.cards || []) set.add(c.label)
+    }
+    return [...set].sort()
+  }, [monthlyTotals])
 
   /* 월별 합계 (최근 12개월, 조회기간과 무관) */
   useEffect(() => {
@@ -1171,17 +1185,48 @@ export default function CardImport() {
         <InlineAlert tone="info">이용일자·가맹점·이용금액 열을 지정하면 미리보기가 나타납니다.</InlineAlert>
       ) : null}
 
-      {monthlyTotals.length ? (
+      {showMonthly && monthlyTotals.length ? (
         <section ref={monthlyRef} className="card scroll-mt-20 overflow-hidden">
-          <header className="border-b border-ink-200 px-4 py-3.5">
-            <h2 className="text-sm font-bold text-ink-900">월별 합계 (최근 12개월)</h2>
-            <p className="mt-0.5 text-xs text-ink-500">
-              {monthlyLoading ? '불러오는 중…' : '월을 누르면 해당 월 내역으로 이동합니다'}
-            </p>
+          <header className="flex flex-wrap items-center justify-between gap-2 border-b border-ink-200 px-4 py-3.5">
+            <div>
+              <h2 className="text-sm font-bold text-ink-900">월별 합계 (최근 12개월)</h2>
+              <p className="mt-0.5 text-xs text-ink-500">
+                {monthlyLoading ? '불러오는 중…' : '월을 누르면 해당 월 내역으로 이동합니다'}
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <select
+                className="input w-auto py-1.5 text-xs"
+                value={monthlyCard}
+                onChange={(e) => setMonthlyCard(e.target.value)}
+                title="카드별 보기"
+              >
+                <option value="all">전체카드</option>
+                {monthlyCardOptions.map((label) => (
+                  <option key={label} value={label}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={() => setShowMonthly(false)}
+                className="rounded-lg p-1.5 text-ink-500 transition hover:bg-ink-100"
+                aria-label="월별 합계 닫기"
+              >
+                <Icon name="close" size={16} />
+              </button>
+            </div>
           </header>
           <div className="grid grid-cols-2 gap-2.5 p-4 sm:grid-cols-3 xl:grid-cols-4">
             {monthlyTotals.map((g) => {
               const on = regMonthFilter === g.mk
+              const view = monthlyCard === 'all'
+                ? { total: g.total, n: g.n, cards: g.cards }
+                : (() => {
+                    const c = (g.cards || []).find((x) => x.label === monthlyCard)
+                    return { total: c?.total || 0, n: c?.n || 0, cards: c ? [c] : [] }
+                  })()
               return (
                 <button
                   key={g.mk}
@@ -1195,18 +1240,20 @@ export default function CardImport() {
                     {g.mk.slice(0, 4)}년 {Number(g.mk.slice(5))}월
                   </p>
                   <p className="mt-1 font-num text-base font-extrabold tabular-nums tracking-tight text-ink-900">
-                    {formatKRW(g.total)}
+                    {formatKRW(view.total)}
                     <span className="text-xs font-semibold text-ink-400">원</span>
                   </p>
-                  <p className="mt-0.5 text-[11px] text-ink-500">{g.n}건</p>
-                  <div className="mt-1.5 flex flex-col gap-0.5 border-t border-ink-100 pt-1.5">
-                    {(g.cards || []).map((c) => (
-                      <p key={c.label} className="flex items-baseline justify-between gap-2 text-[11px] text-ink-500">
-                        <span className="truncate">{c.label}</span>
-                        <span className="shrink-0 font-num tabular-nums">{formatKRW(c.total)}</span>
-                      </p>
-                    ))}
-                  </div>
+                  <p className="mt-0.5 text-[11px] text-ink-500">{view.n}건</p>
+                  {monthlyCard === 'all' ? (
+                    <div className="mt-1.5 flex flex-col gap-0.5 border-t border-ink-100 pt-1.5">
+                      {(view.cards || []).map((c) => (
+                        <p key={c.label} className="flex items-baseline justify-between gap-2 text-[11px] text-ink-500">
+                          <span className="truncate">{c.label}</span>
+                          <span className="shrink-0 font-num tabular-nums">{formatKRW(c.total)}</span>
+                        </p>
+                      ))}
+                    </div>
+                  ) : null}
                 </button>
               )
             })}
@@ -1273,14 +1320,14 @@ export default function CardImport() {
               ) : null}
             </div>
             <div className="grid grid-cols-2 gap-3 border-b border-ink-200 px-4 py-3.5 lg:grid-cols-4">
-              <StatCard label="등록 건수" value={String(visibleRegistered.length)} unit="건" tone="neutral" icon="card" hint="클릭하면 월별로 이동" onClick={scrollToMonthly} />
+              <StatCard label="등록 건수" value={String(visibleRegistered.length)} unit="건" tone="neutral" icon="card" hint="클릭하면 월별로 이동" onClick={openMonthly} />
               <StatCard
                 label="합계"
                 value={visibleRegistered.reduce((a, e) => a + Number(e.total_amount || 0), 0)}
                 tone="neutral"
                 icon="coins"
                 hint="클릭하면 월별로 이동"
-                onClick={scrollToMonthly}
+                onClick={openMonthly}
               />
               {(() => {
                 const map = new Map()
