@@ -73,9 +73,9 @@ async function autoGrantYear(all, profileRows, userId, grantedRef) {
 /* 대표 결재 토글 (대기·승인·반려) */
 function StatusToggle({ status, busy, onChange }) {
   const opts = [
-    { key: '요청', label: '대기' },
-    { key: '승인', label: '승인' },
-    { key: '반려', label: '반려' },
+    { key: '요청', label: '대기', on: 'bg-amber-500 text-white shadow-sm' },
+    { key: '승인', label: '승인', on: 'bg-emerald-600 text-white shadow-sm' },
+    { key: '반려', label: '반려', on: 'bg-rose-500 text-white shadow-sm' },
   ]
   return (
     <div className="inline-flex gap-1 rounded-lg bg-ink-100 p-1">
@@ -88,7 +88,7 @@ function StatusToggle({ status, busy, onChange }) {
             if (status !== o.key) onChange(o.key)
           }}
           className={`rounded-md px-2 py-1 text-[11px] font-bold transition ${
-            status === o.key ? 'bg-white text-ink-900 shadow-sm' : 'text-ink-400 hover:text-ink-700'
+            status === o.key ? o.on : 'text-ink-400 hover:text-ink-700'
           }`}
         >
           {o.label}

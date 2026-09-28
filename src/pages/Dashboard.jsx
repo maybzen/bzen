@@ -26,6 +26,32 @@ import {
   previousPeriod,
 } from '../lib/format'
 import { groupByMonth, groupByProject, summarize } from '../lib/summary'
+
+/* 홈페이지 확인 필요 목록 (체크 상태는 브라우저에 저장) */
+const HOME_ALERTS = [
+  '스완메이드 99.7만원 지급 내역 확인',
+  '정성수 170만원 정체 확인 중',
+  '김인순 349만원 정체 확인 중',
+  '진흥원 관리비 초과분 (8월 57,096원·9월 60,795원)',
+  '윤호식 167만원 (밴타고 잔금 여부)',
+  '비버웍스 입금 93만원 성격 확인',
+  '부산경제진흥원 222만원 과세구분 확인',
+  '대출 원리금 원금·이자 분리 (금진 확인)',
+  'PG 수수료 중복 의혹 (~15만원)',
+  'KCCV 비용 부족 (20% 기준 약 6,700만원 미확인)',
+  '급여-은행 차액 (이보람 +95만 등 상여 여부)',
+  '매입내역 탭 이름 알려주기',
+]
+
+function loadHomeChecks() {
+  try {
+    const raw = localStorage.getItem('bzen.home.alerts.v1')
+    const parsed = raw ? JSON.parse(raw) : {}
+    return parsed && typeof parsed === 'object' ? parsed : {}
+  } catch {
+    return {}
+  }
+}
 import { TaxAlertBanner } from './Tax'
 
 export default function Dashboard() {
@@ -43,6 +69,22 @@ export default function Dashboard() {
   const [profiles, setProfiles] = useState([])
   const [attachmentsByEntry, setAttachmentsByEntry] = useState({})
   const [showRecent, setShowRecent] = useState(false)
+  const [homeChecks, setHomeChecks] = useState(() => loadHomeChecks())
+
+  const toggleHomeCheck = (i) => {
+    setHomeChecks((prev) => {
+      const next = { ...prev }
+      if (next[i]) delete next[i]
+      else next[i] = true
+      try {
+        localStorage.setItem('bzen.home.alerts.v1', JSON.stringify(next))
+      } catch {
+        /* 저장 실패 무시 */
+      }
+      return next
+    })
+  }
+  const homeOpen = HOME_ALERTS.filter((_, i) => !homeChecks[i])
 
   const monthKeys = useMemo(() => lastMonthKeys(12), [])
 
@@ -213,6 +255,36 @@ export default function Dashboard() {
               to={isAdmin || perms.includes('reports') ? '/reports' : undefined}
             />
           </div>
+
+          {homeOpen.length ? (
+            <section className="card overflow-hidden border-amber-200">
+              <header className="flex items-center justify-between gap-3 border-b border-ink-200 bg-amber-50/60 px-4 py-3">
+                <h2 className="text-sm font-bold text-ink-900">
+                  확인 필요 목록
+                  <span className="ml-1.5 font-medium text-ink-500">{homeOpen.length}건</span>
+                </h2>
+                <span className="text-[11px] text-ink-500">하나씩 확인되면 체크하세요</span>
+              </header>
+              <ul className="divide-y divide-ink-100">
+                {HOME_ALERTS.map((text, i) =>
+                  homeChecks[i] ? null : (
+                    <li key={text}>
+                      <button
+                        type="button"
+                        onClick={() => toggleHomeCheck(i)}
+                        className="flex w-full items-start gap-2.5 px-4 py-2.5 text-left transition hover:bg-ink-50/60"
+                      >
+                        <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border border-ink-300 bg-white text-transparent">
+                          <Icon name="check" size={13} strokeWidth={2.6} />
+                        </span>
+                        <span className="text-sm text-ink-800">{text}</span>
+                      </button>
+                    </li>
+                  ),
+                )}
+              </ul>
+            </section>
+          ) : null}
 
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
             <section className="card xl:col-span-2">

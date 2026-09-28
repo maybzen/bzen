@@ -11,7 +11,25 @@ import { listEntries, listProjects } from '../lib/api'
  * 고정비 현황 (별도 메뉴).
  * 최근 12개월 장부 전체에서 3개월 이상 · 월 금액 편차 35% 이내인
  * 거래처를 고정비로 자동 감지합니다.
+ * 항목표 탭은 사내 고정비·변동비 항목(출금예상표 기준)과 장부 실제를 대조합니다.
  */
+const OVERHEAD_RULES = [
+  { name: '급여', kind: '고정비', test: (e) => e.entry_type === 'opex' && e.category === '인건비' && e.counterparty !== '국민건강보험공단' },
+  { name: '4대보험 회사부담분', kind: '고정비', test: (e) => (e.counterparty || '') === '국민건강보험공단' },
+  { name: '퇴직연금', kind: '고정비', test: (e) => /퇴직연금/.test(`${e.description || ''} ${e.memo || ''}`) },
+  { name: '원천세', kind: '고정비', test: (e) => /원천세/.test(`${e.description || ''} ${e.memo || ''}`) },
+  { name: '사무실 관리비', kind: '고정비', test: (e) => /진흥원/.test(e.counterparty || '') },
+  { name: 'LG 공기청정기', kind: '고정비', test: (e) => /엘지전자/.test(e.counterparty || '') },
+  { name: '포켓와이파이', kind: '고정비', test: (e) => /포켓|에그/.test(`${e.description || ''} ${e.memo || ''}`) },
+  { name: '부영 복합기', kind: '고정비', test: (e) => /부영사무기/.test(e.counterparty || '') },
+  { name: 'KT 인터넷·전화', kind: '고정비', test: (e) => /케이티|^KT|KT[0-9]/.test(e.counterparty || '') },
+  { name: '기장수수료', kind: '고정비', test: (e) => /기장/.test(`${e.description || ''} ${e.memo || ''}`) },
+  { name: '생수', kind: '고정비', test: (e) => /몽베스트|생수/.test(`${e.counterparty || ''} ${e.description || ''} ${e.memo || ''}`) },
+  { name: '대출이자·원리금', kind: '고정비', test: (e) => /대출/.test(`${e.description || ''} ${e.memo || ''}`) },
+  { name: 'AI 구독료', kind: '변동비', test: (e) => /GPT|Claude|Perplexity|Grok|구독|AI /.test(`${e.counterparty || ''} ${e.description || ''} ${e.memo || ''}`) },
+  { name: '법인카드', kind: '변동비', test: (e) => e.source === 'card' },
+  { name: '연말정산·세금', kind: '변동비', test: (e) => /연말정산|자동차세|면허세/.test(`${e.description || ''} ${e.memo || ''}`) || (e.category === '세금과공과' && !/원천세/.test(`${e.description || ''} ${e.memo || ''}`)) },
+]
 export default function FixedCosts() {
   const toast = useToast()
   const navigate = useNavigate()
@@ -75,7 +93,19 @@ export default function FixedCosts() {
   const thisMonthPayroll = payrollByMonth.find((r) => r.mk === thisMonthKey)?.total || 0
   const [tab, setTab] = useState('fixed')
 
-  /** 공통(비젠내부) 월별 지출 — 프로젝트 미지정분이 모이는 곳 */
+  /** 고정비·변동비 항목표 (출금예상표 기준 항목과 장부 대조, 첫 매칭 항목에만 귀속) */
+  const overhead = useMemo(() => {
+    const months = new Set((entries || []).map((e) => monthKeyOf(e.entry_date)).filter(Boolean)).size || 1
+    const rows = OVERHEAD_RULES.map((rule) => ({ ...rule, total: 0, count: 0 }))
+    for (const e of entries || []) {
+      if (e.entry_type !== 'purchase' && e.entry_type !== 'opex') continue
+      const hit = rows.find((r) => r.test(e))
+      if (!hit) continue
+      hit.total += Number(e.total_amount || 0)
+      hit.count += 1
+    }
+    return { rows, months }
+  }, [entries])
   const internalByMonth = useMemo(() => {
     if (!internalId) return []
     const map = new Map()
@@ -124,11 +154,71 @@ export default function FixedCosts() {
               onChange={setTab}
               options={[
                 { key: 'fixed', label: `고정비 (${items.length})` },
+                { key: 'overhead', label: '항목표' },
                 { key: 'payroll', label: '월별급여' },
                 { key: 'internal', label: '공통월별지출' },
               ]}
             />
           </div>
+
+          {tab === 'overhead' ? (
+            <section className="flex flex-col gap-4">
+              {['고정비', '변동비'].map((kind) => {
+                const list = overhead.rows.filter((r) => r.kind === kind)
+                const kindTotal = list.reduce((a, r) => a + r.total, 0)
+                return (
+                  <div key={kind} className="card overflow-hidden">
+                    <header className="flex flex-wrap items-center justify-between gap-2 border-b border-ink-200 px-4 py-3.5">
+                      <h2 className="text-sm font-bold text-ink-900">{kind}</h2>
+                      <p className="text-xs text-ink-500">
+                        합계 <strong className="font-num tabular-nums text-ink-900">{formatKRW(kindTotal)}원</strong>
+                        {' · '}월 평균{' '}
+                        <strong className="font-num tabular-nums text-brand-700">
+                          {formatKRW(Math.round(kindTotal / overhead.months))}원
+                        </strong>
+                      </p>
+                    </header>
+                    <div className="overflow-x-auto">
+                      <table className="w-full min-w-[520px] border-collapse text-xs">
+                        <thead className="bg-ink-50/70">
+                          <tr>
+                            <th className="th">항목</th>
+                            <th className="th text-right">합계</th>
+                            <th className="th text-right">월 평균</th>
+                            <th className="th text-right">상태</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-ink-100">
+                          {list.map((r) => (
+                            <tr
+                              key={r.name}
+                              className="cursor-pointer transition hover:bg-ink-50/60"
+                              onClick={() => navigate(`/expenses?search=${encodeURIComponent(r.name)}&from=2026-01-01&to=${todayISO()}`)}
+                              title="운영비 내역 보기"
+                            >
+                              <td className="td font-medium text-ink-900">{r.name}</td>
+                              <td className="td num font-bold">{formatKRW(r.total)}</td>
+                              <td className="td num text-ink-500">{formatKRW(Math.round(r.total / overhead.months))}</td>
+                              <td className="td num">
+                                {r.count ? (
+                                  <span className="text-ink-500">{r.count}건</span>
+                                ) : (
+                                  <span className="chip bg-amber-50 text-amber-700">미등록</span>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )
+              })}
+              <p className="text-xs leading-relaxed text-ink-500">
+                출금예상표 항목 순서대로 첫 매칭 항목에만 집계됩니다. 미등록 항목은 장부에 없는 고정 지출일 수 있으니 확인해 주세요.
+              </p>
+            </section>
+          ) : null}
 
           {tab === 'payroll' && payrollByMonth.length ? (
             <section className="card overflow-hidden">
