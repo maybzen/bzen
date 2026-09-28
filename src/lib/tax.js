@@ -14,6 +14,7 @@ export const TAX_TYPES = {
   withholding: { label: '원천세', chip: 'bg-amber-50 text-amber-700' },
   corporate: { label: '법인세', chip: 'bg-emerald-50 text-emerald-700' },
   local: { label: '지방소득세', chip: 'bg-ink-100 text-ink-700' },
+  insurance: { label: '4대보험', chip: 'bg-sky-50 text-sky-700' },
 }
 
 /** 신고별 준비물 체크리스트 */
@@ -38,6 +39,12 @@ export const TAX_DOCS = {
     '금진 전달: 연간 장부 + 통장·카드 내역',
   ],
   local: ['법인세 신고 접수증 확인', '위택스에서 지방소득세 신고·납부'],
+  insurance: [
+    '국민건강보험공단 합산고지서 수령 확인 (건강·연금·고용·산재)',
+    '부산은행 자동이체 출금 확인 (말일)',
+    '회사부담분 장부 등록 확인 (운영비·인건비)',
+    '세무사무실 전달: 고지서 + 출금내역',
+  ],
 }
 
 /**
@@ -52,9 +59,9 @@ export function buildTaxCalendar(year) {
       id: `vat-final-${y - 1}h2`,
       type: 'vat',
       title: '부가세 2기 확정신고',
-      period: `${y - 1}.7~12월분`,
+      period: `${y - 1}.10~12월분`,
       due: `${y}-01-25`,
-      dataFrom: `${y - 1}-07-01`,
+      dataFrom: `${y - 1}-10-01`,
       dataTo: `${y - 1}-12-31`,
     },
     {
@@ -84,9 +91,9 @@ export function buildTaxCalendar(year) {
       id: `vat-final-${y}h1`,
       type: 'vat',
       title: '부가세 1기 확정신고',
-      period: '1~6월분',
+      period: '4~6월분',
       due: `${y}-07-25`,
-      dataFrom: `${y}-01-01`,
+      dataFrom: `${y}-04-01`,
       dataTo: `${y}-06-30`,
     },
     {
@@ -101,12 +108,23 @@ export function buildTaxCalendar(year) {
   ]
   for (let m = 1; m <= 12; m += 1) {
     const mm = String(m).padStart(2, '0')
+    const lastDay = new Date(y, m, 0).getDate()
+    const dd = String(lastDay).padStart(2, '0')
     list.push({
       id: `with-${y}-${mm}`,
       type: 'withholding',
       title: '원천세 신고·납부',
       period: m === 1 ? `${y - 1}.12월분` : `${m - 1}월분`,
       due: `${y}-${mm}-10`,
+    })
+    list.push({
+      id: `ins-${y}-${mm}`,
+      type: 'insurance',
+      title: '4대보험료 납부',
+      period: `${m}월분`,
+      due: `${y}-${mm}-${dd}`,
+      dataFrom: `${y}-${mm}-01`,
+      dataTo: `${y}-${mm}-${dd}`,
     })
   }
   return list.sort((a, b) => (a.due < b.due ? -1 : 1))
@@ -201,9 +219,9 @@ export function vatEstimateByFiling(entries, year) {
   const y = Number(year)
   const rows = [
     { key: 'q1', label: '1기 예정 (1~3월)', due: `${y}-04-25`, ...vatOf(entries, `${y}-01-01`, `${y}-03-31`) },
-    { key: 'h1', label: '1기 확정 (1~6월)', due: `${y}-07-25`, ...vatOf(entries, `${y}-01-01`, `${y}-06-30`) },
+    { key: 'h1', label: '1기 확정 (4~6월)', due: `${y}-07-25`, ...vatOf(entries, `${y}-04-01`, `${y}-06-30`) },
     { key: 'q3', label: '2기 예정 (7~9월)', due: `${y}-10-25`, ...vatOf(entries, `${y}-07-01`, `${y}-09-30`) },
-    { key: 'h2', label: '2기 확정 (7~12월)', due: `${y + 1}-01-25`, ...vatOf(entries, `${y}-07-01`, `${y}-12-31`) },
+    { key: 'h2', label: '2기 확정 (10~12월)', due: `${y + 1}-01-25`, ...vatOf(entries, `${y}-10-01`, `${y}-12-31`) },
   ]
   return rows
 }

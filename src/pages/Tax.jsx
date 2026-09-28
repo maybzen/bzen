@@ -290,8 +290,9 @@ export default function Tax() {
               </table>
             </div>
             <p className="border-t border-ink-100 px-4 py-3 text-[11px] leading-relaxed text-ink-400">
-              장부에 빠진 매입이 있으면 실제보다 많게 나옵니다. 간이과세·면세·공제 한도·가산세는 반영되지
-              않으니 신고 전 금진에 장부 CSV를 보내 대조하세요.
+              장부에 빠진 매입이 있으면 실제보다 많게 나옵니다. 확정신고분은 예정신고 납부세액 차감 전
+              금액입니다. 간이과세·면세·공제 한도·가산세는 반영되지 않으니 신고 전 금진에 장부 CSV를 보내
+              대조하세요.
             </p>
           </section>
 
