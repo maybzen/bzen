@@ -9,7 +9,7 @@ import { useAuth } from '../auth/AuthContext'
 import { PROJECT_STATUS } from '../lib/constants'
 import { contractSplit, formatDateHuman, formatKRW, formatPercent } from '../lib/format'
 import { buildPnl, groupByProject, summarize } from '../lib/summary'
-import { deleteProject, listEntries, listProfiles, listProjects } from '../lib/api'
+import { deleteProject, isMissingTableError, listEntries, listPartners, listProfiles, listProjectPartners, listProjects } from '../lib/api'
 
 /**
  * 카드에 쓰는 손익 표기. 세무·회계 표현을 그대로 씁니다.
@@ -112,6 +112,9 @@ export default function Projects() {
   const [projects, setProjects] = useState([])
   const [entries, setEntries] = useState([])
   const [profiles, setProfiles] = useState([])
+  const [partners, setPartners] = useState([])
+  const [links, setLinks] = useState([])
+  const [expandedVendors, setExpandedVendors] = useState({})
 
   const managerName = (id) => profiles.find((p) => p.id === id)?.full_name || ''
   const [formOpen, setFormOpen] = useState(false)
@@ -156,14 +159,18 @@ export default function Projects() {
     try {
       // 카드 금액은 "프로젝트 전체 기간" 기준입니다. 상세 화면(listEntries({projectId}))과
       // 동일해야 하므로 기간 필터를 걸지 않습니다. 연간 일정 전체를 한 번에 봐야 해서 기간 조회는 두지 않습니다.
-      const [projectRows, entryRows, profileRows] = await Promise.all([
+      const [projectRows, entryRows, profileRows, partnerRows, linkRows] = await Promise.all([
         listProjects(),
         listEntries(),
         listProfiles(),
+        listPartners().catch(() => []),
+        listProjectPartners().catch(() => []),
       ])
       setProjects(projectRows)
       setEntries(entryRows)
       setProfiles(profileRows)
+      setPartners(partnerRows || [])
+      setLinks(linkRows || [])
     } catch (error) {
       toast.error(error.message)
     } finally {
@@ -233,6 +240,17 @@ export default function Projects() {
     for (const p of yearScoped) counts[p.status] = (counts[p.status] || 0) + 1
     return counts
   }, [yearScoped])
+
+  const vendorsByProject = useMemo(() => {
+    const partnerById = new Map((partners || []).map((p) => [p.id, p]))
+    const map = new Map()
+    for (const l of links || []) {
+      if (!map.has(l.project_id)) map.set(l.project_id, [])
+      const p = partnerById.get(l.partner_id)
+      map.get(l.project_id).push(p ? p.name : '')
+    }
+    return map
+  }, [links, partners])
 
   const totals = useMemo(() => summarize(entries), [entries])
   const maxSale = Math.max(1, ...rows.map((r) => Math.max(r.sale, Math.abs(r.profit))))
@@ -498,13 +516,57 @@ export default function Projects() {
                   <span>
                     거래 {row.count}건 · 전체 기간 기준
                   </span>
-                  <Link
-                    to={`/projects/${project.id}`}
-                    className="font-semibold text-brand-700 hover:underline"
-                  >
-                    상세 →
-                  </Link>
+                  <span className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setExpandedVendors((m) => ({ ...m, [project.id]: !m[project.id] }))
+                      }
+                      className="font-semibold text-brand-700 hover:underline"
+                    >
+                      협력업체{(vendorsByProject.get(project.id) || []).length
+                        ? ` ${(vendorsByProject.get(project.id) || []).length}`
+                        : ''}
+                      {expandedVendors[project.id] ? ' ▲' : ' ▼'}
+                    </button>
+                    <Link
+                      to={`/projects/${project.id}`}
+                      className="font-semibold text-brand-700 hover:underline"
+                    >
+                      상세 →
+                    </Link>
+                  </span>
                 </div>
+                {expandedVendors[project.id] ? (
+                  <div className="mt-2 rounded-lg bg-ink-50/80 px-3 py-2.5">
+                    {(vendorsByProject.get(project.id) || []).filter(Boolean).length ? (
+                      <ul className="flex flex-col gap-1">
+                        {(vendorsByProject.get(project.id) || [])
+                          .filter(Boolean)
+                          .map((name) => (
+                            <li key={name}>
+                              <Link
+                                to={`/partners?search=${encodeURIComponent(name)}`}
+                                className="text-xs font-semibold text-ink-700 hover:text-brand-700 hover:underline"
+                              >
+                                {name}
+                              </Link>
+                            </li>
+                          ))}
+                      </ul>
+                    ) : (
+                      <p className="text-xs text-ink-400">
+                        연결된 거래처가 없습니다.{' '}
+                        <Link
+                          to={`/projects/${project.id}`}
+                          className="font-semibold text-brand-700 hover:underline"
+                        >
+                          상세 협력업체 탭에서 연결 →
+                        </Link>
+                      </p>
+                    )}
+                  </div>
+                ) : null}
               </article>
             )
           })}

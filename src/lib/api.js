@@ -139,6 +139,35 @@ export function deleteSlip(entryId) {
 }
 
 /* ------------------------------------------------------------------ */
+/* 프로젝트 ↔ 거래처 연결 (다대다, migration_project_partners.sql 필요)    */
+/* ------------------------------------------------------------------ */
+
+export function listProjectPartners() {
+  return unwrap(supabase.from('project_partners').select('*'))
+}
+
+export function linkProjectPartner(projectId, partnerId, userId) {
+  return unwrap(
+    supabase
+      .from('project_partners')
+      .upsert({ project_id: projectId, partner_id: partnerId, created_by: userId }, { onConflict: 'project_id,partner_id' })
+      .select()
+      .single(),
+  )
+}
+
+export function unlinkProjectPartner(projectId, partnerId) {
+  return unwrap(
+    supabase.from('project_partners').delete().eq('project_id', projectId).eq('partner_id', partnerId),
+  )
+}
+
+export function isMissingTableError(error) {
+  const msg = String(error?.message || '')
+  return /42P01|does not exist|schema cache|Could not find the table/i.test(msg)
+}
+
+/* ------------------------------------------------------------------ */
 /* 자금관리 (계좌·대출·카드 마스터 + 잔고 스냅샷. 관리자 전용)              */
 /* ------------------------------------------------------------------ */
 

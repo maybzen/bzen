@@ -167,7 +167,7 @@ function DocPreview({ doc }) {
   )
 }
 
-export default function PartnerFormModal({ open, onClose, onSaved, initial, readOnly = false, userId, ledger = null, isAdmin = false, profiles = [] }) {
+export default function PartnerFormModal({ open, onClose, onSaved, initial, readOnly = false, userId, ledger = null, isAdmin = false, profiles = [], linkProps = null }) {
   const toast = useToast()
   const [form, setForm] = useState(EMPTY)
   const [saving, setSaving] = useState(false)
@@ -522,6 +522,44 @@ export default function PartnerFormModal({ open, onClose, onSaved, initial, read
           ) : (
             <p className="mt-3 rounded-lg bg-ink-50 px-3 py-2.5 text-xs text-ink-400">
               이 이름으로 잡힌 장부·수금 내역이 없습니다.
+            </p>
+          )}
+        </div>
+      ) : null}
+
+      {/* 연결된 프로젝트 */}
+      {linkProps && partnerId ? (
+        <div className="mt-5 border-t border-ink-100 pt-4">
+          <h3 className="text-sm font-bold text-ink-900">연결된 프로젝트</h3>
+          <p className="mt-0.5 text-xs text-ink-500">
+            체크하면 연결됩니다. 한 거래처가 여러 행사에 겹쳐도 각각 체크하면 됩니다.
+          </p>
+          {linkProps.projects.length ? (
+            <div className="mt-2.5 flex flex-col gap-1.5">
+              {linkProps.projects.map((p) => {
+                const linked = linkProps.linkedIds.has(p.id)
+                const busy = linkProps.busyId === `${p.id}:${partnerId}`
+                return (
+                  <label
+                    key={p.id}
+                    className="flex cursor-pointer items-center gap-2.5 rounded-lg border border-ink-200 px-3 py-2 text-sm transition hover:bg-ink-50/60"
+                  >
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 shrink-0 accent-brand-600"
+                      checked={linked}
+                      disabled={busy}
+                      onChange={() => linkProps.onToggle(p.id, linked)}
+                    />
+                    <span className="min-w-0 flex-1 truncate font-semibold text-ink-800">{p.name}</span>
+                    {busy ? <span className="text-xs text-ink-400">저장 중…</span> : null}
+                  </label>
+                )
+              })}
+            </div>
+          ) : (
+            <p className="mt-2 rounded-lg bg-ink-50 px-3 py-2.5 text-xs text-ink-400">
+              등록된 프로젝트가 없습니다.
             </p>
           )}
         </div>

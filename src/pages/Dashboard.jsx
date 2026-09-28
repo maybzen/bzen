@@ -74,6 +74,39 @@ function saveHomeChecks(checks) {
     /* 저장 실패 무시 */
   }
 }
+
+/* 회사 PC에서 업데이트할 때 확인할 목록 (관리자만, 브라우저에 저장) */
+const SYNC_CHECKLIST_DEFAULT = [
+  { id: 's-pull', text: '회사 PC에서 main pull 받기 (git pull --ff-only)' },
+  { id: 's-sql', text: '대기 중인 SQL 실행 ( supabase/*.sql 중 미실행분 → SQL Editor)' },
+  { id: 's-payslip', text: '급여명세서 엑셀 대조 (장부 급여분 = 실지급 − 지출결의)' },
+  { id: 's-balance', text: '통장 현재 잔고 입력 (자금관리 → 잔고 기록)' },
+  { id: 's-card', text: '법인카드 명세서 파일 올리기 (자금관리 → 법인카드 내역)' },
+  { id: 's-docs', text: '세금계산서·영수증 증빙 첨부 확인' },
+  { id: 's-deploy', text: '작업 후 push → Actions 배포 성공 확인' },
+  { id: 's-backup', text: '월 1회 CSV 전체 백업 (보고서 → 상세 CSV)' },
+]
+
+function loadSyncItems() {
+  try {
+    const raw = localStorage.getItem('bzen.home.sync.items.v1')
+    const parsed = raw ? JSON.parse(raw) : null
+    if (Array.isArray(parsed) && parsed.every((x) => x && typeof x.id === 'string')) return parsed
+  } catch {
+    /* 무시 */
+  }
+  return SYNC_CHECKLIST_DEFAULT
+}
+
+function loadSyncChecks() {
+  try {
+    const raw = localStorage.getItem('bzen.home.sync.done.v1')
+    const parsed = raw ? JSON.parse(raw) : {}
+    return parsed && typeof parsed === 'object' ? parsed : {}
+  } catch {
+    return {}
+  }
+}
 import { TaxAlertBanner } from './Tax'
 
 export default function Dashboard() {
@@ -98,6 +131,63 @@ export default function Dashboard() {
   const [homeChecks, setHomeChecks] = useState(() => loadHomeChecks())
   const [showDone, setShowDone] = useState(false)
   const [newAlert, setNewAlert] = useState('')
+  const [syncItems, setSyncItems] = useState(() => loadSyncItems())
+  const [syncChecks, setSyncChecks] = useState(() => loadSyncChecks())
+  const [newSync, setNewSync] = useState('')
+  const [syncOpen, setSyncOpen] = useState(true)
+
+  const saveSync = (items, checks) => {
+    try {
+      localStorage.setItem('bzen.home.sync.items.v1', JSON.stringify(items))
+      localStorage.setItem('bzen.home.sync.done.v1', JSON.stringify(checks))
+    } catch {
+      /* 저장 실패 무시 */
+    }
+  }
+
+  const toggleSyncCheck = (id) => {
+    setSyncChecks((prev) => {
+      const next = { ...prev }
+      if (next[id]) delete next[id]
+      else next[id] = true
+      setSyncItems((items) => {
+        saveSync(items, next)
+        return items
+      })
+      return next
+    })
+  }
+
+  const addSyncItem = (e) => {
+    e.preventDefault()
+    const text = newSync.trim()
+    if (!text) return
+    const id = `s${Date.now().toString(36)}`
+    setSyncItems((prev) => {
+      const next = [...prev, { id, text }]
+      setSyncChecks((checks) => {
+        saveSync(next, checks)
+        return checks
+      })
+      return next
+    })
+    setNewSync('')
+  }
+
+  const removeSyncItem = (id) => {
+    setSyncItems((prev) => {
+      const next = prev.filter((x) => x.id !== id)
+      setSyncChecks((checks) => {
+        const nc = { ...checks }
+        delete nc[id]
+        saveSync(next, nc)
+        return nc
+      })
+      return next
+    })
+  }
+
+  const syncOpenCount = syncItems.filter((x) => !syncChecks[x.id]).length
 
   const toggleHomeCheck = (id) => {
     setHomeChecks((prev) => {
@@ -623,6 +713,76 @@ export default function Dashboard() {
                     </li>
                   ))}
                 </ul>
+              ) : null}
+            </section>
+          ) : null}
+
+          {isAdmin ? (
+            <section className="card overflow-hidden border-sky-200">
+              <header className="flex items-center justify-between gap-3 border-b border-ink-200 bg-sky-50/60 px-4 py-3">
+                <button
+                  type="button"
+                  onClick={() => setSyncOpen((v) => !v)}
+                  className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
+                  aria-expanded={syncOpen}
+                >
+                  <h2 className="truncate text-sm font-bold text-ink-900">
+                    업데이트 체크리스트
+                    <span className="ml-1.5 font-medium text-ink-500">{syncOpenCount}건 남음</span>
+                  </h2>
+                  <Icon name={syncOpen ? 'chevron-down' : 'chevron-right'} size={15} className="shrink-0 text-ink-500" />
+                </button>
+                <span className="shrink-0 text-[11px] text-ink-500">회사에서 작업할 때 확인</span>
+              </header>
+              {syncOpen ? (
+                <>
+                  <ul className="divide-y divide-ink-100">
+                    {syncItems.map((item) => {
+                      const done = Boolean(syncChecks[item.id])
+                      return (
+                        <li key={item.id} className="flex items-start gap-1 px-4 py-2.5 transition hover:bg-ink-50/60">
+                          <button
+                            type="button"
+                            onClick={() => toggleSyncCheck(item.id)}
+                            className="flex min-w-0 flex-1 items-start gap-2.5 text-left"
+                          >
+                            <span
+                              className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition ${
+                                done
+                                  ? 'border-sky-600 bg-sky-600 text-white'
+                                  : 'border-ink-300 bg-white text-transparent'
+                              }`}
+                            >
+                              <Icon name="check" size={13} strokeWidth={2.6} />
+                            </span>
+                            <span className={`text-sm ${done ? 'text-ink-400 line-through' : 'text-ink-800'}`}>
+                              {item.text}
+                            </span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => removeSyncItem(item.id)}
+                            className="shrink-0 rounded-md p-1 text-ink-300 transition hover:bg-rose-50 hover:text-loss"
+                            aria-label="삭제"
+                          >
+                            <Icon name="trash" size={14} />
+                          </button>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                  <form onSubmit={addSyncItem} className="flex items-center gap-2 border-t border-ink-100 px-4 py-2.5">
+                    <input
+                      className="input flex-1 py-1.5 text-xs"
+                      placeholder="체크 항목 추가"
+                      value={newSync}
+                      onChange={(e) => setNewSync(e.target.value)}
+                    />
+                    <button type="submit" className="btn-ghost shrink-0 !px-2.5 !py-1.5 text-xs" disabled={!newSync.trim()}>
+                      추가
+                    </button>
+                  </form>
+                </>
               ) : null}
             </section>
           ) : null}

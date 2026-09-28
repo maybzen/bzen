@@ -7,13 +7,13 @@ import ProjectFormModal from '../components/ProjectFormModal'
 import { ProfitBar } from '../components/Charts'
 import { AttachmentModal } from '../components/Attachments'
 import { useToast } from '../components/Toast'
-import { ConfirmDialog, EmptyState, LoadingBlock, SegmentedControl, StatCard } from '../components/ui'
+import { ConfirmDialog, EmptyState, InlineAlert, LoadingBlock, SegmentedControl, StatCard } from '../components/ui'
 import { useAuth } from '../auth/AuthContext'
 import { isStaffVisible, staffIdsFromProfiles } from '../lib/permissions'
 import { ENTRY_META, PROJECT_STATUS } from '../lib/constants'
 import { contractSplit, formatDateHuman, formatKRW, formatPercent, monthLabel, normalizeVendorName } from '../lib/format'
 import { groupByMonth, summarize } from '../lib/summary'
-import { deleteEntry, listAttachments, listEntries, listPartners, listProfiles, listProjects } from '../lib/api'
+import { deleteEntry, isMissingTableError, linkProjectPartner, listAttachments, listEntries, listPartners, listProfiles, listProjectPartners, listProjects, unlinkProjectPartner } from '../lib/api'
 
 const TABS = [
   { key: 'all', label: '전체' },
@@ -42,6 +42,7 @@ export default function ProjectDetail() {
   const [busy, setBusy] = useState(false)
   const [viewerFiles, setViewerFiles] = useState(null)
   const [reloadKey, setReloadKey] = useState(0)
+  const [ledgerTab, setLedgerTab] = useState('entries')
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -99,7 +100,59 @@ export default function ProjectDetail() {
 
   const maxMonthly = Math.max(1, ...monthly.map((m) => Math.max(m.sale, Math.abs(m.profit))))
 
-  /* 협력업체: 이 프로젝트에 거래가 있는 거래처 + 대장 정보 (연락용) */
+  /* 협력업체: 명시적 연결(linked) + 장부에서 나온 연결 후보(candidates) */
+  const [links, setLinks] = useState(null)
+  const [linkBusy, setLinkBusy] = useState(false)
+
+  useEffect(() => {
+    let alive = true
+    listProjectPartners()
+      .then((rows) => {
+        if (alive) setLinks(rows || [])
+      })
+      .catch((err) => {
+        if (alive) setLinks(isMissingTableError(err) ? null : [])
+      })
+    return () => {
+      alive = false
+    }
+  }, [id, reloadKey])
+
+  const refreshLinks = useCallback(async () => {
+    try {
+      setLinks(await listProjectPartners())
+    } catch (err) {
+      if (isMissingTableError(err)) setLinks(null)
+      else toast.error(err.message)
+    }
+  }, [toast])
+
+  const handleLink = async (partnerId) => {
+    setLinkBusy(true)
+    try {
+      await linkProjectPartner(id, partnerId, user?.id)
+      toast.success('연결했습니다.')
+      await refreshLinks()
+    } catch (err) {
+      toast.error(isMissingTableError(err) ? 'SQL 1회 실행이 필요합니다 (supabase/migration_project_partners.sql)' : err.message)
+    } finally {
+      setLinkBusy(false)
+    }
+  }
+
+  const handleUnlink = async (partnerId) => {
+    setLinkBusy(true)
+    try {
+      await unlinkProjectPartner(id, partnerId)
+      toast.success('연결을 해제했습니다. 장부 내역은 그대로 둡니다.')
+      await refreshLinks()
+    } catch (err) {
+      toast.error(err.message)
+    } finally {
+      setLinkBusy(false)
+    }
+  }
+
   const vendors = useMemo(() => {
     const byNorm = new Map()
     for (const e of entries || []) {
@@ -118,6 +171,30 @@ export default function ProjectDetail() {
       .map((v) => ({ ...v, partner: partnerByNorm.get(normalizeVendorName(v.name)) || null }))
       .sort((a, b) => b.total - a.total)
   }, [entries, partners])
+
+  /* 명시적 연결 + 연결 후보(장부에 있는데 미연결) */
+  const linkedVendors = useMemo(() => {
+    if (!links) return []
+    const vByPartner = new Map()
+    for (const v of vendors) {
+      if (v.partner) vByPartner.set(v.partner.id, v)
+    }
+    return links
+      .filter((l) => l.project_id === id)
+      .map((l) => {
+        const p = (partners || []).find((x) => x.id === l.partner_id)
+        if (!p) return null
+        const stat = vByPartner.get(p.id) || { name: p.name, count: 0, total: 0 }
+        return { ...stat, name: p.name, partner: p, linked: true }
+      })
+      .filter(Boolean)
+      .sort((a, b) => b.total - a.total)
+  }, [links, vendors, partners, id])
+
+  const candidateVendors = useMemo(() => {
+    const linkedIds = new Set(linkedVendors.map((v) => v.partner?.id).filter(Boolean))
+    return vendors.filter((v) => !(v.partner && linkedIds.has(v.partner.id)))
+  }, [vendors, linkedVendors])
 
   const handleDeleteEntry = async () => {
     if (!removing) return
@@ -321,71 +398,56 @@ export default function ProjectDetail() {
         </section>
       ) : null}
 
-      {vendors.length ? (
-        <section className="card overflow-hidden">
-          <header className="border-b border-ink-200 px-4 py-3.5">
-            <h2 className="text-sm font-bold text-ink-900">
-              협력업체 ({vendors.length}곳)
-            </h2>
-            <p className="mt-0.5 text-xs text-ink-500">
-              이 프로젝트에 거래가 있는 곳입니다. 연락처는 거래처 대장에서 가져옵니다.
-            </p>
-          </header>
-          <ul className="divide-y divide-ink-100">
-            {vendors.map((v) => (
-              <li key={v.name} className="flex items-center gap-3 px-4 py-3">
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-bold text-ink-900">{v.name}</p>
-                  <p className="mt-0.5 truncate text-xs text-ink-500">
-                    {v.partner?.contact_person
-                      ? `담당 ${v.partner.contact_person}${v.partner.job_title ? ` ${v.partner.job_title}` : ''}`
-                      : '담당자 미등록'}
-                    {v.partner?.phone || v.partner?.phone_main
-                      ? ` · ${v.partner.phone || v.partner.phone_main}`
-                      : ''}
-                    {` · ${v.count}건`}
-                  </p>
-                </div>
-                <span className="shrink-0 font-num text-sm font-extrabold tabular-nums text-ink-900">
-                  {formatKRW(v.total)}원
-                </span>
-                <Link
-                  to={`/partners?search=${encodeURIComponent(v.partner?.name || v.name)}`}
-                  className="shrink-0 text-xs font-semibold text-brand-700 hover:underline"
-                >
-                  거래처 →
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
-
       <section className="card overflow-hidden">
         <header className="flex flex-col gap-3 border-b border-ink-200 px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between">
           <h2 className="text-sm font-bold text-ink-900">
-            거래 내역 ({shown.length}건)
-            {!isAdmin ? <span className="ml-1.5 font-normal text-ink-400">· 운영비만 표시됩니다</span> : null}
+            {ledgerTab === 'vendors' ? `협력업체 (${linkedVendors.length}곳)` : `거래 내역 (${shown.length}건)`}
+            {!isAdmin && ledgerTab === 'entries' ? <span className="ml-1.5 font-normal text-ink-400">· 운영비만 표시됩니다</span> : null}
           </h2>
-          <SegmentedControl size="sm" options={isAdmin ? TABS : staffTabs} value={tab} onChange={setTab} />
+          <div className="flex flex-wrap items-center gap-2">
+            <SegmentedControl
+              size="sm"
+              value={ledgerTab}
+              onChange={setLedgerTab}
+              options={[
+                { key: 'entries', label: '거래내역' },
+                { key: 'vendors', label: `협력업체${linkedVendors.length ? ` ${linkedVendors.length}` : ''}` },
+              ]}
+            />
+            {ledgerTab === 'entries' ? (
+              <SegmentedControl size="sm" options={isAdmin ? TABS : staffTabs} value={tab} onChange={setTab} />
+            ) : null}
+          </div>
         </header>
-        <EntryTable
-          entries={shown}
-          projects={[project]}
-          profiles={profiles}
-          attachmentsByEntry={attachmentsByEntry}
-          showType
-          canEdit
-          canChangeAuthor={isAdmin}
-          onEdit={(entry) => {
-            setEditing({ ...entry, attachments: attachmentsByEntry[entry.id] || [] })
-            setFormType(entry.entry_type)
-          }}
-          onDelete={(entry) => setRemoving(entry)}
-          onOpenAttachments={setViewerFiles}
-          canEditEntry={(e) => isAdmin || e?.created_by === user?.id || e?.requester_id === user?.id}
-          canDeleteEntry={(e) => isAdmin || e?.created_by === user?.id || e?.requester_id === user?.id}
-        />
+        {ledgerTab === 'vendors' ? (
+          <VendorPanel
+            links={links}
+            linked={linkedVendors}
+            candidates={candidateVendors}
+            linkBusy={linkBusy}
+            isAdmin={isAdmin}
+            onLink={handleLink}
+            onUnlink={handleUnlink}
+          />
+        ) : (
+          <EntryTable
+            entries={shown}
+            projects={[project]}
+            profiles={profiles}
+            attachmentsByEntry={attachmentsByEntry}
+            showType
+            canEdit
+            canChangeAuthor={isAdmin}
+            onEdit={(entry) => {
+              setEditing({ ...entry, attachments: attachmentsByEntry[entry.id] || [] })
+              setFormType(entry.entry_type)
+            }}
+            onDelete={(entry) => setRemoving(entry)}
+            onOpenAttachments={setViewerFiles}
+            canEditEntry={(e) => isAdmin || e?.created_by === user?.id || e?.requester_id === user?.id}
+            canDeleteEntry={(e) => isAdmin || e?.created_by === user?.id || e?.requester_id === user?.id}
+          />
+        )}
       </section>
 
       <EntryFormModal
@@ -434,6 +496,114 @@ export default function ProjectDetail() {
         onClose={() => setViewerFiles(null)}
         attachments={viewerFiles || []}
       />
+    </div>
+  )
+}
+
+/**
+ * 협력업체 패널.
+ * 명시적 연결(linked)이 중심입니다. 한 거래처가 여러 행사에 겹쳐도
+ * 프로젝트마다 따로 연결하므로 중복 걱정 없습니다.
+ * 장부에만 있고 미연결인 곳은 후보로 보여주고, 밥집처럼 엮지 않을 곳은 그냥 두면 됩니다.
+ */
+function VendorPanel({ links, linked, candidates, linkBusy, isAdmin, onLink, onUnlink }) {
+  if (links === null) {
+    return (
+      <div className="p-4">
+        {isAdmin ? (
+          <InlineAlert tone="warn">
+            <strong>연결 저장소가 아직 없습니다.</strong> Supabase Dashboard → SQL Editor에서{' '}
+            <code>supabase/migration_project_partners.sql</code> 내용을 실행한 뒤 새로고침하세요. (1분 소요)
+          </InlineAlert>
+        ) : (
+          <EmptyState icon="building" title="연결된 협력업체가 없습니다" />
+        )}
+      </div>
+    )
+  }
+  if (!linked.length && !candidates.length) {
+    return (
+      <div className="p-4">
+        <EmptyState icon="building" title="거래처가 없습니다" description="장부에 거래처명으로 입력하면 후보로 뜹니다." />
+      </div>
+    )
+  }
+  return (
+    <div>
+      {linked.length ? (
+        <ul className="divide-y divide-ink-100">
+          {linked.map((v) => (
+            <li key={v.partner.id} className="flex items-center gap-3 px-4 py-3">
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-bold text-ink-900">{v.name}</p>
+                <p className="mt-0.5 truncate text-xs text-ink-500">
+                  {v.partner?.contact_person
+                    ? `담당 ${v.partner.contact_person}${v.partner.job_title ? ` ${v.partner.job_title}` : ''}`
+                    : '담당자 미등록'}
+                  {v.partner?.phone || v.partner?.phone_main
+                    ? ` · ${v.partner.phone || v.partner.phone_main}`
+                    : ''}
+                  {` · ${v.count}건`}
+                </p>
+              </div>
+              <span className="shrink-0 font-num text-sm font-extrabold tabular-nums text-ink-900">
+                {formatKRW(v.total)}원
+              </span>
+              <Link
+                to={`/partners?search=${encodeURIComponent(v.name)}`}
+                className="shrink-0 text-xs font-semibold text-brand-700 hover:underline"
+              >
+                거래처 →
+              </Link>
+              <button
+                type="button"
+                onClick={() => onUnlink(v.partner.id)}
+                disabled={linkBusy}
+                className="shrink-0 text-xs font-semibold text-ink-300 hover:text-loss hover:underline disabled:opacity-50"
+              >
+                해제
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      {candidates.length ? (
+        <div className={linked.length ? 'border-t border-ink-100' : ''}>
+          <p className="bg-ink-50/60 px-4 py-2 text-[11px] font-bold text-ink-500">
+            연결 후보 (장부에만 있는 곳 · 밥집처럼 엮지 않을 곳은 두세요)
+          </p>
+          <ul className="divide-y divide-ink-100">
+            {candidates.map((v) => (
+              <li key={v.name} className="flex items-center gap-3 px-4 py-2.5">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold text-ink-700">{v.name}</p>
+                  <p className="mt-0.5 truncate text-xs text-ink-400">
+                    {v.count}건 · {formatKRW(v.total)}원
+                    {v.partner ? ' · 대장 있음' : ' · 대장 없음'}
+                  </p>
+                </div>
+                {v.partner ? (
+                  <button
+                    type="button"
+                    onClick={() => onLink(v.partner.id)}
+                    disabled={linkBusy}
+                    className="shrink-0 rounded-md bg-brand-50 px-2 py-1 text-xs font-bold text-brand-700 transition hover:bg-brand-100 disabled:opacity-50"
+                  >
+                    연결
+                  </button>
+                ) : (
+                  <Link
+                    to={`/partners?search=${encodeURIComponent(v.name)}`}
+                    className="shrink-0 text-xs font-semibold text-ink-400 hover:text-brand-700 hover:underline"
+                  >
+                    대장 등록 →
+                  </Link>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
     </div>
   )
 }

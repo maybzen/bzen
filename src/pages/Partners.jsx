@@ -11,12 +11,16 @@ import { downloadTextFile, toCSV } from '../lib/csv'
 import { formatKRW, normalizeVendorName } from '../lib/format'
 import {
   deletePartner,
+  linkProjectPartner,
   listCollections,
   listEntries,
   listPartnerDocs,
   listPartners,
   listProfiles,
+  listProjectPartners,
+  listProjects,
   partnersTableExists,
+  unlinkProjectPartner,
   updatePartner,
 } from '../lib/api'
 
@@ -56,6 +60,9 @@ export default function Partners() {
   const [profiles, setProfiles] = useState([])
   /* 거래처 모달의 거래내역용 (모달 열 때 1회 로드) */
   const [ledger, setLedger] = useState(null)
+  const [allProjects, setAllProjects] = useState([])
+  const [allLinks, setAllLinks] = useState([])
+  const [linkBusyId, setLinkBusyId] = useState('')
   const profileName = (id) => {
     if (!id) return ''
     const p = profiles.find((x) => x.id === id)
@@ -205,21 +212,49 @@ export default function Partners() {
     load()
   }, [load, reloadKey])
 
-  /* 거래처 상세·수정을 열 때 거래내역을 함께 가져옵니다 (수금 잔금 확인용) */
+  /* 거래처 상세·수정을 열 때 거래내역 + 프로젝트 연결을 함께 가져옵니다 */
   useEffect(() => {
     if (!formOpen) return
     let alive = true
-    Promise.all([listEntries({ maxRows: 20000 }), listCollections().catch(() => [])])
-      .then(([entryRows, collectionRows]) => {
-        if (alive) setLedger({ entries: entryRows || [], collections: collectionRows || [] })
+    Promise.all([
+      listEntries({ maxRows: 20000 }),
+      listCollections().catch(() => []),
+      listProjects().catch(() => []),
+      listProjectPartners().catch(() => []),
+    ])
+      .then(([entryRows, collectionRows, projectRows, linkRows]) => {
+        if (!alive) return
+        setLedger({ entries: entryRows || [], collections: collectionRows || [] })
+        setAllProjects((projectRows || []).filter((p) => !p.is_hidden))
+        setAllLinks(linkRows || [])
       })
       .catch(() => {
-        if (alive) setLedger({ entries: [], collections: [] })
+        if (alive) {
+          setLedger({ entries: [], collections: [] })
+          setAllProjects([])
+          setAllLinks([])
+        }
       })
     return () => {
       alive = false
     }
   }, [formOpen])
+
+  const togglePartnerLink = async (projectId, partnerId, linked) => {
+    const key = `${projectId}:${partnerId}`
+    setLinkBusyId(key)
+    try {
+      if (linked) await unlinkProjectPartner(projectId, partnerId)
+      else await linkProjectPartner(projectId, partnerId, user?.id)
+      const rows = await listProjectPartners().catch(() => [])
+      setAllLinks(rows || [])
+      toast.success(linked ? '연결을 해제했습니다.' : '프로젝트에 연결했습니다.')
+    } catch (err) {
+      toast.error(err.message)
+    } finally {
+      setLinkBusyId('')
+    }
+  }
 
   const groupOptions = useMemo(() => {
     const custom = [...new Set(partners.map((p) => p.group_name).filter((g) => g && !PARTNER_GROUPS.includes(g)))]
@@ -611,6 +646,18 @@ export default function Partners() {
         ledger={ledger}
         isAdmin={isAdmin}
         profiles={profiles}
+        linkProps={
+          editing?.id
+            ? {
+                projects: allProjects,
+                linkedIds: new Set(
+                  allLinks.filter((l) => l.partner_id === editing.id).map((l) => l.project_id),
+                ),
+                busyId: linkBusyId,
+                onToggle: (projectId, linked) => togglePartnerLink(projectId, editing.id, linked),
+              }
+            : null
+        }
       />
 
       <ConfirmDialog

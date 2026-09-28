@@ -444,13 +444,20 @@ export default function EntryTable({
                     <AttachmentCell attachments={files} onOpen={onOpenAttachments} />
                   </td>
                   <td className="td max-w-[130px] truncate text-xs text-ink-500">
-                    {ownerLabel(profiles, work)}
+                    작성자 {ownerLabel(profiles, work)}
                     {dirty && work.created_by !== undefined ? (
                       <span className="block truncate text-[11px] text-brand-700">→ {authorName(work.created_by)}</span>
                     ) : null}
-                    {cardUser(entry) && cardUser(entry) !== ownerLabel(profiles, work) ? (
+                    {cardUser(entry) ? (
                       <span className="block truncate text-[11px] text-brand-700">이용자 {cardUser(entry)}</span>
                     ) : null}
+                    {(() => {
+                      const reg = authorName(entry.created_by)
+                      const own = ownerLabel(profiles, entry)
+                      return reg && reg !== '미지정' && reg !== own && reg !== cardUser(entry) ? (
+                        <span className="block truncate text-[11px] text-ink-400">등록 {reg}</span>
+                      ) : null
+                    })()}
                   </td>
                   <td className="td">
                     {canEdit ? (
@@ -582,6 +589,7 @@ export default function EntryTable({
                       <p className="mt-0.5 truncate text-xs text-ink-500">
                         {entry.counterparty || '—'}
                         {` · 작성자 ${ownerLabel(profiles, entry)}`}
+                        {cardUser(entry) ? ` · 이용자 ${cardUser(entry)}` : ''}
                       </p>
                     </div>
                   </div>
