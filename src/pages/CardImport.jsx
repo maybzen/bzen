@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Icon from '../components/Icon'
 import EntryFormModal from '../components/EntryFormModal'
 import CardUserSelect from '../components/CardUserSelect'
@@ -199,6 +199,11 @@ export default function CardImport() {
   const [regMonthFilter, setRegMonthFilter] = useState('')
   const [monthlyTotals, setMonthlyTotals] = useState([])
   const [monthlyLoading, setMonthlyLoading] = useState(false)
+  const monthlyRef = useRef(null)
+
+  const scrollToMonthly = () => {
+    monthlyRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
 
   /* 월별 합계 (최근 12개월, 조회기간과 무관) */
   useEffect(() => {
@@ -214,12 +219,26 @@ export default function CardImport() {
           if (e.entry_type !== 'purchase' && e.entry_type !== 'opex') continue
           const mk = String(e.entry_date || '').slice(0, 7)
           if (!mk) continue
-          const g = map.get(mk) || { mk, n: 0, total: 0 }
+          const g = map.get(mk) || { mk, n: 0, total: 0, byCard: new Map() }
           g.n += 1
           g.total += Number(e.total_amount || 0)
+          const label = cardOf(e) || '기타'
+          const c = g.byCard.get(label) || { n: 0, total: 0 }
+          c.n += 1
+          c.total += Number(e.total_amount || 0)
+          g.byCard.set(label, c)
           map.set(mk, g)
         }
-        setMonthlyTotals([...map.values()].sort((a, b) => (a.mk < b.mk ? 1 : -1)))
+        setMonthlyTotals(
+          [...map.values()]
+            .sort((a, b) => (a.mk < b.mk ? 1 : -1))
+            .map((g) => ({
+              ...g,
+              cards: [...g.byCard.entries()]
+                .map(([label, v]) => ({ label, ...v }))
+                .sort((a, b) => b.total - a.total),
+            })),
+        )
       })
       .catch(() => {})
       .finally(() => {
@@ -1153,7 +1172,7 @@ export default function CardImport() {
       ) : null}
 
       {monthlyTotals.length ? (
-        <section className="card overflow-hidden">
+        <section ref={monthlyRef} className="card scroll-mt-20 overflow-hidden">
           <header className="border-b border-ink-200 px-4 py-3.5">
             <h2 className="text-sm font-bold text-ink-900">월별 합계 (최근 12개월)</h2>
             <p className="mt-0.5 text-xs text-ink-500">
@@ -1180,6 +1199,14 @@ export default function CardImport() {
                     <span className="text-xs font-semibold text-ink-400">원</span>
                   </p>
                   <p className="mt-0.5 text-[11px] text-ink-500">{g.n}건</p>
+                  <div className="mt-1.5 flex flex-col gap-0.5 border-t border-ink-100 pt-1.5">
+                    {(g.cards || []).map((c) => (
+                      <p key={c.label} className="flex items-baseline justify-between gap-2 text-[11px] text-ink-500">
+                        <span className="truncate">{c.label}</span>
+                        <span className="shrink-0 font-num tabular-nums">{formatKRW(c.total)}</span>
+                      </p>
+                    ))}
+                  </div>
                 </button>
               )
             })}
@@ -1246,12 +1273,14 @@ export default function CardImport() {
               ) : null}
             </div>
             <div className="grid grid-cols-2 gap-3 border-b border-ink-200 px-4 py-3.5 lg:grid-cols-4">
-              <StatCard label="등록 건수" value={String(visibleRegistered.length)} unit="건" tone="neutral" icon="card" />
+              <StatCard label="등록 건수" value={String(visibleRegistered.length)} unit="건" tone="neutral" icon="card" hint="클릭하면 월별로 이동" onClick={scrollToMonthly} />
               <StatCard
                 label="합계"
                 value={visibleRegistered.reduce((a, e) => a + Number(e.total_amount || 0), 0)}
                 tone="neutral"
                 icon="coins"
+                hint="클릭하면 월별로 이동"
+                onClick={scrollToMonthly}
               />
               {(() => {
                 const map = new Map()
