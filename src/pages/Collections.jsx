@@ -93,16 +93,17 @@ export default function Collections() {
   const totalCollected = collections.reduce((a, c) => a + Number(c.amount || 0), 0)
   const thisMonth = todayISO().slice(0, 7)
 
-  /* 거래처별: 매출(합계) 대비 수금·잔금 */
+  /* 거래처별: 매출(합계) 대비 수금·잔금 + 매입(합계) */
   const vendorRows = useMemo(() => {
     const map = new Map()
     const bump = (name, key, v) => {
       const n = (name || '').trim() || '미지정'
-      if (!map.has(n)) map.set(n, { name: n, revenue: 0, collected: 0 })
+      if (!map.has(n)) map.set(n, { name: n, revenue: 0, collected: 0, purchase: 0 })
       map.get(n)[key] += Number(v || 0)
     }
     for (const e of entries) {
       if (e.entry_type === 'sale') bump(e.counterparty, 'revenue', e.total_amount)
+      else if (e.entry_type === 'purchase') bump(e.counterparty, 'purchase', e.total_amount)
     }
     for (const c of collections) {
       bump(c.counterparty, 'collected', c.amount)
@@ -258,13 +259,14 @@ export default function Collections() {
             )
             ) : vendorRows.length ? (
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[560px] border-collapse">
+                <table className="w-full min-w-[680px] border-collapse">
                   <thead className="bg-ink-50/70">
                     <tr>
                       <th className="th">거래처</th>
                       <th className="th text-right">매출(합계)</th>
                       <th className="th text-right">수금</th>
                       <th className="th text-right">잔금</th>
+                      <th className="th text-right">매입(합계)</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-ink-100">
@@ -283,6 +285,7 @@ export default function Collections() {
                         <td className={`td num font-bold ${r.due > 0 ? 'text-loss' : 'text-ink-500'}`}>
                           {formatKRW(r.due)}
                         </td>
+                        <td className="td num text-ink-500">{formatKRW(r.purchase)}</td>
                       </tr>
                     ))}
                   </tbody>
