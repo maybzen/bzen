@@ -51,6 +51,8 @@ export default function EntryTable({
   canChangeAuthor = false,
   /* 명세서 버튼 (급여관리). 주면 행마다 명세서 버튼이 생깁니다. */
   onSlip = null,
+  /* 명세서가 저장된 행 id 목록. 버튼에 ✓가 붙습니다. */
+  slipEntryIds = null,
 }) {
   const [rowEdits, setRowEdits] = useState({})
   const [savingId, setSavingId] = useState(null)
@@ -455,9 +457,9 @@ export default function EntryTable({
                             type="button"
                             onClick={() => onSlip?.(entry)}
                             className="rounded-md px-1.5 py-1.5 text-xs font-semibold text-ink-500 transition hover:bg-brand-50 hover:text-brand-700"
-                            title="명세서"
+                            title={slipEntryIds?.has?.(entry.id) ? '명세서 보기·수정' : '명세서 작성'}
                           >
-                            명세서
+                            명세서{slipEntryIds?.has?.(entry.id) ? ' ✓' : ''}
                           </button>
                         ) : null}
                         <button

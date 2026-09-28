@@ -93,7 +93,24 @@ export default function Payroll() {
   const toast = useToast()
 
   const [ym, setYm] = useState(() => todayISO().slice(0, 7))
-  const [query, setQuery] = useState('')
+  /* 인명 칩 선택 ('' = 전체) */
+  const [selName, setSelName] = useState('')
+
+  /* 월 빠른선택: 2025-01 ~ 다음 달 */
+  const ymOptions = useMemo(() => {
+    const out = []
+    let [y, m] = [2025, 1]
+    const [ey, em] = shiftYm(todayISO().slice(0, 7), 1).split('-').map(Number)
+    while (y < ey || (y === ey && m <= em)) {
+      out.push(`${y}-${String(m).padStart(2, '0')}`)
+      m += 1
+      if (m > 12) {
+        m = 1
+        y += 1
+      }
+    }
+    return out.reverse()
+  }, [])
   const [loading, setLoading] = useState(true)
   const [entries, setEntries] = useState([])
   const [prevEntries, setPrevEntries] = useState([])
@@ -103,6 +120,8 @@ export default function Payroll() {
   const [attachmentsByEntry, setAttachmentsByEntry] = useState({})
   const [slips, setSlips] = useState({})
   const [slipsMissing, setSlipsMissing] = useState(false)
+  /* 명세서 저장된 행 id 목록 (명세서 ✓ 표시용) */
+  const slipIds = useMemo(() => new Set(Object.keys(slips || {})), [slips])
 
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState(null)
@@ -226,20 +245,30 @@ export default function Payroll() {
     [projects],
   )
 
-  /* 성명 검색 (세 테이블 공통) */
-  const q = query.trim().toLowerCase()
-  const matchQ = useCallback(
-    (e) => {
-      if (!q) return true
-      return [e.counterparty, e.description, e.memo].some((v) => String(v || '').toLowerCase().includes(q))
-    },
-    [q],
+  /* 인명 칩 선택 (세 테이블 공통) */
+  const matchName = useCallback(
+    (e) => !selName || String(e.counterparty || '').trim() === selName,
+    [selName],
   )
-  const staffShown = useMemo(() => staffSalaryRows.filter(matchQ), [staffSalaryRows, matchQ])
-  const tempShown = useMemo(() => tempSalaryRows.filter(matchQ), [tempSalaryRows, matchQ])
+  const rosterStaff = useMemo(
+    () => [...new Set(staffSalaryRows.map((e) => String(e.counterparty || '').trim()))].sort((a, b) => {
+      const ra = rankOf.get(a)
+      const rb = rankOf.get(b)
+      if (ra !== undefined || rb !== undefined) return (ra ?? 9999) - (rb ?? 9999)
+      return a.localeCompare(b, 'ko')
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [staffSalaryRows, rankOf],
+  )
+  const rosterTemp = useMemo(
+    () => [...new Set(tempSalaryRows.map((e) => String(e.counterparty || '').trim()))].sort((a, b) => a.localeCompare(b, 'ko')),
+    [tempSalaryRows],
+  )
+  const staffShown = useMemo(() => staffSalaryRows.filter(matchName), [staffSalaryRows, matchName])
+  const tempShown = useMemo(() => tempSalaryRows.filter(matchName), [tempSalaryRows, matchName])
   const taxShown = useMemo(
-    () => [...insuranceRows, ...taxRows].filter(matchQ),
-    [insuranceRows, taxRows, matchQ],
+    () => [...insuranceRows, ...taxRows].filter(matchName),
+    [insuranceRows, taxRows, matchName],
   )
 
   const salaryTotal = useMemo(() => sumTotal(salaryRows), [salaryRows])
@@ -286,37 +315,31 @@ export default function Payroll() {
     <div className="flex flex-col gap-5">
       <PageHeader
         title="급여관리"
-        description="귀속월 기준 월별 급여대장입니다. 입력은 급여대장 올리기로 일괄 처리하고, 수정은 행마다 합니다."
+        description="귀속월(근무한 달) 기준입니다. 지급일이 다음 달이어도 근무한 달에 집계됩니다."
       >
         <div className="flex items-center gap-1.5">
           <button type="button" onClick={() => setYm(shiftYm(ym, -1))} className="btn-ghost !px-2" aria-label="이전 달">
             <Icon name="chevron-left" size={16} />
           </button>
-          <input
-            type="month"
+          <select
             className="input w-auto py-1.5 text-xs"
-            value={ym}
+            value={ymOptions.includes(ym) ? ym : ''}
             onChange={(e) => e.target.value && setYm(e.target.value)}
-          />
+            aria-label="월 선택"
+          >
+            {ymOptions.includes(ym) ? null : <option value="">{y}년 {m}월</option>}
+            {ymOptions.map((o) => (
+              <option key={o} value={o}>
+                {o.slice(0, 4)}년 {Number(o.slice(5))}월
+              </option>
+            ))}
+          </select>
           <button type="button" onClick={() => setYm(shiftYm(ym, 1))} className="btn-ghost !px-2" aria-label="다음 달">
             <Icon name="chevron-right" size={16} />
           </button>
           <button type="button" onClick={() => setYm(todayISO().slice(0, 7))} className="btn-ghost !px-2.5 text-xs">
             이번 달
           </button>
-        </div>
-        <div className="relative">
-          <Icon
-            name="search"
-            size={15}
-            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-400"
-          />
-          <input
-            className="input w-44 pl-9 py-1.5 text-xs"
-            placeholder="성명 검색"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
         </div>
         {isAdmin ? (
           <button type="button" className="btn-primary" onClick={() => setImportOpen(true)}>
@@ -325,6 +348,45 @@ export default function Payroll() {
           </button>
         ) : null}
       </PageHeader>
+
+      {(rosterStaff.length + rosterTemp.length) > 0 ? (
+        <div className="card flex flex-wrap items-center gap-1.5 px-4 py-3">
+          <span className="mr-1 text-xs font-semibold text-ink-500">사람</span>
+          <button
+            type="button"
+            onClick={() => setSelName('')}
+            className={`rounded-md px-2.5 py-1 text-xs font-semibold transition ${
+              selName === '' ? 'bg-brand-600 text-white' : 'bg-ink-100 text-ink-600 hover:bg-ink-200'
+            }`}
+          >
+            전체
+          </button>
+          {rosterStaff.map((n) => (
+            <button
+              key={n}
+              type="button"
+              onClick={() => setSelName((s) => (s === n ? '' : n))}
+              className={`rounded-md px-2.5 py-1 text-xs font-semibold transition ${
+                selName === n ? 'bg-brand-600 text-white' : 'bg-ink-100 text-ink-600 hover:bg-ink-200'
+              }`}
+            >
+              {n}
+            </button>
+          ))}
+          {rosterTemp.map((n) => (
+            <button
+              key={`t:${n}`}
+              type="button"
+              onClick={() => setSelName((s) => (s === n ? '' : n))}
+              className={`rounded-md px-2.5 py-1 text-xs font-semibold transition ${
+                selName === n ? 'bg-amber-500 text-white' : 'bg-amber-50 text-amber-700 hover:bg-amber-100'
+              }`}
+            >
+              {n}
+            </button>
+          ))}
+        </div>
+      ) : null}
 
       {loading ? (
         <LoadingBlock />
@@ -368,7 +430,7 @@ export default function Payroll() {
                 직원 급여 ({staffShown.length}건)
               </h2>
               <p className="mt-0.5 text-xs text-ink-500">
-                향란 → 보람 → 혜민 순서입니다. 합계 {formatKRW(sumTotal(staffShown))}원
+                합계 {formatKRW(sumTotal(staffShown))}원
               </p>
             </header>
             {staffShown.length ? (
@@ -383,6 +445,7 @@ export default function Payroll() {
                 onOpenAttachments={setViewerFiles}
                 canChangeAuthor={isAdmin}
                 onSlip={slipsMissing ? undefined : setSlipEntry}
+                slipEntryIds={slipIds}
               />
             ) : (
               <EmptyState icon="coins" title={`${y}년 ${m}월 급여 내역이 없습니다`} description="급여대장 올리기로 기록하세요." />
@@ -410,6 +473,7 @@ export default function Payroll() {
                 onOpenAttachments={setViewerFiles}
                 canChangeAuthor={isAdmin}
                 onSlip={slipsMissing ? undefined : setSlipEntry}
+                slipEntryIds={slipIds}
               />
             ) : (
               <EmptyState icon="users" title="단기·외부 인력 급여가 없습니다" />
@@ -502,6 +566,7 @@ export default function Payroll() {
           ym={ym}
           initial={slips[slipEntry.id] || null}
           reportRows={reportRows}
+          projects={projects}
           personId={profileIdOf(slipEntry.counterparty)}
           userId={user?.id}
         />
@@ -512,7 +577,7 @@ export default function Payroll() {
 
 /* --------------------------- 급여명세서 (breakdown) --------------------------- */
 
-function SlipModal({ open, onClose, onSaved, entry, ym, initial, reportRows, personId, userId }) {
+function SlipModal({ open, onClose, onSaved, entry, ym, initial, reportRows, projects, personId, userId }) {
   const toast = useToast()
   const [form, setForm] = useState({})
   const [checked, setChecked] = useState({})
@@ -560,6 +625,11 @@ function SlipModal({ open, onClose, onSaved, entry, ym, initial, reportRows, per
   const payTotal = slipTotal(form, PAY_FIELDS)
   const dedTotal = slipTotal(form, DED_FIELDS)
   const net = payTotal - dedTotal
+  const expensePay = Number(form.expense_pay) || 0
+  // 우리 회사는 지출결의를 급여에 포함해서 줍니다. 지결은 별도 행으로 잡히므로
+  // 장부 급여분은 실지급액에서 지출결의를 뺀 금액으로 맞춥니다 (중복 방지).
+  const bookAmount = net - expensePay
+  const projectNameOf = (id) => (projects || []).find((p) => p.id === id)?.name || ''
 
   const submit = async (e) => {
     e.preventDefault()
@@ -575,9 +645,8 @@ function SlipModal({ open, onClose, onSaved, entry, ym, initial, reportRows, per
         },
         userId,
       )
-      // 장부 금액을 실지급액으로 맞춥니다.
-      await updateEntry(entry.id, { supply_amount: net, vat_amount: 0 })
-      toast.success(`명세서 저장 + 장부 실지급액 ${formatKRW(net)}원 반영`)
+      await updateEntry(entry.id, { supply_amount: bookAmount, vat_amount: 0 })
+      toast.success(`명세서 저장 + 장부 급여분 ${formatKRW(bookAmount)}원 반영`)
       onSaved?.()
     } catch (err) {
       setError(err.message)
@@ -593,7 +662,7 @@ function SlipModal({ open, onClose, onSaved, entry, ym, initial, reportRows, per
       open={open}
       onClose={saving ? undefined : onClose}
       title={`${name} · ${ym.slice(0, 4)}년 ${Number(ym.slice(5))}월 급여명세서`}
-      subtitle={`장부 합계 ${formatKRW(entry.total_amount)}원 · 저장하면 실지급액 ${formatKRW(net)}원으로 맞춰집니다.`}
+      subtitle={`장부 합계 ${formatKRW(entry.total_amount)}원 · 저장하면 급여분 ${formatKRW(bookAmount)}원(실지급 ${formatKRW(net)} − 지출결의 ${formatKRW(expensePay)})으로 맞춰집니다.`}
       size="lg"
       footer={
         <>
@@ -646,6 +715,9 @@ function SlipModal({ open, onClose, onSaved, entry, ym, initial, reportRows, per
 
         <div className="rounded-lg bg-ink-50/80 px-3.5 py-2.5 text-xs font-bold text-ink-800">
           실지급액 {formatKRW(net)}원 (지급 {formatKRW(payTotal)} − 공제 {formatKRW(dedTotal)})
+          <span className="mt-0.5 block font-normal text-ink-500">
+            장부 반영액 {formatKRW(bookAmount)}원 (실지급 − 지출결의, 지결 행과 중복 방지)
+          </span>
         </div>
 
         <div className="rounded-lg border border-ink-200 p-3.5">
@@ -675,6 +747,7 @@ function SlipModal({ open, onClose, onSaved, entry, ym, initial, reportRows, per
                     <span className="w-20 shrink-0 font-semibold text-ink-500">{String(r.entry_date || '').slice(5)}</span>
                     <span className="min-w-0 flex-1 truncate text-ink-800">
                       {r.counterparty} · {r.description}
+                      {projectNameOf(r.project_id) ? ` · ${projectNameOf(r.project_id)}` : ''}
                       {r.requester_id ? '' : ' (코드 미지정)'}
                     </span>
                     <span className="shrink-0 font-num font-bold tabular-nums">{formatKRW(r.total_amount)}원</span>

@@ -64,5 +64,17 @@ check('귀속 프로젝트', prow[0]?.project_id, 'proj-1')
 check('적요 유지', prow[0]?.description, '10월 급여 (행사 도움)')
 check('기본 적요', buildPayrollRows([['일자', '성명', '급여'], ['2026-10-10', '홍길동', '1000000']], {}).rows[0]?.description, '10월 급여')
 
+console.log('\n== 명세서 장부반영액 (김혜린 8월 실제값) ==')
+// 지급총액 2,722,360 − 공제 246,830 = 실지급 2,475,530
+// 장부 급여분 = 실지급 − 지출결의 22,360 = 2,453,170 (지결 행과 중복 방지)
+const payTotal = 2300000 + 0 + 200000 + 200000 + 22360
+const dedTotal = 118750 + 89870 + 22500 + 11800 + 3560 + 350
+const net = payTotal - dedTotal
+const book = net - 22360
+check('지급총액', payTotal, 2722360)
+check('공제총액', dedTotal, 246830)
+check('실지급액', net, 2475530)
+check('장부 급여분', book, 2453170)
+
 console.log(failed ? `\n실패 ${failed}건` : '\n전부 통과')
 process.exit(failed ? 1 : 0)
