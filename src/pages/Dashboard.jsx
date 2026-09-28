@@ -78,7 +78,7 @@ function saveHomeChecks(checks) {
 /* 회사 PC에서 업데이트할 때 확인할 목록 (관리자만, 브라우저에 저장) */
 const SYNC_CHECKLIST_DEFAULT = [
   { id: 's-pull', text: '회사 PC에서 main pull 받기 (git pull --ff-only)' },
-  { id: 's-sql', text: '대기 중인 SQL 실행 ( supabase/*.sql 중 미실행분 → SQL Editor)' },
+  { id: 's-sql-partners', text: 'SQL 실행: migration_project_partners.sql (프로젝트↔거래처 연결용, 미실행)' },
   { id: 's-payslip', text: '급여명세서 엑셀 대조 (장부 급여분 = 실지급 − 지출결의)' },
   { id: 's-balance', text: '통장 현재 잔고 입력 (자금관리 → 잔고 기록)' },
   { id: 's-card', text: '법인카드 명세서 파일 올리기 (자금관리 → 법인카드 내역)' },
@@ -88,10 +88,15 @@ const SYNC_CHECKLIST_DEFAULT = [
 ]
 
 function loadSyncItems() {
+  // 저장된 목록에 없는 기본 항목은 뒤에 덧붙입니다 (체크 상태 유지).
+  const merge = (stored) => {
+    const ids = new Set(stored.map((x) => x.id))
+    return [...stored, ...SYNC_CHECKLIST_DEFAULT.filter((x) => !ids.has(x.id))]
+  }
   try {
     const raw = localStorage.getItem('bzen.home.sync.items.v1')
     const parsed = raw ? JSON.parse(raw) : null
-    if (Array.isArray(parsed) && parsed.every((x) => x && typeof x.id === 'string')) return parsed
+    if (Array.isArray(parsed) && parsed.every((x) => x && typeof x.id === 'string')) return merge(parsed)
   } catch {
     /* 무시 */
   }

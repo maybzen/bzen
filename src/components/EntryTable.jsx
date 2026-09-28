@@ -444,20 +444,25 @@ export default function EntryTable({
                     <AttachmentCell attachments={files} onOpen={onOpenAttachments} />
                   </td>
                   <td className="td max-w-[130px] truncate text-xs text-ink-500">
-                    작성자 {ownerLabel(profiles, work)}
+                    {(() => {
+                      const own = ownerLabel(profiles, work)
+                      const use = cardUser(entry)
+                      // 작성자가 있으면 작성자로, 없으면 이용자만. 등록자는 일괄 입력이라서 뺍니다.
+                      if (own && own !== '미지정') {
+                        return (
+                          <>
+                            작성자 {own}
+                            {use && use !== own ? (
+                              <span className="block truncate text-[11px] text-brand-700">이용자 {use}</span>
+                            ) : null}
+                          </>
+                        )
+                      }
+                      return use ? <>이용자 {use}</> : '미지정'
+                    })()}
                     {dirty && work.created_by !== undefined ? (
                       <span className="block truncate text-[11px] text-brand-700">→ {authorName(work.created_by)}</span>
                     ) : null}
-                    {cardUser(entry) ? (
-                      <span className="block truncate text-[11px] text-brand-700">이용자 {cardUser(entry)}</span>
-                    ) : null}
-                    {(() => {
-                      const reg = authorName(entry.created_by)
-                      const own = ownerLabel(profiles, entry)
-                      return reg && reg !== '미지정' && reg !== own && reg !== cardUser(entry) ? (
-                        <span className="block truncate text-[11px] text-ink-400">등록 {reg}</span>
-                      ) : null
-                    })()}
                   </td>
                   <td className="td">
                     {canEdit ? (
@@ -588,8 +593,14 @@ export default function EntryTable({
                       </p>
                       <p className="mt-0.5 truncate text-xs text-ink-500">
                         {entry.counterparty || '—'}
-                        {` · 작성자 ${ownerLabel(profiles, entry)}`}
-                        {cardUser(entry) ? ` · 이용자 ${cardUser(entry)}` : ''}
+                        {(() => {
+                          const own = ownerLabel(profiles, entry)
+                          const use = cardUser(entry)
+                          if (own && own !== '미지정') {
+                            return ` · 작성자 ${own}${use && use !== own ? ` · 이용자 ${use}` : ''}`
+                          }
+                          return use ? ` · 이용자 ${use}` : ' · 미지정'
+                        })()}
                       </p>
                     </div>
                   </div>
