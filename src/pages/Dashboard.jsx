@@ -27,25 +27,22 @@ import {
 } from '../lib/format'
 import { groupByMonth, groupByProject, summarize } from '../lib/summary'
 
-/* 홈페이지 확인 필요 목록 (체크 상태는 브라우저에 저장) */
+/* 홈페이지 확인 필요 목록 (체크 상태는 브라우저에 저장, 목록 교체 시 키 상향) */
 const HOME_ALERTS = [
-  '스완메이드 99.7만원 지급 내역 확인',
-  '정성수 170만원 정체 확인 중',
-  '김인순 349만원 정체 확인 중',
-  '진흥원 관리비 초과분 (8월 57,096원·9월 60,795원)',
-  '윤호식 167만원 (밴타고 잔금 여부)',
+  '스완메이드 99.7만원×2회 — 우리가 받을 돈인지 증빙 확인',
+  '윤호식 직접지급 매입근거 확인 (5/8 1,298만·7/9 1,100만·8/14 167만 / 브이오디오 매입 913만원과 차이)',
+  '김영일 761만원 (8/28 KCCV 지급) 매입근거 확인',
+  'KCCV 매출·매입 재등록 (카드-프로젝트 연결·통장·기간 대조)',
   '비버웍스 입금 93만원 성격 확인',
   '부산경제진흥원 222만원 과세구분 확인',
   '대출 원리금 원금·이자 분리 (금진 확인)',
   'PG 수수료 중복 의혹 (~15만원)',
-  'KCCV 비용 부족 (20% 기준 약 6,700만원 미확인)',
-  '급여-은행 차액 (이보람 +95만 등 상여 여부)',
   '매입내역 탭 이름 알려주기',
 ]
 
 function loadHomeChecks() {
   try {
-    const raw = localStorage.getItem('bzen.home.alerts.v1')
+    const raw = localStorage.getItem('bzen.home.alerts.v2')
     const parsed = raw ? JSON.parse(raw) : {}
     return parsed && typeof parsed === 'object' ? parsed : {}
   } catch {
@@ -77,7 +74,7 @@ export default function Dashboard() {
       if (next[i]) delete next[i]
       else next[i] = true
       try {
-        localStorage.setItem('bzen.home.alerts.v1', JSON.stringify(next))
+        localStorage.setItem('bzen.home.alerts.v2', JSON.stringify(next))
       } catch {
         /* 저장 실패 무시 */
       }
