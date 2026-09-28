@@ -16,6 +16,7 @@ import {
   listProfiles,
   listProjects,
 } from '../lib/api'
+import { isStaffWritten, staffIdsFromProfiles } from '../lib/permissions'
 import {
   changeRate,
   formatCompact,
@@ -173,7 +174,11 @@ export default function Dashboard() {
       ])
       const ql = q.toLowerCase()
       const match = (...vals) => vals.some((v) => String(v || '').toLowerCase().includes(ql))
-      const visibleEntries = entryRows || []
+      /* 직원 검색: 사원 작성분만 (관리자 작성분 제외) */
+      const staffIds = staffIdsFromProfiles(profiles)
+      const visibleEntries = isAdmin
+        ? entryRows || []
+        : (entryRows || []).filter((e) => isStaffWritten(e, staffIds))
       setResults({
         q,
         projects: (projectRows || [])

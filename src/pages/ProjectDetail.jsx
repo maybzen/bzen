@@ -9,6 +9,7 @@ import { AttachmentModal } from '../components/Attachments'
 import { useToast } from '../components/Toast'
 import { ConfirmDialog, EmptyState, LoadingBlock, SegmentedControl, StatCard } from '../components/ui'
 import { useAuth } from '../auth/AuthContext'
+import { isStaffWritten, staffIdsFromProfiles } from '../lib/permissions'
 import { ENTRY_META, PROJECT_STATUS } from '../lib/constants'
 import { contractSplit, formatDateHuman, formatKRW, formatPercent, monthLabel } from '../lib/format'
 import { groupByMonth, summarize } from '../lib/summary'
@@ -84,10 +85,11 @@ export default function ProjectDetail() {
     [entries, tab],
   )
 
-  /* 직원은 운영비 행만 봅니다. 매출·매입은 관리자가 관리합니다 */
+  /* 직원은 운영비 중 사원 작성분만 봅니다. 매출·매입은 관리자가 관리합니다 */
+  const staffIds = useMemo(() => staffIdsFromProfiles(profiles), [profiles])
   const staffRows = useMemo(
-    () => filtered.filter((e) => e.entry_type === 'opex'),
-    [filtered],
+    () => filtered.filter((e) => e.entry_type === 'opex' && isStaffWritten(e, staffIds)),
+    [filtered, staffIds],
   )
   const shown = isAdmin ? filtered : staffRows
   const staffTabs = useMemo(() => TABS.filter((t) => t.key === 'all' || t.key === 'opex'), [])

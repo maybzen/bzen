@@ -610,6 +610,7 @@ export default function Partners() {
         userId={user?.id}
         ledger={ledger}
         isAdmin={isAdmin}
+        profiles={profiles}
       />
 
       <ConfirmDialog

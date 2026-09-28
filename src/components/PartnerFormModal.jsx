@@ -15,6 +15,7 @@ import {
   uploadPartnerDoc,
 } from '../lib/api'
 import { formatDateHuman, formatDateTime, formatFileSize, formatKRW, normalizeVendorName } from '../lib/format'
+import { isStaffWritten, staffIdsFromProfiles } from '../lib/permissions'
 
 const EMPTY = {
   name: '',
@@ -166,7 +167,7 @@ function DocPreview({ doc }) {
   )
 }
 
-export default function PartnerFormModal({ open, onClose, onSaved, initial, readOnly = false, userId, ledger = null, isAdmin = false }) {
+export default function PartnerFormModal({ open, onClose, onSaved, initial, readOnly = false, userId, ledger = null, isAdmin = false, profiles = [] }) {
   const toast = useToast()
   const [form, setForm] = useState(EMPTY)
   const [saving, setSaving] = useState(false)
@@ -278,13 +279,17 @@ export default function PartnerFormModal({ open, onClose, onSaved, initial, read
 
   const docsByType = (type) => docs.filter((d) => (d.doc_type || 'other') === type)
 
-  /* 거래내역: 법인격 표기 차이 무시하고 이름으로 매칭합니다 */
+  /* 거래내역: 법인격 표기 차이 무시하고 이름으로 매칭합니다.
+     직원은 사원 작성분만 봅니다 (관리자 작성분 제외). */
   const ledgerInfo = useMemo(() => {
     if (!ledger || !partnerId) return null
     const target = normalizeVendorName(initial?.name)
     if (!target) return null
     const same = (v) => normalizeVendorName(v) === target
-    const matched = (ledger.entries || []).filter((e) => same(e.counterparty))
+    const staffIds = staffIdsFromProfiles(profiles)
+    const matched = (ledger.entries || []).filter(
+      (e) => same(e.counterparty) && (isAdmin || isStaffWritten(e, staffIds)),
+    )
     const cols = (ledger.collections || []).filter((c) => same(c.counterparty))
     let sale = 0
     let purchase = 0
@@ -317,7 +322,7 @@ export default function PartnerFormModal({ open, onClose, onSaved, initial, read
       .sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')))
       .slice(0, 8)
     return { sale, purchase, collected, count: matched.length + cols.length, recent }
-  }, [ledger, partnerId, initial?.name])
+  }, [ledger, partnerId, initial?.name, isAdmin, profiles])
 
   return (
     <Modal

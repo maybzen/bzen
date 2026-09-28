@@ -55,6 +55,27 @@ export function effectivePerms(staffSettings, profile) {
   return [...new Set([...global, ...(Array.isArray(extra) ? extra : [])])]
 }
 
+/** 사원(관리자 제외) id 집합 */
+export function staffIdsFromProfiles(profiles) {
+  return new Set(
+    (profiles || [])
+      .filter((p) => p && p.id && p.role && p.role !== 'admin')
+      .map((p) => p.id),
+  )
+}
+
+/**
+ * 사원 작성분 여부 (직원 공유 범위 판단용).
+ * 등록자·지출자가 사원이거나, 메모에 이용자(E·SH 등 현장 코드)가 있으면 사원 경유로 봅니다.
+ * 급여·세금처럼 관리자가 직접 넣은 행은 여기서 걸러집니다.
+ */
+export function isStaffWritten(entry, staffIds) {
+  if (!entry) return false
+  if (staffIds?.has?.(entry.created_by)) return true
+  if (staffIds?.has?.(entry.requester_id)) return true
+  return /이용자\s+[^·]+/.test(String(entry.memo || ''))
+}
+
 export function useStaffPermissions(profile) {
   const [settings, setSettings] = useState(null)
   useEffect(() => {

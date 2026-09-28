@@ -8,6 +8,7 @@ import { AttachmentModal } from '../components/Attachments'
 import { useToast } from '../components/Toast'
 import { ConfirmDialog, EmptyState, LoadingBlock, Modal, PageHeader, StatCard } from '../components/ui'
 import { useAuth } from '../auth/AuthContext'
+import { isStaffWritten, staffIdsFromProfiles } from '../lib/permissions'
 import { CATEGORIES, ENTRY_META } from '../lib/constants'
 import { downloadTextFile, parseAmount, parseCSV, toCSV } from '../lib/csv'
 import { formatKRW } from '../lib/format'
@@ -143,11 +144,14 @@ export default function LedgerPage({ type, source = 'manual', title, description
     if (code) return '기타'
     return '미지정'
   }
-  /** 직원은 자기 결의만 봅니다 (관리자는 전체 + 직원별 전환) */
-  const lockedSelf = isReport && !isAdmin && user?.id ? user.id : ''
-  const effectiveFilter = lockedSelf || personFilter
+  /** 직원 화면: 사원 작성분만 공유합니다 (관리자 작성분 제외) */
+  const staffIds = useMemo(() => staffIdsFromProfiles(profiles), [profiles])
+  const effectiveFilter = personFilter
   /** 퇴사자분은 기타에 합산됩니다 */
-  const base = useMemo(() => entries, [entries])
+  const base = useMemo(
+    () => (isAdmin ? entries : entries.filter((e) => isStaffWritten(e, staffIds))),
+    [isAdmin, entries, staffIds],
+  )
 
   /** 지출결의: 직원 필터 + 직원별 소계 (날짜가 아니라 사람 기준으로 봅니다) */
   const [oldestFirst, setOldestFirst] = useState(false)
@@ -341,7 +345,7 @@ export default function LedgerPage({ type, source = 'manual', title, description
         />
       </div>
 
-      {isReport && !lockedSelf && byPerson.length > 0 ? (
+      {isReport && byPerson.length > 0 ? (
         <div className="card px-4 py-3.5">
           <p className="mb-2 text-xs font-semibold text-ink-500">직원별 소계 (클릭하면 해당 직원만 표시)</p>
           <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-5">
@@ -402,7 +406,7 @@ export default function LedgerPage({ type, source = 'manual', title, description
               ))}
             </select>
 
-            {isReport && !lockedSelf ? (
+            {isReport ? (
               <select
                 className="input sm:w-44"
                 value={personFilter}
