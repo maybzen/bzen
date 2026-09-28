@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Icon from './Icon'
 import { Field, InlineAlert, Modal, Spinner } from './ui'
 import { useToast } from './Toast'
-import { PARTNER_GROUPS } from '../lib/constants'
+import { PARTNER_GROUPS, suggestPartnerGroup } from '../lib/constants'
 import {
   PARTNER_DOC_TYPES,
   createPartner,
@@ -211,6 +211,11 @@ export default function PartnerFormModal({ open, onClose, onSaved, initial, read
 
   const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }))
 
+  const groupSuggest = useMemo(
+    () => (readOnly ? null : suggestPartnerGroup(form.name, form.memo)),
+    [readOnly, form.name, form.memo],
+  )
+
   const submit = async (e) => {
     e.preventDefault()
     if (!form.name.trim()) return setError('거래처명을 입력해 주세요.')
@@ -328,6 +333,18 @@ export default function PartnerFormModal({ open, onClose, onSaved, initial, read
               <option key={g} value={g} />
             ))}
           </datalist>
+          {groupSuggest && groupSuggest !== form.group_name ? (
+            <p className="mt-1.5 text-xs text-ink-500">
+              추천: <strong className="text-ink-700">{groupSuggest}</strong>{' '}
+              <button
+                type="button"
+                className="font-bold text-brand-700 hover:underline"
+                onClick={() => setForm((f) => ({ ...f, group_name: groupSuggest }))}
+              >
+                적용
+              </button>
+            </p>
+          ) : null}
         </Field>
 
         <Field label="영업상태">
