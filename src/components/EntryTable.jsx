@@ -9,15 +9,16 @@ function personName(profiles, id) {
   return p?.full_name || p?.email || '—'
 }
 
-/** 작성자 표기: 결의자 → 기타(퇴사자 코드) → 기존 방식 순 */
+/** 작성자 표기: 결의자 → 등록자 → 카드 이용자 → 미지정 순 */
 function ownerLabel(profiles, entry) {
   if (entry.requester_id) return personName(profiles, entry.requester_id)
+  if (entry.created_by) return personName(profiles, entry.created_by)
+  if (cardUser(entry)) return cardUser(entry)
   if (entry.source === 'expense_report') {
     const m = String(entry.memo || '').match(/([A-Z]+)\s*지결/)
     if (m) return '기타'
-    return '미지정'
   }
-  return personName(profiles, entry.created_by)
+  return '미지정'
 }
 
 /** 법인카드 이용자: 메모의 "· 이용자 XXX" 에서 추출 */
@@ -120,7 +121,7 @@ export default function EntryTable({
                   </td>
                   <td className="td max-w-[130px] truncate text-xs text-ink-500">
                     {ownerLabel(profiles, entry)}
-                    {cardUser(entry) ? (
+                    {cardUser(entry) && cardUser(entry) !== ownerLabel(profiles, entry) ? (
                       <span className="block truncate text-[11px] text-brand-700">이용자 {cardUser(entry)}</span>
                     ) : null}
                   </td>

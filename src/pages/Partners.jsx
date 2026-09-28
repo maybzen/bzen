@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import Icon from '../components/Icon'
 import PartnerFormModal from '../components/PartnerFormModal'
 import { useToast } from '../components/Toast'
@@ -48,7 +49,8 @@ export default function Partners() {
   const [partners, setPartners] = useState([])
   const [docsByPartner, setDocsByPartner] = useState({})
   const [tableState, setTableState] = useState('checking')
-  const [search, setSearch] = useState('')
+  const [searchParams] = useSearchParams()
+  const [search, setSearch] = useState(() => searchParams.get('search') || '')
   const [groupFilter, setGroupFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [sortKey, setSortKey] = useState('name')

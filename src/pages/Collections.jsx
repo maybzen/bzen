@@ -270,7 +270,14 @@ export default function Collections() {
                   <tbody className="divide-y divide-ink-100">
                     {vendorRows.map((r) => (
                       <tr key={r.name} className="transition hover:bg-ink-50/60">
-                        <td className="td font-medium">{r.name}</td>
+                        <td className="td font-medium">
+                          <Link
+                            to={`/partners?search=${encodeURIComponent(r.name)}`}
+                            className="text-ink-800 hover:text-brand-700 hover:underline"
+                          >
+                            {r.name}
+                          </Link>
+                        </td>
                         <td className="td num text-ink-500">{formatKRW(r.revenue)}</td>
                         <td className="td num text-emerald-700">{formatKRW(r.collected)}</td>
                         <td className={`td num font-bold ${r.due > 0 ? 'text-loss' : 'text-ink-500'}`}>
