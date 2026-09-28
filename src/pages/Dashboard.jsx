@@ -34,7 +34,6 @@ const HOME_ALERTS = [
   '김영일 761만원 (8/28 KCCV 지급) 매입근거 확인',
   'KCCV 매출·매입 재등록 (카드-프로젝트 연결·통장·기간 대조)',
   '비버웍스 입금 93만원 성격 확인',
-  '부산경제진흥원 222만원 과세구분 확인',
   '대출 원리금 원금·이자 분리 (금진 확인)',
   'PG 수수료 중복 의혹 (~15만원)',
   '매입내역 탭 이름 알려주기',
@@ -82,6 +81,23 @@ export default function Dashboard() {
     })
   }
   const homeOpen = HOME_ALERTS.filter((_, i) => !homeChecks[i])
+  const [alertsOpen, setAlertsOpen] = useState(() => {
+    try {
+      return localStorage.getItem('bzen.home.alerts.open.v1') !== '0'
+    } catch {
+      return true
+    }
+  })
+  const toggleAlertsOpen = () => {
+    setAlertsOpen((v) => {
+      try {
+        localStorage.setItem('bzen.home.alerts.open.v1', v ? '0' : '1')
+      } catch {
+        /* 저장 실패 무시 */
+      }
+      return !v
+    })
+  }
 
   const monthKeys = useMemo(() => lastMonthKeys(12), [])
 
@@ -256,12 +272,21 @@ export default function Dashboard() {
           {homeOpen.length ? (
             <section className="card overflow-hidden border-amber-200">
               <header className="flex items-center justify-between gap-3 border-b border-ink-200 bg-amber-50/60 px-4 py-3">
-                <h2 className="text-sm font-bold text-ink-900">
-                  확인 필요 목록
-                  <span className="ml-1.5 font-medium text-ink-500">{homeOpen.length}건</span>
-                </h2>
-                <span className="text-[11px] text-ink-500">하나씩 확인되면 체크하세요</span>
+                <button
+                  type="button"
+                  onClick={toggleAlertsOpen}
+                  className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
+                  aria-expanded={alertsOpen}
+                >
+                  <h2 className="truncate text-sm font-bold text-ink-900">
+                    확인 필요 목록
+                    <span className="ml-1.5 font-medium text-ink-500">{homeOpen.length}건</span>
+                  </h2>
+                  <Icon name={alertsOpen ? 'chevron-down' : 'chevron-right'} size={15} className="shrink-0 text-ink-500" />
+                </button>
+                <span className="shrink-0 text-[11px] text-ink-500">하나씩 확인되면 체크하세요</span>
               </header>
+              {alertsOpen ? (
               <ul className="divide-y divide-ink-100">
                 {HOME_ALERTS.map((text, i) =>
                   homeChecks[i] ? null : (
@@ -280,6 +305,7 @@ export default function Dashboard() {
                   ),
                 )}
               </ul>
+              ) : null}
             </section>
           ) : null}
 

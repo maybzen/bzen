@@ -8,7 +8,7 @@ import { AttachmentModal } from '../components/Attachments'
 import { useToast } from '../components/Toast'
 import { ConfirmDialog, EmptyState, LoadingBlock, Modal, PageHeader, StatCard } from '../components/ui'
 import { useAuth } from '../auth/AuthContext'
-import { ENTRY_META } from '../lib/constants'
+import { CATEGORIES, ENTRY_META } from '../lib/constants'
 import { downloadTextFile, parseAmount, parseCSV, toCSV } from '../lib/csv'
 import { formatKRW } from '../lib/format'
 import {
@@ -19,6 +19,7 @@ import {
   listPartners,
   listProfiles,
   listProjects,
+  updateEntry,
 } from '../lib/api'
 
 const IMPORT_COLUMNS = ['일자', '거래처', '항목', '적요', '공급가액', '부가세', '결제수단', '비고', '프로젝트']
@@ -45,6 +46,7 @@ export default function LedgerPage({ type, source = 'manual', title, description
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState(null)
   const [removing, setRemoving] = useState(null)
+  const [removingMany, setRemovingMany] = useState(null)
   const [busy, setBusy] = useState(false)
   const [viewerFiles, setViewerFiles] = useState(null)
   const [importOpen, setImportOpen] = useState(false)
@@ -209,6 +211,35 @@ export default function LedgerPage({ type, source = 'manual', title, description
       setReloadKey((k) => k + 1)
     } catch (error) {
       toast.error(error.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  /* 운영비 목록 직접 수정 (법인카드식 단계 저장) */
+  const bulkEdit = type === 'opex' && source === 'manual'
+  const handleSaveRow = async (entry, payload) => {
+    const saved = await updateEntry(entry.id, payload)
+    setEntries((rows) => rows.map((r) => (r.id === entry.id ? { ...r, ...saved } : r)))
+    return saved
+  }
+  const handleDeleteMany = async () => {
+    if (!removingMany?.length) return
+    setBusy(true)
+    try {
+      let ok = 0
+      for (const id of removingMany) {
+        // eslint-disable-next-line no-await-in-loop
+        try {
+          await deleteEntry(id)
+          ok += 1
+        } catch {
+          /* 개별 실패는 합계에 반영 */
+        }
+      }
+      toast.success(`${removingMany.length}건 중 ${ok}건을 삭제했습니다.`)
+      setRemovingMany(null)
+      setReloadKey((k) => k + 1)
     } finally {
       setBusy(false)
     }
@@ -401,6 +432,10 @@ export default function LedgerPage({ type, source = 'manual', title, description
             }}
             onDelete={isAdmin ? setRemoving : undefined}
             onOpenAttachments={setViewerFiles}
+            bulkEdit={bulkEdit}
+            categories={CATEGORIES[type] || []}
+            onSaveRow={handleSaveRow}
+            onBulkDelete={isAdmin ? setRemovingMany : undefined}
           />
         )}
       </div>
@@ -435,6 +470,15 @@ export default function LedgerPage({ type, source = 'manual', title, description
         }
         onClose={() => setRemoving(null)}
         onConfirm={handleDelete}
+      />
+
+      <ConfirmDialog
+        open={Boolean(removingMany)}
+        busy={busy}
+        title="선택한 내역을 삭제하시겠습니까?"
+        message={removingMany ? `${removingMany.length}건, 삭제하면 되돌릴 수 없습니다.` : ''}
+        onClose={() => setRemovingMany(null)}
+        onConfirm={handleDeleteMany}
       />
 
       <AttachmentModal

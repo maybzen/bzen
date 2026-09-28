@@ -11,23 +11,24 @@ export const NAV = [
   { to: '/dashboard', label: '대시보드', icon: 'dashboard', base: true },
   { to: '/sales', label: '매출', icon: 'trending-up', perm: 'sales' },
   { to: '/purchases', label: '매입', icon: 'cart', perm: 'purchases' },
+  { to: '/collections', label: '수금관리', icon: 'card', perm: 'collections' },
   { to: '/expenses', label: '운영비', icon: 'receipt', perm: 'expenses' },
   { to: '/cards', label: '법인카드', icon: 'card', perm: 'cards' },
   { to: '/expense-reports', label: '지출결의', icon: 'coins', perm: 'expense-reports' },
   { to: '/projects', label: '프로젝트', icon: 'folder', perm: 'projects' },
   { to: '/partners', label: '거래처', icon: 'building', perm: 'partners' },
   { to: '/fixed-costs', label: '고정비', icon: 'coins', perm: 'fixed' },
-  { to: '/reports', label: '보고서', icon: 'chart', perm: 'reports' },
-  { to: '/tax', label: '세금관리', icon: 'calendar', perm: 'tax' },
-  { to: '/collections', label: '수금관리', icon: 'card', perm: 'collections' },
   { to: '/leaves', label: '휴무대장', icon: 'file', perm: 'leaves' },
+  { to: '/tax', label: '세금관리', icon: 'calendar', perm: 'tax' },
+  { to: '/reports', label: '보고서', icon: 'chart', perm: 'reports' },
   { to: '/users', label: '계정관리', icon: 'users', adminOnly: true },
   { to: '/settings', label: '설정', icon: 'settings', base: true },
 ]
 
 const NAV_GROUPS = [
-  { title: '장부', items: ['/dashboard', '/sales', '/purchases', '/expenses', '/cards', '/expense-reports'] },
-  { title: '분석', items: ['/projects', '/collections', '/partners', '/fixed-costs', '/reports', '/tax', '/leaves'] },
+  { title: '장부', items: ['/dashboard', '/sales', '/purchases', '/collections', '/expenses', '/cards', '/expense-reports'] },
+  { title: '사업', items: ['/projects', '/partners', '/fixed-costs', '/leaves'] },
+  { title: '세금·정산', items: ['/tax', '/reports'] },
   { title: '관리', items: ['/users', '/settings'] },
 ]
 

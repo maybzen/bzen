@@ -5,7 +5,7 @@ import { useToast } from '../components/Toast'
 import { EmptyState, LoadingBlock, PageHeader, SegmentedControl, StatCard } from '../components/ui'
 import { formatKRW, monthEnd, monthKey, monthKeyOf, monthLabel, todayISO, toISODate } from '../lib/format'
 import { detectFixedCosts } from '../lib/summary'
-import { listEntries, listProjects } from '../lib/api'
+import { listEntries } from '../lib/api'
 
 /**
  * 고정비 현황 (별도 메뉴).
@@ -14,17 +14,21 @@ import { listEntries, listProjects } from '../lib/api'
  * 항목표 탭은 사내 고정비·변동비 항목(출금예상표 기준)과 장부 실제를 대조합니다.
  */
 const OVERHEAD_RULES = [
-  { name: '급여', kind: '고정비', test: (e) => e.entry_type === 'opex' && e.category === '인건비' && e.counterparty !== '국민건강보험공단' },
   { name: '4대보험 회사부담분', kind: '고정비', test: (e) => (e.counterparty || '') === '국민건강보험공단' },
   { name: '퇴직연금', kind: '고정비', test: (e) => /퇴직연금/.test(`${e.description || ''} ${e.memo || ''}`) },
   { name: '원천세', kind: '고정비', test: (e) => /원천세/.test(`${e.description || ''} ${e.memo || ''}`) },
+  { name: '급여', kind: '고정비', test: (e) => e.entry_type === 'opex' && e.category === '인건비' && e.counterparty !== '국민건강보험공단' },
   { name: '사무실 관리비', kind: '고정비', test: (e) => /진흥원/.test(e.counterparty || '') },
   { name: 'LG 공기청정기', kind: '고정비', test: (e) => /엘지전자/.test(e.counterparty || '') },
   { name: '포켓와이파이', kind: '고정비', test: (e) => /포켓|에그/.test(`${e.description || ''} ${e.memo || ''}`) },
   { name: '부영 복합기', kind: '고정비', test: (e) => /부영사무기/.test(e.counterparty || '') },
   { name: 'KT 인터넷·전화', kind: '고정비', test: (e) => /케이티|^KT|KT[0-9]/.test(e.counterparty || '') },
   { name: '기장수수료', kind: '고정비', test: (e) => /기장/.test(`${e.description || ''} ${e.memo || ''}`) },
-  { name: '생수', kind: '고정비', test: (e) => /몽베스트|생수/.test(`${e.counterparty || ''} ${e.description || ''} ${e.memo || ''}`) },
+  { name: '생수', kind: '고정비', test: (e) => {
+    const t = `${e.counterparty || ''} ${e.description || ''} ${e.memo || ''}`
+    if (/몽베스트|생수/.test(t)) return true
+    return /쿠팡/.test(e.counterparty || '') && /생수|몽베스트|워터|음료/.test(`${e.description || ''} ${e.memo || ''}`)
+  } },
   { name: '대출이자·원리금', kind: '고정비', test: (e) => /대출/.test(`${e.description || ''} ${e.memo || ''}`) },
   { name: 'AI 구독료', kind: '변동비', test: (e) => /GPT|Claude|Perplexity|Grok|구독|AI /.test(`${e.counterparty || ''} ${e.description || ''} ${e.memo || ''}`) },
   { name: '법인카드', kind: '변동비', test: (e) => e.source === 'card' },
@@ -35,7 +39,6 @@ export default function FixedCosts() {
   const navigate = useNavigate()
   const [loading, setLoading] = useState(true)
   const [entries, setEntries] = useState([])
-  const [internalId, setInternalId] = useState('')
   const [excluded, setExcluded] = useState(() => {
     try {
       const raw = localStorage.getItem('bzen.fixed.excluded.v1')
@@ -60,11 +63,10 @@ export default function FixedCosts() {
     setLoading(true)
     const now = new Date()
     const from = toISODate(new Date(now.getFullYear(), now.getMonth() - 11, 1))
-    Promise.all([listEntries({ from, to: toISODate(now), maxRows: 20000 }), listProjects()])
-      .then(([rows, projectRows]) => {
+    Promise.all([listEntries({ from, to: toISODate(now), maxRows: 20000 })])
+      .then(([rows]) => {
         if (!alive) return
         setEntries(rows || [])
-        setInternalId((projectRows || []).find((p) => p.name === '비젠내부')?.id || '')
       })
       .catch((e) => toast.error(e.message))
       .finally(() => {
@@ -113,7 +115,7 @@ export default function FixedCosts() {
   )
   const thisMonthKey = monthKey(new Date())
   const thisMonthPayroll = payrollByMonth.find((r) => r.mk === thisMonthKey)?.total || 0
-  const [tab, setTab] = useState('fixed')
+  const [tab, setTab] = useState('overhead')
 
   /** 고정비·변동비 항목표 (출금예상표 기준 항목과 장부 대조, 첫 매칭 항목에만 귀속) */
   const overhead = useMemo(() => {
@@ -128,21 +130,21 @@ export default function FixedCosts() {
     }
     return { rows, months }
   }, [entries])
-  const internalByMonth = useMemo(() => {
-    if (!internalId) return []
+  /** 법인카드 월별 지출 (source=card, 매입+운영비) */
+  const cardByMonth = useMemo(() => {
     const map = new Map()
     for (const e of entries) {
-      if (e.project_id !== internalId) continue
+      if (e.source !== 'card') continue
       if (e.entry_type !== 'purchase' && e.entry_type !== 'opex') continue
       const mk = monthKeyOf(e.entry_date)
       if (!mk) continue
       map.set(mk, (map.get(mk) || 0) + Number(e.total_amount || 0))
     }
     return [...map.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1)).slice(-12)
-  }, [entries, internalId])
-  const internalAvg = useMemo(
-    () => (internalByMonth.length ? Math.round(internalByMonth.reduce((a, [, v]) => a + v, 0) / internalByMonth.length) : 0),
-    [internalByMonth],
+  }, [entries])
+  const cardAvg = useMemo(
+    () => (cardByMonth.length ? Math.round(cardByMonth.reduce((a, [, v]) => a + v, 0) / cardByMonth.length) : 0),
+    [cardByMonth],
   )
 
   return (
@@ -175,10 +177,10 @@ export default function FixedCosts() {
               value={tab}
               onChange={setTab}
               options={[
-                { key: 'fixed', label: `고정비 (${items.length})` },
                 { key: 'overhead', label: '항목표' },
+                { key: 'fixed', label: `고정비 (${items.length})` },
                 { key: 'payroll', label: '월별급여' },
-                { key: 'internal', label: '공통월별지출' },
+                { key: 'card', label: '카드월별지출' },
               ]}
             />
           </div>
@@ -281,23 +283,23 @@ export default function FixedCosts() {
             </section>
           ) : null}
 
-          {tab === 'internal' && internalByMonth.length ? (
+          {tab === 'card' && cardByMonth.length ? (
             <section className="card overflow-hidden">
               <header className="flex flex-wrap items-center justify-between gap-2 border-b border-ink-200 px-4 py-3.5">
-                <h2 className="text-sm font-bold text-ink-900">공통(비젠내부) 월별 지출</h2>
+                <h2 className="text-sm font-bold text-ink-900">법인카드 월별 지출</h2>
                 <p className="text-xs text-ink-500">
-                  월 평균 <strong className="font-num tabular-nums text-brand-700">{formatKRW(internalAvg)}원</strong>
+                  월 평균 <strong className="font-num tabular-nums text-brand-700">{formatKRW(cardAvg)}원</strong>
                 </p>
               </header>
               <div className="grid grid-cols-2 gap-2.5 p-4 sm:grid-cols-3 xl:grid-cols-4">
-                {internalByMonth.map(([mk, v]) => {
+                {cardByMonth.map(([mk, v]) => {
                   const [y, m] = mk.split('-').map(Number)
                   const from = `${mk}-01`
                   const to = monthEnd(new Date(y, m, 0))
                   return (
                     <Link
                       key={mk}
-                      to={`/expenses?project=${internalId}&from=${from}&to=${to}`}
+                      to={`/expenses?search=${encodeURIComponent('법카')}&from=${from}&to=${to}`}
                       className="group rounded-xl border border-ink-200 px-3.5 py-3 transition hover:border-brand-300 hover:shadow-card"
                     >
                       <p className="text-xs font-semibold text-ink-500">{monthLabel(mk)}</p>
@@ -313,7 +315,7 @@ export default function FixedCosts() {
                 })}
               </div>
               <p className="border-t border-ink-100 px-4 py-3 text-xs leading-relaxed text-ink-500">
-                프로젝트 미지정분은 모두 여기로 모입니다. 카드를 누르면 운영비 내역으로 이동합니다.
+                법인카드로 결제한 내역만 월별로 모았습니다. 카드를 누르면 운영비 내역으로 이동합니다.
               </p>
             </section>
           ) : null}
