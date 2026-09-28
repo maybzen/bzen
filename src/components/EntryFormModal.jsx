@@ -63,6 +63,8 @@ export default function EntryFormModal({
   partnerNames = [],
   isAdmin = false,
   userId = null,
+  /* 프로젝트 상세에서 열 때: 신규 등록분을 그 프로젝트로 자동 지정 */
+  defaultProjectId = '',
 }) {
   const toast = useToast()
   const meta = ENTRY_META[entryType] || ENTRY_META.sale
@@ -113,10 +115,13 @@ export default function EntryFormModal({
       })
       setExisting(initial.attachments || [])
     } else {
-      setForm({ ...emptyForm(entryType, source, userId), project_id: internalProjectId })
+      setForm({
+        ...emptyForm(entryType, source, userId),
+        project_id: defaultProjectId || internalProjectId,
+      })
       setExisting([])
     }
-  }, [open, initial, entryType, source, userId, internalProjectId])
+  }, [open, initial, entryType, source, userId, internalProjectId, defaultProjectId])
 
   const supply = toNumber(form.supply_amount)
   const vat = toNumber(form.vat_amount)

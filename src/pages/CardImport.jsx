@@ -715,12 +715,18 @@ export default function CardImport({ embed = false } = {}) {
   const loadRegistered = useCallback(async () => {
     setLoadingList(true)
     try {
-      const [cardRows, projectRows, profileRows] = await Promise.all([
+      const [cardRows, manualRows, projectRows, profileRows] = await Promise.all([
         listEntries({ from: period.range.from, to: period.range.to, source: 'card' }),
+        // 직접 등록한 카드 결제(수기·지결)도 카드내역에 합칩니다. 메모의 법카 태그로 카드가 구분됩니다.
+        listEntries({ from: period.range.from, to: period.range.to, types: ['opex', 'purchase'] }).catch(() => []),
         listProjects().catch(() => []),
         listProfiles().catch(() => []),
       ])
-      setRegistered(cardRows)
+      const seen = new Set((cardRows || []).map((r) => r.id))
+      const manualCards = (manualRows || []).filter(
+        (r) => r.source !== 'card' && r.payment_method === '카드' && !seen.has(r.id),
+      )
+      setRegistered([...(cardRows || []), ...manualCards])
       setProjects(projectRows || [])
       setRegProjects(projectRows || [])
       setRegProfiles(profileRows || [])
@@ -1468,6 +1474,9 @@ export default function CardImport({ embed = false } = {}) {
                           />
                           {fixedSet.has(String(work.counterparty || '').trim()) ? (
                             <span className="chip mt-1 bg-brand-50 text-brand-700">고정비</span>
+                          ) : null}
+                          {entry.source !== 'card' ? (
+                            <span className="chip mt-1 bg-ink-100 text-ink-500">직접등록</span>
                           ) : null}
                         </td>
                         <td className="td min-w-[150px]">

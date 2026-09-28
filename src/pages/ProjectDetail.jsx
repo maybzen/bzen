@@ -317,6 +317,7 @@ export default function ProjectDetail() {
         profiles={profiles}
         isAdmin={isAdmin}
         userId={user?.id}
+        defaultProjectId={project.id}
       />
 
       <ProjectFormModal
