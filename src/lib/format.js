@@ -41,6 +41,18 @@ export function formatFileSize(bytes) {
   return `${(b / 1024 / 1024).toFixed(1)}MB`
 }
 
+/**
+ * 거래처명 비교용 정규화.
+ * 법인격 표기 차이((주)·주식회사 등)와 공백을 무시해 같은 거래처로 묶습니다.
+ * 수금관리 ↔ 거래처 화면이 같은 이름으로 매칭되도록 양쪽에서 씁니다.
+ */
+export function normalizeVendorName(name) {
+  return String(name || '')
+    .replace(/\s+/g, '')
+    .replace(/\(주\)|\(재\)|\(사\)|주식회사|㈜/g, '')
+    .toLowerCase()
+}
+
 function pad2(n) {
   return String(n).padStart(2, '0')
 }

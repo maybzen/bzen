@@ -11,8 +11,6 @@ const EMPTY = {
   start_date: '',
   end_date: '',
   contract_amount: '',
-  profit_rate: '',
-  profit_amount: '',
   venue: '',
   manager_id: '',
   memo: '',
@@ -35,8 +33,6 @@ export default function ProjectFormModal({ open, onClose, onSaved, initial, prof
         start_date: initial.start_date || '',
         end_date: initial.end_date || '',
         contract_amount: String(initial.contract_amount ?? ''),
-        profit_rate: initial.profit_rate ? String(initial.profit_rate) : '',
-        profit_amount: initial.profit_amount ? String(initial.profit_amount) : '',
         venue: initial.venue || '',
         manager_id: initial.manager_id || '',
         memo: initial.memo || '',
@@ -62,8 +58,6 @@ export default function ProjectFormModal({ open, onClose, onSaved, initial, prof
         start_date: form.start_date || null,
         end_date: form.end_date || null,
         contract_amount: Math.round(Number(String(form.contract_amount).replace(/[^0-9.-]/g, '')) || 0),
-        profit_rate: Number(String(form.profit_rate).replace(/[^0-9.-]/g, '')) || 0,
-        profit_amount: Math.round(Number(String(form.profit_amount).replace(/[^0-9.-]/g, '')) || 0),
         venue: form.venue.trim(),
         manager_id: form.manager_id || null,
         memo: form.memo.trim(),
@@ -163,25 +157,13 @@ export default function ProjectFormModal({ open, onClose, onSaved, initial, prof
           />
         </Field>
 
-        <Field label="수익률 (%)" hint="미진행 등으로 손실이면 음수로 적어주세요.">
-          <input
-            className="input num text-left"
-            inputMode="decimal"
-            value={form.profit_rate}
-            onChange={set('profit_rate')}
-            placeholder="예: 30"
-          />
-        </Field>
-
-        <Field label="수익 (원)" hint="확정·예상 수익금. 손실이면 음수.">
-          <input
-            className="input num text-left"
-            inputMode="numeric"
-            value={form.profit_amount}
-            onChange={set('profit_amount')}
-            placeholder="0"
-          />
-        </Field>
+        <div className="sm:col-span-2">
+          <InlineAlert tone="info">
+            <strong>수익·수익률은 직접 입력하지 않습니다.</strong> 장부의 매출 − (매입 + 운영비)로 자동
+            계산되고, 수익률은 이를 매출로 나눈 값입니다. 제안서·미진행도 마찬가지여서 매출이 없으면
+            투입비용만큼 손실로 표시됩니다. (프로젝트 카드·상세 화면에 바로 반영됩니다)
+          </InlineAlert>
+        </div>
 
         <Field label="메모" className="sm:col-span-2">
           <textarea className="input min-h-[72px] resize-y" value={form.memo} onChange={set('memo')} />

@@ -13,6 +13,28 @@ function addTo(bucket, entry) {
 }
 
 /**
+ * 세무·회계 기준 손익 구조.
+ *   순매출액(공급가액) → 매출원가(매입) → 매출총이익 → 경비(운영비) → 영업이익
+ * 부가세는 통과 항목이므로 공급가액(부가세 제외)만 집계합니다.
+ */
+export function buildPnl(sale, purchase, opex) {
+  const revenue = Number(sale || 0)
+  const cogs = Number(purchase || 0)
+  const gross = revenue - cogs
+  const expense = Number(opex || 0)
+  const operating = gross - expense
+  return {
+    revenue,
+    cogs,
+    gross,
+    expense,
+    operating,
+    grossMargin: revenue ? (gross / revenue) * 100 : null,
+    operatingMargin: revenue ? (operating / revenue) * 100 : null,
+  }
+}
+
+/**
  * 매출/매입/운영비 집계.
  * 영업이익은 부가세를 제외한 "공급가액" 기준으로 계산합니다.
  */
@@ -27,10 +49,7 @@ export function summarize(entries) {
     else if (e.entry_type === 'opex') addTo(opex, e)
   }
 
-  const revenue = sale.supply
-  const cost = purchase.supply + opex.supply
-  const profit = revenue - cost
-  const margin = revenue ? (profit / revenue) * 100 : null
+  const pnl = buildPnl(sale.supply, purchase.supply, opex.supply)
   // 부가세 납부 예상액 (매출세액 - 매입세액)
   const vatPayable = sale.vat - purchase.vat - opex.vat
 
@@ -38,10 +57,11 @@ export function summarize(entries) {
     sale,
     purchase,
     opex,
-    revenue,
-    cost,
-    profit,
-    margin,
+    ...pnl,
+    revenue: pnl.revenue,
+    cost: pnl.cogs + pnl.expense,
+    profit: pnl.operating,
+    margin: pnl.operatingMargin,
     vatPayable,
     count: (entries || []).length,
   }
@@ -90,8 +110,11 @@ export function groupByProject(entries, projects) {
   const rows = [...map.values()]
   if (unassigned.count) rows.push(unassigned)
   for (const r of rows) {
-    r.profit = r.sale - r.purchase - r.opex
-    r.margin = r.sale ? (r.profit / r.sale) * 100 : null
+    const pnl = buildPnl(r.sale, r.purchase, r.opex)
+    r.gross = pnl.gross
+    r.grossMargin = pnl.grossMargin
+    r.profit = pnl.operating
+    r.margin = pnl.operatingMargin
   }
   return rows
 }

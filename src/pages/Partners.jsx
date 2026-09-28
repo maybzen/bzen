@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import Icon from '../components/Icon'
 import PartnerFormModal from '../components/PartnerFormModal'
 import { useToast } from '../components/Toast'
@@ -8,8 +8,10 @@ import { useAuth } from '../auth/AuthContext'
 import { PARTNER_GROUPS, suggestPartnerGroup } from '../lib/constants'
 import { supabase } from '../lib/supabase'
 import { downloadTextFile, toCSV } from '../lib/csv'
+import { formatKRW, normalizeVendorName } from '../lib/format'
 import {
   deletePartner,
+  listCollections,
   listPartnerDocs,
   listPartners,
   partnersTableExists,
@@ -48,6 +50,7 @@ export default function Partners() {
   const [loading, setLoading] = useState(true)
   const [partners, setPartners] = useState([])
   const [docsByPartner, setDocsByPartner] = useState({})
+  const [collections, setCollections] = useState([])
   const [tableState, setTableState] = useState('checking')
   const [searchParams] = useSearchParams()
   const [search, setSearch] = useState(() => searchParams.get('search') || '')
@@ -172,10 +175,13 @@ export default function Partners() {
         } else {
           setDocsByPartner({})
         }
+        /* 수금관리 역링크용. 수금 테이블/권한이 없으면 조용히 비워 둡니다. */
+        setCollections(await listCollections().catch(() => []))
       } else {
         setTableState('missing')
         setPartners([])
         setDocsByPartner({})
+        setCollections([])
       }
     } catch (error) {
       toast.error(error.message)
@@ -222,6 +228,20 @@ export default function Partners() {
     () => Object.values(docsByPartner).reduce((a, list) => a + list.length, 0),
     [docsByPartner],
   )
+
+  /* 수금관리에 입금이 등록된 거래처만 골라 냅니다(법인격 표기 차이는 무시). */
+  const collectionStats = useMemo(() => {
+    const map = new Map()
+    for (const c of collections) {
+      const key = normalizeVendorName(c.counterparty)
+      if (!key) continue
+      const hit = map.get(key) || { count: 0, amount: 0 }
+      hit.count += 1
+      hit.amount += Number(c.amount || 0)
+      map.set(key, hit)
+    }
+    return map
+  }, [collections])
 
   const handleDelete = async () => {
     if (!removing) return
@@ -302,6 +322,14 @@ export default function Partners() {
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard label="등록 거래처" value={String(partners.length)} unit="곳" tone="neutral" icon="building" />
         <StatCard label="등록 서류" value={String(docTotal)} unit="건" tone="neutral" icon="file" />
+        <StatCard
+          label="수금 연동"
+          value={String(collectionStats.size)}
+          unit="곳"
+          tone="profit"
+          icon="card"
+          hint="수금관리 입금 건 있음"
+        />
       </div>
 
       <div className="card overflow-hidden">
@@ -362,6 +390,7 @@ export default function Partners() {
                   <th className="th">사업자번호</th>
                   <th className="th">계좌</th>
                   <th className="th text-right">서류</th>
+                  <th className="th text-right">수금</th>
                   {isAdmin ? <th className="th text-right">관리</th> : null}
                 </tr>
               </thead>
@@ -378,6 +407,8 @@ export default function Partners() {
                       : null
                   const openDetail = () =>
                     isAdmin ? (setEditing(p), setFormOpen(true)) : setViewing(p)
+                  /* 수금관리에 입금이 남은 거래처만 수금 버튼을 노출합니다. */
+                  const collected = collectionStats.get(normalizeVendorName(p.name))
                   return (
                     <tr key={p.id} className={`transition hover:bg-ink-50/60 ${closed ? 'opacity-60' : ''}`}>
                       <td className={`td whitespace-nowrap ${pendingGroups[p.id] ? 'bg-amber-50/60' : ''}`}>
@@ -482,6 +513,20 @@ export default function Partners() {
                             <Icon name="paperclip" size={14} />
                             {docs.length}
                           </button>
+                        ) : (
+                          <span className="text-xs text-ink-300">—</span>
+                        )}
+                      </td>
+                      <td className="td num whitespace-nowrap">
+                        {collected ? (
+                          <Link
+                            to={`/collections?vendor=${encodeURIComponent(p.name)}`}
+                            title={`수금관리에서 ${p.name} 보기 (${collected.count}건 · ${formatKRW(collected.amount)}원)`}
+                            className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-50"
+                          >
+                            <Icon name="card" size={14} />
+                            {collected.count}
+                          </Link>
                         ) : (
                           <span className="text-xs text-ink-300">—</span>
                         )}

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import Icon from '../components/Icon'
 import { useToast } from '../components/Toast'
 import { ConfirmDialog, EmptyState, InlineAlert, LoadingBlock, PageHeader, StatCard } from '../components/ui'
@@ -12,15 +12,10 @@ import {
   listPartners,
   listProjects,
 } from '../lib/api'
-import { formatDateHuman, formatKRW, formatPercent, todayISO } from '../lib/format'
+import { formatDateHuman, formatKRW, formatPercent, normalizeVendorName, todayISO } from '../lib/format'
 
 /* 법인격 표기 차이((주)·주식회사 등)를 무시하고 거래처명을 비교합니다 */
-function normVendor(name) {
-  return String(name || '')
-    .replace(/\s+/g, '')
-    .replace(/\(주\)|\(재\)|\(사\)|주식회사|㈜/g, '')
-    .toLowerCase()
-}
+const normVendor = normalizeVendorName
 
 function isMissingTable(error) {
   const msg = String(error?.message || '')
@@ -30,6 +25,13 @@ function isMissingTable(error) {
 export default function Collections() {
   const { isAdmin, user } = useAuth()
   const toast = useToast()
+  /* 거래처 화면에서 넘어올 때 (?vendor=이름) 해당 거래처를 바로 보여줍니다. */
+  const [searchParams, setSearchParams] = useSearchParams()
+  const focusVendor = (searchParams.get('vendor') || '').trim()
+  const clearFocus = () => {
+    searchParams.delete('vendor')
+    setSearchParams(searchParams, { replace: true })
+  }
   const [loading, setLoading] = useState(true)
   const [missingTable, setMissingTable] = useState(false)
   const [projects, setProjects] = useState([])
@@ -63,6 +65,11 @@ export default function Collections() {
     load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  /* 거래처 화면에서 넘어온 경우 거래처별 탭을 자동으로 엽니다. */
+  useEffect(() => {
+    if (focusVendor) setViewTab('vendor')
+  }, [focusVendor])
 
   const rows = useMemo(() => {
     const saleByProject = new Map()
@@ -160,6 +167,49 @@ export default function Collections() {
     .filter((c) => String(c.collected_on || '').startsWith(thisMonth))
     .reduce((a, c) => a + Number(c.amount || 0), 0)
 
+  /* 거래처 화면에서 지정한 거래처 1곳의 수금 현황.
+     주거래처 15곳 목록에 없어도 보여주도록 장부 전체에서 이름으로 직접 집계합니다. */
+  const focusRow = useMemo(() => {
+    const name = focusVendor.trim()
+    if (!name) return null
+    const target = normVendor(name)
+    const matches = (v) => normVendor(v) === target
+    let revenue = 0
+    let purchase = 0
+    for (const e of entries) {
+      if (!matches(e.counterparty)) continue
+      if (e.entry_type === 'sale') revenue += Number(e.total_amount || 0)
+      else if (e.entry_type === 'purchase') purchase += Number(e.total_amount || 0)
+    }
+    let collected = 0
+    const items = []
+    for (const c of collections) {
+      if (!matches(c.counterparty)) continue
+      collected += Number(c.amount || 0)
+      items.push(c)
+    }
+    const payable = (partners || [])
+      .filter((p) => matches(p.name))
+      .reduce((a, p) => a + Number(p.payable_balance || 0), 0)
+    return {
+      name,
+      revenue,
+      purchase,
+      collected,
+      payable,
+      due: revenue - collected,
+      count: items.length,
+      items,
+    }
+  }, [focusVendor, entries, collections, partners])
+
+  /* 거래처를 지정한 동안에는 그 거래처 입금 내역만 아래에 보여줍니다. */
+  const listedCollections = useMemo(() => {
+    if (!focusRow) return collections
+    const ids = new Set(focusRow.items.map((c) => c.id))
+    return collections.filter((c) => ids.has(c.id))
+  }, [collections, focusRow])
+
   const handleSave = async (e) => {
     e.preventDefault()
     const amount = Math.round(Number(String(form.amount).replace(/[^0-9.-]/g, '')) || 0)
@@ -227,6 +277,45 @@ export default function Collections() {
             <StatCard label="전체 수금" value={totalCollected} tone="neutral" icon="chart" hint={`${collections.length}건`} />
             <StatCard label="계약 프로젝트" value={String(withContract.length)} unit="건" tone="neutral" icon="folder" />
           </div>
+
+          {focusRow ? (
+            <section className="card overflow-hidden ring-2 ring-brand-200">
+              <header className="flex flex-wrap items-center justify-between gap-2 border-b border-ink-200 bg-brand-50/60 px-4 py-3.5">
+                <h2 className="text-sm font-bold text-ink-900">
+                  <span className="text-brand-700">거래처</span> {focusRow.name} · 수금 현황
+                </h2>
+                <button
+                  type="button"
+                  onClick={clearFocus}
+                  className="btn-ghost !px-2 !py-1 text-xs"
+                >
+                  <Icon name="close" size={14} />
+                  선택 해제
+                </button>
+              </header>
+              <div className="grid grid-cols-2 gap-3 p-4 lg:grid-cols-5">
+                <StatCard label="매출(합계)" value={focusRow.revenue} tone="sale" icon="trending-up" />
+                <StatCard label="수금" value={focusRow.collected} tone="profit" icon="check" hint={`${focusRow.count}건`} />
+                <StatCard
+                  label="잔금"
+                  value={Math.abs(focusRow.due)}
+                  tone={focusRow.due > 0 ? 'loss' : 'profit'}
+                  icon="coins"
+                  hint={focusRow.due > 0 ? '미수금' : focusRow.due < 0 ? '반환 초과' : '정산 완료'}
+                />
+                <StatCard label="매입(합계)" value={focusRow.purchase} tone="opex" icon="cart" />
+                <StatCard
+                  label="미지급(확정)"
+                  value={focusRow.payable}
+                  tone={focusRow.payable > 0 ? 'loss' : 'neutral'}
+                  icon="card"
+                />
+              </div>
+              <p className="border-t border-ink-100 px-4 py-2.5 text-xs text-ink-500">
+                거래처 대장에서 넘어온 값입니다. 아래 입금 내역도 이 거래처만 표시됩니다.
+              </p>
+            </section>
+          ) : null}
 
           <section className="card overflow-hidden">
             <header className="flex flex-wrap items-center justify-between gap-2 border-b border-ink-200 px-4 py-3.5">
@@ -345,12 +434,20 @@ export default function Collections() {
           </section>
 
           <section className="card overflow-hidden">
-            <header className="border-b border-ink-200 px-4 py-3.5">
-              <h2 className="text-sm font-bold text-ink-900">입금 내역</h2>
+            <header className="flex flex-wrap items-center justify-between gap-2 border-b border-ink-200 px-4 py-3.5">
+              <h2 className="text-sm font-bold text-ink-900">
+                입금 내역
+                {focusRow ? <span className="ml-1.5 font-normal text-brand-700">· {focusRow.name}</span> : null}
+              </h2>
+              {focusRow ? (
+                <button type="button" onClick={clearFocus} className="btn-ghost !px-2 !py-1 text-xs">
+                  전체 입금 보기
+                </button>
+              ) : null}
             </header>
-            {collections.length ? (
+            {listedCollections.length ? (
               <ul className="divide-y divide-ink-100">
-                {collections.map((c) => (
+                {listedCollections.map((c) => (
                   <li key={c.id} className="flex items-center gap-3 px-4 py-3">
                     <span className="w-24 shrink-0 text-xs font-semibold text-ink-500">
                       {formatDateHuman(c.collected_on)}
@@ -377,7 +474,15 @@ export default function Collections() {
                 ))}
               </ul>
             ) : (
-              <EmptyState icon="coins" title="입금 내역이 없습니다" description="입금 등록으로 받으신 돈을 기록하세요." />
+              <EmptyState
+                icon="coins"
+                title={focusRow ? `${focusRow.name} 입금 내역이 없습니다` : '입금 내역이 없습니다'}
+                description={
+                  focusRow
+                    ? '이 거래처로 받은 돈이 아직 없습니다. 입금 등록으로 기록하세요.'
+                    : '입금 등록으로 받으신 돈을 기록하세요.'
+                }
+              />
             )}
           </section>
         </>

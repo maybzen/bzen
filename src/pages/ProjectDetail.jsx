@@ -164,19 +164,9 @@ export default function ProjectDetail() {
                 : '담당 미지정'}
               {project.venue ? ` · ${project.venue}` : ''}
             </p>
-            {(project.contract_amount > 0 || Number(project.profit_rate) || Number(project.profit_amount)) ? (
+            {project.contract_amount > 0 ? (
               <p className="mt-1 text-sm font-semibold text-ink-800">
-                {project.contract_amount > 0 ? `계약 ${formatKRW(project.contract_amount)}원` : ''}
-                {project.contract_amount > 0 && (Number(project.profit_rate) || Number(project.profit_amount)) ? ' · ' : ''}
-                {Number(project.profit_rate) ? `수익률 ${formatPercent(Number(project.profit_rate))}` : ''}
-                {Number(project.profit_rate) && Number(project.profit_amount) ? ' · ' : ''}
-                {Number(project.profit_amount) ? (
-                  <span className={Number(project.profit_amount) >= 0 ? '' : 'text-loss'}>
-                    수익 {formatKRW(Number(project.profit_amount))}원
-                  </span>
-                ) : (
-                  ''
-                )}
+                계약 {formatKRW(project.contract_amount)}원
               </p>
             ) : null}
           </div>
@@ -199,27 +189,36 @@ export default function ProjectDetail() {
       </div>
 
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-        <StatCard label="매출" value={stats.revenue} tone="sale" icon="trending-up" />
-        <StatCard label="매입" value={stats.purchase.supply} tone="purchase" icon="cart" />
-        <StatCard label="운영비" value={stats.opex.supply} tone="opex" icon="receipt" />
+        <StatCard label="순매출액" value={stats.revenue} tone="sale" icon="trending-up" hint="공급가액 기준" />
+        <StatCard label="매출원가" value={stats.cogs} tone="purchase" icon="cart" hint="매입" />
+        <StatCard
+          label="매출총이익"
+          value={stats.gross}
+          tone={stats.gross >= 0 ? 'profit' : 'loss'}
+          icon="chart"
+          hint={stats.grossMargin === null ? '매출 없음' : `매출총이익률 ${formatPercent(stats.grossMargin)}`}
+        />
         <StatCard
           label="영업이익"
-          value={stats.profit}
-          tone={stats.profit >= 0 ? 'profit' : 'loss'}
+          value={stats.operating}
+          tone={stats.operating >= 0 ? 'profit' : 'loss'}
           icon="coins"
-          hint={stats.margin === null ? '매출 없음' : `이익률 ${formatPercent(stats.margin)}`}
+          hint={stats.operatingMargin === null ? '매출 없음 · 비용만 반영' : `영업이익률 ${formatPercent(stats.operatingMargin)}`}
         />
       </div>
 
       {project.contract_amount > 0 ? (
         <div className="card p-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="text-sm font-bold text-ink-800">계약 대비 매출</p>
+            <p className="text-sm font-bold text-ink-800">계약 대비 순매출</p>
             <p className="text-xs text-ink-500">
-              계약 {formatKRW(project.contract_amount)}원 · 매출 {formatKRW(stats.revenue)}원 ·{' '}
+              계약 {formatKRW(project.contract_amount)}원 · 순매출 {formatKRW(stats.revenue)}원 ·{' '}
               <strong className="font-semibold text-brand-700">{formatPercent(achieved, 0)}</strong>
             </p>
           </div>
+          <p className="mt-1 text-[11px] text-ink-400">
+            계약 금액은 부가세 포함 합계, 순매출액은 공급가액 기준이라 두 값이 그대로 맞지 않습니다. 참고용입니다.
+          </p>
           <div className="mt-2.5">
             <ProfitBar value={stats.revenue} max={project.contract_amount} tone="sale" />
           </div>
@@ -241,9 +240,10 @@ export default function ProjectDetail() {
               <thead className="bg-ink-50/70">
                 <tr>
                   <th className="th">월</th>
-                  <th className="th text-right">매출</th>
-                  <th className="th text-right">매입</th>
-                  <th className="th text-right">운영비</th>
+                  <th className="th text-right">순매출액</th>
+                  <th className="th text-right">매출원가</th>
+                  <th className="th text-right">매출총이익</th>
+                  <th className="th text-right">경비</th>
                   <th className="th text-right">영업이익</th>
                   <th className="th w-28">비중</th>
                 </tr>
@@ -254,6 +254,9 @@ export default function ProjectDetail() {
                     <td className="td font-medium">{monthLabel(row.month)}</td>
                     <td className="td num">{formatKRW(row.sale)}</td>
                     <td className="td num">{formatKRW(row.purchase)}</td>
+                    <td className={`td num font-semibold ${row.sale - row.purchase >= 0 ? '' : 'text-loss'}`}>
+                      {formatKRW(row.sale - row.purchase)}
+                    </td>
                     <td className="td num">{formatKRW(row.opex)}</td>
                     <td
                       className={`td num font-bold ${row.profit >= 0 ? 'text-emerald-700' : 'text-loss'}`}
