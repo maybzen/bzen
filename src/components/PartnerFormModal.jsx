@@ -15,7 +15,7 @@ import {
   uploadPartnerDoc,
 } from '../lib/api'
 import { formatDateHuman, formatDateTime, formatFileSize, formatKRW, normalizeVendorName } from '../lib/format'
-import { isStaffWritten, staffIdsFromProfiles } from '../lib/permissions'
+import { isStaffVisible, staffIdsFromProfiles } from '../lib/permissions'
 
 const EMPTY = {
   name: '',
@@ -288,7 +288,7 @@ export default function PartnerFormModal({ open, onClose, onSaved, initial, read
     const same = (v) => normalizeVendorName(v) === target
     const staffIds = staffIdsFromProfiles(profiles)
     const matched = (ledger.entries || []).filter(
-      (e) => same(e.counterparty) && (isAdmin || isStaffWritten(e, staffIds)),
+      (e) => same(e.counterparty) && (isAdmin || isStaffVisible(e, staffIds)),
     )
     const cols = (ledger.collections || []).filter((c) => same(c.counterparty))
     let sale = 0

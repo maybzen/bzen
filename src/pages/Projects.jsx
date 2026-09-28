@@ -11,8 +11,35 @@ import { contractSplit, formatDateHuman, formatKRW, formatPercent } from '../lib
 import { buildPnl, groupByProject, summarize } from '../lib/summary'
 import { deleteProject, listEntries, listProfiles, listProjects } from '../lib/api'
 
-/** 카드에 쓰는 손익 표기. 세무·회계 표현을 그대로 씁니다. */
-function PnlGrid({ pnl, achieved, contractAmount, showContract }) {
+/**
+ * 카드에 쓰는 손익 표기. 세무·회계 표현을 그대로 씁니다.
+ * 직원 화면(bare)에서는 매출·이익을 숨기고 비용만 보여줍니다.
+ */
+function PnlGrid({ pnl, achieved, contractAmount, showContract, bare = false }) {
+  if (bare) {
+    return (
+      <dl className="mt-4 grid grid-cols-3 gap-2 rounded-lg bg-ink-50/80 p-3 text-center">
+        <div>
+          <dt className="text-[11px] font-semibold text-ink-500">매출원가</dt>
+          <dd className="mt-0.5 font-num text-sm font-bold tabular-nums text-ink-900">
+            {formatKRW(pnl.cogs)}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-[11px] font-semibold text-ink-500">경비</dt>
+          <dd className="mt-0.5 font-num text-sm font-bold tabular-nums text-ink-900">
+            {formatKRW(pnl.expense)}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-[11px] font-semibold text-ink-500">비용 합계</dt>
+          <dd className="mt-0.5 font-num text-sm font-extrabold tabular-nums text-ink-900">
+            {formatKRW(pnl.cogs + pnl.expense)}
+          </dd>
+        </div>
+      </dl>
+    )
+  }
   const neg = (v) => v < 0
   return (
     <>
@@ -253,15 +280,25 @@ export default function Projects() {
           icon="folder"
           hint={yearFilter ? `${yearFilter}년` : '전체 연도'}
         />
-        <StatCard label="순매출액" value={totals.revenue} tone="sale" icon="trending-up" hint="공급가액 기준" />
-        <StatCard label="매출총이익" value={totals.gross} tone={totals.gross >= 0 ? 'profit' : 'loss'} icon="chart" hint={totals.grossMargin === null ? '매출 없음' : `매출총이익률 ${formatPercent(totals.grossMargin)}`} />
-        <StatCard
-          label="영업이익"
-          value={totals.operating}
-          tone={totals.operating >= 0 ? 'profit' : 'loss'}
-          icon="coins"
-          hint={totals.operatingMargin === null ? '매출 없음' : `영업이익률 ${formatPercent(totals.operatingMargin)}`}
-        />
+        {isAdmin ? (
+          <>
+            <StatCard label="순매출액" value={totals.revenue} tone="sale" icon="trending-up" hint="공급가액 기준" />
+            <StatCard label="매출총이익" value={totals.gross} tone={totals.gross >= 0 ? 'profit' : 'loss'} icon="chart" hint={totals.grossMargin === null ? '매출 없음' : `매출총이익률 ${formatPercent(totals.grossMargin)}`} />
+            <StatCard
+              label="영업이익"
+              value={totals.operating}
+              tone={totals.operating >= 0 ? 'profit' : 'loss'}
+              icon="coins"
+              hint={totals.operatingMargin === null ? '매출 없음' : `영업이익률 ${formatPercent(totals.operatingMargin)}`}
+            />
+          </>
+        ) : (
+          <>
+            <StatCard label="전체 비용" value={totals.cost} tone="opex" icon="cart" hint="매입 + 운영비" />
+            <StatCard label="진행중" value={String(statusCounts.active || 0)} unit="개" tone="neutral" icon="folder" />
+            <StatCard label="완료" value={String(statusCounts.done || 0)} unit="개" tone="neutral" icon="check" />
+          </>
+        )}
       </div>
 
       <div className="card overflow-hidden">
@@ -448,11 +485,14 @@ export default function Projects() {
                   achieved={achieved}
                   contractAmount={csplit.supply}
                   showContract
+                  bare={!isAdmin}
                 />
 
-                <div className="mt-3">
-                  <ProfitBar value={Math.abs(row.profit)} max={maxSale} tone={row.profit >= 0 ? 'profit' : 'loss'} />
-                </div>
+                {!isAdmin ? null : (
+                  <div className="mt-3">
+                    <ProfitBar value={Math.abs(row.profit)} max={maxSale} tone={row.profit >= 0 ? 'profit' : 'loss'} />
+                  </div>
+                )}
 
                 <div className="mt-3 flex items-center justify-between text-xs text-ink-500">
                   <span>
@@ -558,32 +598,50 @@ function ProposalCard({ project, row, status, isAdmin, managerName, onEdit, onDe
             {project.contract_amount > 0 ? formatKRW(project.contract_amount) : '—'}
           </dd>
         </div>
-        <div>
-          <dt className="text-[11px] font-semibold text-ink-500">매출총이익</dt>
-          <dd
-            className={`mt-0.5 font-num text-sm font-extrabold tabular-nums ${
-              pnl.gross < 0 ? 'text-loss' : 'text-ink-900'
-            }`}
-          >
-            {pnl.gross ? formatKRW(pnl.gross) : '—'}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-[11px] font-semibold text-ink-500">영업이익</dt>
-          <dd
-            className={`mt-0.5 font-num text-sm font-extrabold tabular-nums ${
-              pnl.operating < 0 ? 'text-loss' : 'text-ink-900'
-            }`}
-          >
-            {pnl.operating ? formatKRW(pnl.operating) : '—'}
-          </dd>
-        </div>
+        {isAdmin ? (
+          <>
+            <div>
+              <dt className="text-[11px] font-semibold text-ink-500">매출총이익</dt>
+              <dd
+                className={`mt-0.5 font-num text-sm font-extrabold tabular-nums ${
+                  pnl.gross < 0 ? 'text-loss' : 'text-ink-900'
+                }`}
+              >
+                {pnl.gross ? formatKRW(pnl.gross) : '—'}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-[11px] font-semibold text-ink-500">영업이익</dt>
+              <dd
+                className={`mt-0.5 font-num text-sm font-extrabold tabular-nums ${
+                  pnl.operating < 0 ? 'text-loss' : 'text-ink-900'
+                }`}
+              >
+                {pnl.operating ? formatKRW(pnl.operating) : '—'}
+              </dd>
+            </div>
+          </>
+        ) : (
+          <div className="col-span-2">
+            <dt className="text-[11px] font-semibold text-ink-500">투입 비용</dt>
+            <dd className="mt-0.5 font-num text-sm font-extrabold tabular-nums text-ink-900">
+              {formatKRW(pnl.cogs + pnl.expense)}
+            </dd>
+          </div>
+        )}
       </dl>
       {row.count ? (
         <p className="mt-2 text-[11px] text-ink-500">
-          장부 {row.count}건 기준 · 순매출 {formatKRW(pnl.revenue)}원 − 매출원가 {formatKRW(pnl.cogs)}원 − 경비{' '}
-          {formatKRW(pnl.expense)}원
-          {pnl.operating < 0 ? ' · 제안 부대비용 때문에 영업손실입니다.' : ''}
+          장부 {row.count}건 기준
+          {isAdmin ? (
+            <>
+              {' '}· 순매출 {formatKRW(pnl.revenue)}원 − 매출원가 {formatKRW(pnl.cogs)}원 − 경비{' '}
+              {formatKRW(pnl.expense)}원
+              {pnl.operating < 0 ? ' · 제안 부대비용 때문에 영업손실입니다.' : ''}
+            </>
+          ) : (
+            <> · 매출원가 {formatKRW(pnl.cogs)}원 + 경비 {formatKRW(pnl.expense)}원</>
+          )}
         </p>
       ) : (
         <p className="mt-2 text-[11px] text-ink-500">

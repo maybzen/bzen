@@ -8,7 +8,7 @@ import { AttachmentModal } from '../components/Attachments'
 import { useToast } from '../components/Toast'
 import { ConfirmDialog, EmptyState, LoadingBlock, Modal, PageHeader, StatCard } from '../components/ui'
 import { useAuth } from '../auth/AuthContext'
-import { isStaffWritten, staffIdsFromProfiles } from '../lib/permissions'
+import { isStaffVisible, staffIdsFromProfiles } from '../lib/permissions'
 import { CATEGORIES, ENTRY_META } from '../lib/constants'
 import { downloadTextFile, parseAmount, parseCSV, toCSV } from '../lib/csv'
 import { formatKRW } from '../lib/format'
@@ -149,7 +149,7 @@ export default function LedgerPage({ type, source = 'manual', title, description
   const effectiveFilter = personFilter
   /** 퇴사자분은 기타에 합산됩니다 */
   const base = useMemo(
-    () => (isAdmin ? entries : entries.filter((e) => isStaffWritten(e, staffIds))),
+    () => (isAdmin ? entries : entries.filter((e) => isStaffVisible(e, staffIds))),
     [isAdmin, entries, staffIds],
   )
 

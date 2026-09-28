@@ -9,11 +9,11 @@ import { AttachmentModal } from '../components/Attachments'
 import { useToast } from '../components/Toast'
 import { ConfirmDialog, EmptyState, LoadingBlock, SegmentedControl, StatCard } from '../components/ui'
 import { useAuth } from '../auth/AuthContext'
-import { isStaffWritten, staffIdsFromProfiles } from '../lib/permissions'
+import { isStaffVisible, staffIdsFromProfiles } from '../lib/permissions'
 import { ENTRY_META, PROJECT_STATUS } from '../lib/constants'
-import { contractSplit, formatDateHuman, formatKRW, formatPercent, monthLabel } from '../lib/format'
+import { contractSplit, formatDateHuman, formatKRW, formatPercent, monthLabel, normalizeVendorName } from '../lib/format'
 import { groupByMonth, summarize } from '../lib/summary'
-import { deleteEntry, listAttachments, listEntries, listProfiles, listProjects } from '../lib/api'
+import { deleteEntry, listAttachments, listEntries, listPartners, listProfiles, listProjects } from '../lib/api'
 
 const TABS = [
   { key: 'all', label: '전체' },
@@ -32,6 +32,7 @@ export default function ProjectDetail() {
   const [project, setProject] = useState(null)
   const [entries, setEntries] = useState([])
   const [profiles, setProfiles] = useState([])
+  const [partners, setPartners] = useState([])
   const [attachmentsByEntry, setAttachmentsByEntry] = useState({})
   const [tab, setTab] = useState('all')
   const [formType, setFormType] = useState(null)
@@ -45,15 +46,17 @@ export default function ProjectDetail() {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const [projectRows, entryRows, profileRows] = await Promise.all([
+      const [projectRows, entryRows, profileRows, partnerRows] = await Promise.all([
         listProjects(),
         listEntries({ projectId: id }),
         listProfiles(),
+        listPartners().catch(() => []),
       ])
       const found = projectRows.find((p) => p.id === id)
       setProject(found || null)
       setEntries(entryRows)
       setProfiles(profileRows)
+      setPartners(partnerRows || [])
 
       const files = await listAttachments(entryRows.map((r) => r.id))
       const map = {}
@@ -88,13 +91,33 @@ export default function ProjectDetail() {
   /* 직원은 운영비 중 사원 작성분만 봅니다. 매출·매입은 관리자가 관리합니다 */
   const staffIds = useMemo(() => staffIdsFromProfiles(profiles), [profiles])
   const staffRows = useMemo(
-    () => filtered.filter((e) => e.entry_type === 'opex' && isStaffWritten(e, staffIds)),
+    () => filtered.filter((e) => e.entry_type === 'opex' && isStaffVisible(e, staffIds)),
     [filtered, staffIds],
   )
   const shown = isAdmin ? filtered : staffRows
   const staffTabs = useMemo(() => TABS.filter((t) => t.key === 'all' || t.key === 'opex'), [])
 
   const maxMonthly = Math.max(1, ...monthly.map((m) => Math.max(m.sale, Math.abs(m.profit))))
+
+  /* 협력업체: 이 프로젝트에 거래가 있는 거래처 + 대장 정보 (연락용) */
+  const vendors = useMemo(() => {
+    const byNorm = new Map()
+    for (const e of entries || []) {
+      const name = String(e.counterparty || '').trim()
+      if (!name || name === '미지정') continue
+      const key = normalizeVendorName(name)
+      if (!byNorm.has(key)) byNorm.set(key, { name, count: 0, total: 0 })
+      const row = byNorm.get(key)
+      row.count += 1
+      row.total += Number(e.total_amount || 0)
+    }
+    const partnerByNorm = new Map(
+      (partners || []).map((p) => [normalizeVendorName(p.name), p]),
+    )
+    return [...byNorm.values()]
+      .map((v) => ({ ...v, partner: partnerByNorm.get(normalizeVendorName(v.name)) || null }))
+      .sort((a, b) => b.total - a.total)
+  }, [entries, partners])
 
   const handleDeleteEntry = async () => {
     if (!removing) return
@@ -200,25 +223,34 @@ export default function ProjectDetail() {
       </div>
 
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-        <StatCard label="순매출액" value={stats.revenue} tone="sale" icon="trending-up" hint="공급가액 기준" />
-        <StatCard label="매출원가" value={stats.cogs} tone="purchase" icon="cart" hint="매입" />
-        <StatCard
-          label="매출총이익"
-          value={stats.gross}
-          tone={stats.gross >= 0 ? 'profit' : 'loss'}
-          icon="chart"
-          hint={stats.grossMargin === null ? '매출 없음' : `매출총이익률 ${formatPercent(stats.grossMargin)}`}
-        />
-        <StatCard
-          label="영업이익"
-          value={stats.operating}
-          tone={stats.operating >= 0 ? 'profit' : 'loss'}
-          icon="coins"
-          hint={stats.operatingMargin === null ? '매출 없음 · 비용만 반영' : `영업이익률 ${formatPercent(stats.operatingMargin)}`}
-        />
+        {isAdmin ? (
+          <>
+            <StatCard label="순매출액" value={stats.revenue} tone="sale" icon="trending-up" hint="공급가액 기준" />
+            <StatCard label="매출원가" value={stats.cogs} tone="purchase" icon="cart" hint="매입" />
+            <StatCard
+              label="매출총이익"
+              value={stats.gross}
+              tone={stats.gross >= 0 ? 'profit' : 'loss'}
+              icon="chart"
+              hint={stats.grossMargin === null ? '매출 없음' : `매출총이익률 ${formatPercent(stats.grossMargin)}`}
+            />
+            <StatCard
+              label="영업이익"
+              value={stats.operating}
+              tone={stats.operating >= 0 ? 'profit' : 'loss'}
+              icon="coins"
+              hint={stats.operatingMargin === null ? '매출 없음 · 비용만 반영' : `영업이익률 ${formatPercent(stats.operatingMargin)}`}
+            />
+          </>
+        ) : (
+          <>
+            <StatCard label="매출원가" value={stats.cogs} tone="purchase" icon="cart" hint="매입" />
+            <StatCard label="경비" value={stats.expense} tone="opex" icon="receipt" hint="운영비" />
+          </>
+        )}
       </div>
 
-      {csplit.total > 0 ? (
+      {isAdmin && csplit.total > 0 ? (
         <div className="card p-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="text-sm font-bold text-ink-800">계약 대비 순매출</p>
@@ -286,6 +318,46 @@ export default function ProjectDetail() {
               </tbody>
             </table>
           </div>
+        </section>
+      ) : null}
+
+      {vendors.length ? (
+        <section className="card overflow-hidden">
+          <header className="border-b border-ink-200 px-4 py-3.5">
+            <h2 className="text-sm font-bold text-ink-900">
+              협력업체 ({vendors.length}곳)
+            </h2>
+            <p className="mt-0.5 text-xs text-ink-500">
+              이 프로젝트에 거래가 있는 곳입니다. 연락처는 거래처 대장에서 가져옵니다.
+            </p>
+          </header>
+          <ul className="divide-y divide-ink-100">
+            {vendors.map((v) => (
+              <li key={v.name} className="flex items-center gap-3 px-4 py-3">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-bold text-ink-900">{v.name}</p>
+                  <p className="mt-0.5 truncate text-xs text-ink-500">
+                    {v.partner?.contact_person
+                      ? `담당 ${v.partner.contact_person}${v.partner.job_title ? ` ${v.partner.job_title}` : ''}`
+                      : '담당자 미등록'}
+                    {v.partner?.phone || v.partner?.phone_main
+                      ? ` · ${v.partner.phone || v.partner.phone_main}`
+                      : ''}
+                    {` · ${v.count}건`}
+                  </p>
+                </div>
+                <span className="shrink-0 font-num text-sm font-extrabold tabular-nums text-ink-900">
+                  {formatKRW(v.total)}원
+                </span>
+                <Link
+                  to={`/partners?search=${encodeURIComponent(v.partner?.name || v.name)}`}
+                  className="shrink-0 text-xs font-semibold text-brand-700 hover:underline"
+                >
+                  거래처 →
+                </Link>
+              </li>
+            ))}
+          </ul>
         </section>
       ) : null}
 

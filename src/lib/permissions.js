@@ -64,16 +64,33 @@ export function staffIdsFromProfiles(profiles) {
   )
 }
 
+/** 메모의 이용자 코드 목록 (E·SH·Z 등 현장 코드, 대문자 통일) */
+export function memoUserCodes(entry) {
+  const m = String(entry?.memo || '').match(/이용자\s+([^·]+)/)
+  if (!m) return []
+  return m[1]
+    .split(',')
+    .map((s) => s.trim().toUpperCase())
+    .filter(Boolean)
+}
+
 /**
- * 사원 작성분 여부 (직원 공유 범위 판단용).
- * 등록자·지출자가 사원이거나, 메모에 이용자(E·SH 등 현장 코드)가 있으면 사원 경유로 봅니다.
- * 급여·세금처럼 관리자가 직접 넣은 행은 여기서 걸러집니다.
+ * 직원 화면 노출 여부.
+ * - 등록자·지출자가 사원이면 보임 (본인 포함)
+ * - 메모에 현장 코드가 있으면 보임. 단, 이용자가 Z뿐인 행은 제외
+ * - 3842(대표님 카드) 행은 직원이 직접 등록한 것만 보임
+ * 급여·세금·매출·매입처럼 관리자가 직접 넣은 행은 여기서 걸러집니다.
  */
-export function isStaffWritten(entry, staffIds) {
+export function isStaffVisible(entry, staffIds) {
   if (!entry) return false
-  if (staffIds?.has?.(entry.created_by)) return true
-  if (staffIds?.has?.(entry.requester_id)) return true
-  return /이용자\s+[^·]+/.test(String(entry.memo || ''))
+  const registered =
+    (staffIds?.has?.(entry.created_by) ?? false) || (staffIds?.has?.(entry.requester_id) ?? false)
+  if (registered) return true
+  const codes = memoUserCodes(entry)
+  if (!codes.length) return false
+  if (codes.every((c) => c === 'Z')) return false
+  if (/3842/.test(String(entry.memo || ''))) return false
+  return true
 }
 
 export function useStaffPermissions(profile) {

@@ -16,7 +16,7 @@ import {
   listProfiles,
   listProjects,
 } from '../lib/api'
-import { isStaffWritten, staffIdsFromProfiles } from '../lib/permissions'
+import { isStaffVisible, staffIdsFromProfiles } from '../lib/permissions'
 import {
   changeRate,
   formatCompact,
@@ -178,7 +178,7 @@ export default function Dashboard() {
       const staffIds = staffIdsFromProfiles(profiles)
       const visibleEntries = isAdmin
         ? entryRows || []
-        : (entryRows || []).filter((e) => isStaffWritten(e, staffIds))
+        : (entryRows || []).filter((e) => isStaffVisible(e, staffIds))
       setResults({
         q,
         projects: (projectRows || [])
