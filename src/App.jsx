@@ -57,6 +57,7 @@ const Collections = lazyWithRetry(() => import('./pages/Collections'))
 const Users = lazyWithRetry(() => import('./pages/Users'))
 const Settings = lazyWithRetry(() => import('./pages/Settings'))
 const Leaves = lazyWithRetry(() => import('./pages/Leaves'))
+const Payroll = lazyWithRetry(() => import('./pages/Payroll'))
 
 function Splash() {
   return (
@@ -256,6 +257,14 @@ export default function App() {
               element={
                 <Guard adminOnly>
                   <Users />
+                </Guard>
+              }
+            />
+            <Route
+              path="/payroll"
+              element={
+                <Guard adminOnly>
+                  <Payroll />
                 </Guard>
               }
             />
