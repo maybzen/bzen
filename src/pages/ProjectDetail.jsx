@@ -174,20 +174,18 @@ export default function ProjectDetail() {
             ) : null}
           </div>
 
-          {isAdmin ? (
-            <div className="flex flex-wrap items-center gap-2">
-              <button type="button" className="btn-ghost" onClick={() => setProjectForm(true)}>
-                <Icon name="pencil" size={16} />
-                프로젝트 수정
+          <div className="flex flex-wrap items-center gap-2">
+            <button type="button" className="btn-ghost" onClick={() => setProjectForm(true)}>
+              <Icon name="pencil" size={16} />
+              프로젝트 수정
+            </button>
+            {['sale', 'purchase', 'opex'].map((type) => (
+              <button key={type} type="button" className="btn-soft" onClick={() => setFormType(type)}>
+                <Icon name="plus" size={15} />
+                {ENTRY_META[type].label}
               </button>
-              {['sale', 'purchase', 'opex'].map((type) => (
-                <button key={type} type="button" className="btn-soft" onClick={() => setFormType(type)}>
-                  <Icon name="plus" size={15} />
-                  {ENTRY_META[type].label}
-                </button>
-              ))}
-            </div>
-          ) : null}
+            ))}
+          </div>
         </div>
       </div>
 
@@ -292,14 +290,16 @@ export default function ProjectDetail() {
           profiles={profiles}
           attachmentsByEntry={attachmentsByEntry}
           showType
-          canEdit={isAdmin}
+          canEdit
           canChangeAuthor={isAdmin}
           onEdit={(entry) => {
             setEditing({ ...entry, attachments: attachmentsByEntry[entry.id] || [] })
             setFormType(entry.entry_type)
           }}
-          onDelete={isAdmin ? setRemoving : undefined}
+          onDelete={(entry) => setRemoving(entry)}
           onOpenAttachments={setViewerFiles}
+          canEditEntry={(e) => isAdmin || e?.created_by === user?.id || e?.requester_id === user?.id}
+          canDeleteEntry={(e) => isAdmin || e?.created_by === user?.id || e?.requester_id === user?.id}
         />
       </section>
 

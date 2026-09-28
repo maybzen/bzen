@@ -230,8 +230,11 @@ export default function LedgerPage({ type, source = 'manual', title, description
     }
   }
 
-  /* 운영비 목록 직접 수정 (법인카드식 단계 저장) */
-  const bulkEdit = true
+  /* 운영비 목록 직접 수정 (법인카드식 단계 저장). 일괄편집은 관리자만 */
+  const bulkEdit = isAdmin
+  /* 본인 행(등록자·지출자)만 수정·삭제 가능. 관리자는 전부 */
+  const ownRow = (e) =>
+    isAdmin || e?.created_by === user?.id || e?.requester_id === user?.id
   const handleSaveRow = async (entry, payload) => {
     const saved = await updateEntry(entry.id, payload)
     setEntries((rows) => rows.map((r) => (r.id === entry.id ? { ...r, ...saved } : r)))
@@ -453,13 +456,15 @@ export default function LedgerPage({ type, source = 'manual', title, description
               })
               setFormOpen(true)
             }}
-            onDelete={isAdmin ? setRemoving : undefined}
+            onDelete={(entry) => setRemoving(entry)}
             onOpenAttachments={setViewerFiles}
             bulkEdit={bulkEdit}
             categories={CATEGORIES[type] || []}
             onSaveRow={handleSaveRow}
             onBulkDelete={isAdmin ? setRemovingMany : undefined}
             canChangeAuthor={isAdmin}
+            canEditEntry={ownRow}
+            canDeleteEntry={ownRow}
           />
         )}
       </div>

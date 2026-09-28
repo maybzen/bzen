@@ -231,19 +231,17 @@ export default function Projects() {
         title="프로젝트"
         description="세무·회계 기준으로 순매출액 − 매출원가 = 매출총이익, − 경비 = 영업이익을 자동 집계합니다. 금액은 프로젝트 전체 기간 기준입니다."
       >
-        {isAdmin ? (
-          <button
-            type="button"
-            className="btn-primary"
-            onClick={() => {
-              setEditing(null)
-              setFormOpen(true)
-            }}
-          >
-            <Icon name="plus" size={16} />
-            프로젝트 등록
-          </button>
-        ) : null}
+        <button
+          type="button"
+          className="btn-primary"
+          onClick={() => {
+            setEditing(null)
+            setFormOpen(true)
+          }}
+        >
+          <Icon name="plus" size={16} />
+          프로젝트 등록
+        </button>
       </PageHeader>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -336,19 +334,17 @@ export default function Projects() {
             title="등록된 프로젝트가 없습니다"
             description="프로젝트를 만들면 매출·비용을 연결해 손익을 볼 수 있습니다."
             action={
-              isAdmin ? (
-                <button
-                  type="button"
-                  className="btn-primary"
-                  onClick={() => {
-                    setEditing(null)
-                    setFormOpen(true)
-                  }}
-                >
-                  <Icon name="plus" size={16} />
-                  프로젝트 등록
-                </button>
-              ) : null
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={() => {
+                  setEditing(null)
+                  setFormOpen(true)
+                }}
+              >
+                <Icon name="plus" size={16} />
+                프로젝트 등록
+              </button>
             }
           />
         </div>
@@ -422,19 +418,19 @@ export default function Projects() {
                     ) : null}
                   </div>
 
-                  {isAdmin ? (
-                    <div className="flex shrink-0 items-center gap-1">
-                      <button
-                        type="button"
-                        className="rounded-md p-1.5 text-ink-500 transition hover:bg-brand-50 hover:text-brand-700"
-                        onClick={() => {
-                          setEditing(project)
-                          setFormOpen(true)
-                        }}
-                        aria-label="수정"
-                      >
-                        <Icon name="pencil" size={15} />
-                      </button>
+                  <div className="flex shrink-0 items-center gap-1">
+                    <button
+                      type="button"
+                      className="rounded-md p-1.5 text-ink-500 transition hover:bg-brand-50 hover:text-brand-700"
+                      onClick={() => {
+                        setEditing(project)
+                        setFormOpen(true)
+                      }}
+                      aria-label="수정"
+                    >
+                      <Icon name="pencil" size={15} />
+                    </button>
+                    {isAdmin ? (
                       <button
                         type="button"
                         className="rounded-md p-1.5 text-ink-500 transition hover:bg-rose-50 hover:text-loss"
@@ -443,8 +439,8 @@ export default function Projects() {
                       >
                         <Icon name="trash" size={15} />
                       </button>
-                    </div>
-                  ) : null}
+                    ) : null}
+                  </div>
                 </div>
 
                 <PnlGrid
@@ -533,16 +529,16 @@ function ProposalCard({ project, row, status, isAdmin, managerName, onEdit, onDe
           </p>
         </div>
 
-        {isAdmin ? (
-          <div className="flex shrink-0 items-center gap-1">
-            <button
-              type="button"
-              className="rounded-md p-1.5 text-ink-500 transition hover:bg-brand-50 hover:text-brand-700"
-              onClick={onEdit}
-              aria-label="수정"
-            >
-              <Icon name="pencil" size={15} />
-            </button>
+        <div className="flex shrink-0 items-center gap-1">
+          <button
+            type="button"
+            className="rounded-md p-1.5 text-ink-500 transition hover:bg-brand-50 hover:text-brand-700"
+            onClick={onEdit}
+            aria-label="수정"
+          >
+            <Icon name="pencil" size={15} />
+          </button>
+          {isAdmin ? (
             <button
               type="button"
               className="rounded-md p-1.5 text-ink-500 transition hover:bg-rose-50 hover:text-loss"
@@ -551,8 +547,8 @@ function ProposalCard({ project, row, status, isAdmin, managerName, onEdit, onDe
             >
               <Icon name="trash" size={15} />
             </button>
-          </div>
-        ) : null}
+          ) : null}
+        </div>
       </div>
 
       <dl className="mt-4 grid grid-cols-3 gap-2 rounded-lg bg-ink-50/80 p-3 text-center">

@@ -53,6 +53,9 @@ export default function EntryTable({
   onSlip = null,
   /* 명세서가 저장된 행 id 목록. 버튼에 ✓가 붙습니다. */
   slipEntryIds = null,
+  /* 행별 수정·삭제 가능 여부 (직원 본인 행만 허용할 때 사용) */
+  canEditEntry = null,
+  canDeleteEntry = null,
 }) {
   const [rowEdits, setRowEdits] = useState({})
   const [savingId, setSavingId] = useState(null)
@@ -462,14 +465,16 @@ export default function EntryTable({
                             명세서{slipEntryIds?.has?.(entry.id) ? ' ✓' : ''}
                           </button>
                         ) : null}
-                        <button
-                          type="button"
-                          onClick={() => onEdit?.(entry)}
-                          className="rounded-md px-1.5 py-1.5 text-xs font-semibold text-ink-500 transition hover:bg-brand-50 hover:text-brand-700"
-                          title="상세"
-                        >
-                          상세
-                        </button>
+                        {(!canEditEntry || canEditEntry(entry)) && onEdit ? (
+                          <button
+                            type="button"
+                            onClick={() => onEdit?.(entry)}
+                            className="rounded-md px-1.5 py-1.5 text-xs font-semibold text-ink-500 transition hover:bg-brand-50 hover:text-brand-700"
+                            title="상세"
+                          >
+                            상세
+                          </button>
+                        ) : null}
                         {editable && dirty ? (
                           <>
                             <button
@@ -489,7 +494,7 @@ export default function EntryTable({
                               취소
                             </button>
                           </>
-                        ) : (
+                        ) : (!canEditEntry || canEditEntry(entry)) && onEdit ? (
                           <button
                             type="button"
                             onClick={() => onEdit?.(entry)}
@@ -498,8 +503,8 @@ export default function EntryTable({
                           >
                             <Icon name="pencil" size={15} />
                           </button>
-                        )}
-                        {onDelete ? (
+                        ) : null}
+                        {onDelete && (!canDeleteEntry || canDeleteEntry(entry)) ? (
                           <button
                             type="button"
                             onClick={() => onDelete?.(entry)}
@@ -644,11 +649,13 @@ export default function EntryTable({
                           명세서{slipEntryIds?.has?.(entry.id) ? ' ✓' : ''}
                         </button>
                       ) : null}
-                      <button type="button" onClick={() => onEdit?.(entry)} className="btn-ghost px-2.5 py-1.5 text-xs">
-                        <Icon name="pencil" size={13} />
-                        수정
-                      </button>
-                      {onDelete ? (
+                      {(!canEditEntry || canEditEntry(entry)) && onEdit ? (
+                        <button type="button" onClick={() => onEdit?.(entry)} className="btn-ghost px-2.5 py-1.5 text-xs">
+                          <Icon name="pencil" size={13} />
+                          수정
+                        </button>
+                      ) : null}
+                      {onDelete && (!canDeleteEntry || canDeleteEntry(entry)) ? (
                         <button
                           type="button"
                           onClick={() => onDelete?.(entry)}

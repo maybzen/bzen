@@ -166,7 +166,7 @@ function DocPreview({ doc }) {
   )
 }
 
-export default function PartnerFormModal({ open, onClose, onSaved, initial, readOnly = false, userId, ledger = null }) {
+export default function PartnerFormModal({ open, onClose, onSaved, initial, readOnly = false, userId, ledger = null, isAdmin = false }) {
   const toast = useToast()
   const [form, setForm] = useState(EMPTY)
   const [saving, setSaving] = useState(false)
@@ -541,7 +541,7 @@ export default function PartnerFormModal({ open, onClose, onSaved, initial, read
               <section key={type}>
                 <div className="mb-1.5 flex items-center justify-between">
                   <h4 className="text-xs font-bold text-ink-700">{PARTNER_DOC_TYPES[type]}</h4>
-                  {!readOnly ? (
+                  {isAdmin ? (
                     <label className="btn-ghost cursor-pointer px-2.5 py-1.5 text-xs">
                       {uploading === type ? <Spinner size={13} /> : <Icon name="upload" size={14} />}
                       올리기
@@ -564,7 +564,7 @@ export default function PartnerFormModal({ open, onClose, onSaved, initial, read
                     {docsByType(type).map((doc) => (
                       <div key={doc.id} className="flex flex-col gap-2">
                         <DocPreview doc={doc} />
-                        {!readOnly ? (
+                        {isAdmin ? (
                           <button
                             type="button"
                             onClick={() => handleDeleteDoc(doc)}
@@ -581,7 +581,7 @@ export default function PartnerFormModal({ open, onClose, onSaved, initial, read
                     등록된 {PARTNER_DOC_TYPES[type]}이(가) 없습니다.
                   </p>
                 )}
-                {!readOnly ? (
+                {isAdmin ? (
                   <DriveLinkForm
                     docType={type}
                     partnerId={partnerId}

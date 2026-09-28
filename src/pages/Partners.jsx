@@ -71,7 +71,6 @@ export default function Partners() {
 
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState(null)
-  const [viewing, setViewing] = useState(null)
   const [removing, setRemoving] = useState(null)
   const [busy, setBusy] = useState(false)
   const [customGroupId, setCustomGroupId] = useState(null)
@@ -208,7 +207,7 @@ export default function Partners() {
 
   /* 거래처 상세·수정을 열 때 거래내역을 함께 가져옵니다 (수금 잔금 확인용) */
   useEffect(() => {
-    if (!formOpen && !viewing) return
+    if (!formOpen) return
     let alive = true
     Promise.all([listEntries({ maxRows: 20000 }), listCollections().catch(() => [])])
       .then(([entryRows, collectionRows]) => {
@@ -220,7 +219,7 @@ export default function Partners() {
     return () => {
       alive = false
     }
-  }, [formOpen, viewing])
+  }, [formOpen])
 
   const groupOptions = useMemo(() => {
     const custom = [...new Set(partners.map((p) => p.group_name).filter((g) => g && !PARTNER_GROUPS.includes(g)))]
@@ -320,7 +319,7 @@ export default function Partners() {
           <Icon name="download" size={16} />
           CSV 내보내기
         </button>
-        {isAdmin && pendingCount > 0 ? (
+        {pendingCount > 0 ? (
           <>
             <button type="button" className="btn-ghost" onClick={resetPending} disabled={savingAll}>
               되돌리기
@@ -331,7 +330,7 @@ export default function Partners() {
             </button>
           </>
         ) : null}
-        {isAdmin && tableState === 'ready' ? (
+        {tableState === 'ready' ? (
           <button type="button" className="btn-primary" onClick={openNew}>
             <Icon name="plus" size={16} />
             거래처 등록
@@ -420,7 +419,7 @@ export default function Partners() {
                   <th className="th text-right">서류</th>
                   <th className="th text-right">수금</th>
                   <th className="th">등록자</th>
-                  {isAdmin ? <th className="th text-right">관리</th> : null}
+                  <th className="th text-right">관리</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-ink-100">
@@ -434,15 +433,17 @@ export default function Partners() {
                     !effGroup || effGroup === '기타'
                       ? suggestPartnerGroup(p.name, p.memo)
                       : null
-                  const openDetail = () =>
-                    isAdmin ? (setEditing(p), setFormOpen(true)) : setViewing(p)
+                  /* 직원도 수정 가능 (삭제·서류관리는 관리자). 상세 보기는 수정 화면으로 통합 */
+                  const openDetail = () => {
+                    setEditing(p)
+                    setFormOpen(true)
+                  }
                   /* 수금관리에 입금이 남은 거래처만 수금 버튼을 노출합니다. */
                   const collected = collectionStats.get(normalizeVendorName(p.name))
                   return (
                     <tr key={p.id} className={`transition hover:bg-ink-50/60 ${closed ? 'opacity-60' : ''}`}>
                       <td className={`td whitespace-nowrap ${pendingGroups[p.id] ? 'bg-amber-50/60' : ''}`}>
-                        {isAdmin ? (
-                          customGroupId === p.id ? (
+                        {customGroupId === p.id ? (
                             <span className="flex items-center gap-1">
                               <input
                                 autoFocus
@@ -489,16 +490,13 @@ export default function Partners() {
                               ) : null}
                               <option value="__new">직접 입력…</option>
                             </select>
-                          )
-                        ) : (
-                          <span className="chip bg-ink-100 text-ink-600">{p.group_name || '기타'}</span>
-                        )}
+                          )}
                         {pendingGroups[p.id] ? (
                           <span className="mt-1 block text-[11px] font-semibold text-amber-700">
                             저장 대기 중
                           </span>
                         ) : null}
-                        {isAdmin && groupSuggest && groupSuggest !== '기타' ? (
+                        {groupSuggest && groupSuggest !== '기타' ? (
                           <span className="mt-1 block text-[11px] text-ink-500">
                             추천: <strong className="text-ink-700">{groupSuggest}</strong>{' '}
                             <button
@@ -563,18 +561,18 @@ export default function Partners() {
                       <td className="td max-w-[110px] truncate text-xs text-ink-500">
                         {profileName(p.created_by) || <span className="text-ink-300">—</span>}
                       </td>
-                      {isAdmin ? (
-                        <td className="td num whitespace-nowrap">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setEditing(p)
-                              setFormOpen(true)
-                            }}
-                            className="mr-2 text-xs font-semibold text-brand-700 hover:underline"
-                          >
-                            수정
-                          </button>
+                      <td className="td num whitespace-nowrap">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditing(p)
+                            setFormOpen(true)
+                          }}
+                          className="mr-2 text-xs font-semibold text-brand-700 hover:underline"
+                        >
+                          수정
+                        </button>
+                        {isAdmin ? (
                           <button
                             type="button"
                             onClick={() => setRemoving(p)}
@@ -582,8 +580,8 @@ export default function Partners() {
                           >
                             삭제
                           </button>
-                        </td>
-                      ) : null}
+                        ) : null}
+                      </td>
                     </tr>
                   )
                 })}
@@ -611,15 +609,7 @@ export default function Partners() {
         initial={editing}
         userId={user?.id}
         ledger={ledger}
-      />
-
-      <PartnerFormModal
-        open={Boolean(viewing)}
-        onClose={() => setViewing(null)}
-        initial={viewing}
-        readOnly
-        userId={user?.id}
-        ledger={ledger}
+        isAdmin={isAdmin}
       />
 
       <ConfirmDialog
