@@ -32,5 +32,30 @@ check('관세 → 세금(분류상)', isTaxRow({ counterparty: '인천세관장'
 // 프로젝트 매입은 급여 페이지에 안 나와야 함
 check('엑시움 매입 → 셋 다 아님', isSalary({ counterparty: '엑시움', category: '외주용역비' }) || isInsurance({ counterparty: '엑시움' }) || isTaxRow({ counterparty: '엑시움', category: '외주용역비' }), false)
 
+console.log('\n== 급여대장 업로드 매핑 ==')
+import { buildPayrollRows } from '../src/pages/Payroll.jsx'
+
+const sheet = [
+  ['일자', '성명', '급여', '적요', '메모'],
+  ['2026-10-10', '손선욱', '2,002,510', '10월 급여 (행사 도움)', '은행지급 기준'],
+  ['2026-10-10', '이향란', '5317356', '', ''],
+  ['2026-10-10', '이향란', '5317356', '', ''], // 시트 내 중복
+  ['2026-10-10', '', '1000000', '', ''], // 성명 없음 → 제외
+  ['2026-10-10', '김철수', '0', '', ''], // 0원 → 제외
+]
+const { rows: prow, skipped: pskip } = buildPayrollRows(sheet, {
+  existingNames: new Set(['이향란']),
+  defaultProjectId: 'proj-1',
+  userId: 'user-1',
+})
+check('등록 행 수', prow.length, 1)
+check('건너뜀 수', pskip.length, 2)
+check('손선욱 매핑', prow[0]?.counterparty, '손선욱')
+check('항목 고정', prow[0]?.category, '인건비')
+check('부가세 0', prow[0]?.vat_amount, 0)
+check('귀속 프로젝트', prow[0]?.project_id, 'proj-1')
+check('적요 유지', prow[0]?.description, '10월 급여 (행사 도움)')
+check('기본 적요', buildPayrollRows([['일자', '성명', '급여'], ['2026-10-10', '홍길동', '1000000']], {}).rows[0]?.description, '10월 급여')
+
 console.log(failed ? `\n실패 ${failed}건` : '\n전부 통과')
 process.exit(failed ? 1 : 0)

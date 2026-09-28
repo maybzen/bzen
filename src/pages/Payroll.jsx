@@ -4,10 +4,12 @@ import EntryTable from '../components/EntryTable'
 import Icon from '../components/Icon'
 import { AttachmentModal } from '../components/Attachments'
 import { useToast } from '../components/Toast'
-import { ConfirmDialog, EmptyState, LoadingBlock, PageHeader, StatCard } from '../components/ui'
+import { ConfirmDialog, EmptyState, LoadingBlock, Modal, PageHeader, StatCard } from '../components/ui'
 import { useAuth } from '../auth/AuthContext'
 import { formatKRW, monthEnd, todayISO } from '../lib/format'
-import { deleteEntry, listAttachments, listEntries, listProfiles, listProjects } from '../lib/api'
+import { INTERNAL_PROJECT_NAME } from '../lib/constants'
+import { downloadTextFile, parseCSV, toCSV } from '../lib/csv'
+import { createEntries, deleteEntry, listAttachments, listEntries, listProfiles, listProjects } from '../lib/api'
 
 /**
  * 급여관리 (관리자 전용).
@@ -59,6 +61,7 @@ export default function Payroll() {
   const [busy, setBusy] = useState(false)
   const [viewerFiles, setViewerFiles] = useState(null)
   const [reloadKey, setReloadKey] = useState(0)
+  const [importOpen, setImportOpen] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -104,7 +107,33 @@ export default function Payroll() {
     () => new Set((profiles || []).map((p) => String(p.full_name || '').trim()).filter(Boolean)),
     [profiles],
   )
-  const personKind = (name) => (staffNames.has(String(name || '').trim()) ? '내부' : '외부·단기') 
+  const personKind = (name) => (staffNames.has(String(name || '').trim()) ? '내부' : '외부·단기')
+
+  /* 단기·외부 인력은 별도 섹션에서 관리합니다 (손선욱·행사 단기인력 등) */
+  const staffSalaryRows = useMemo(
+    () => salaryRows.filter((e) => personKind(e.counterparty) === '내부'),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [salaryRows, staffNames],
+  )
+  const tempSalaryRows = useMemo(
+    () => salaryRows.filter((e) => personKind(e.counterparty) !== '내부'),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [salaryRows, staffNames],
+  )
+  const tempTotal = useMemo(() => sumTotal(tempSalaryRows), [tempSalaryRows])
+  const tempHeads = useMemo(
+    () => new Set(tempSalaryRows.map((e) => String(e.counterparty || '').trim())).size,
+    [tempSalaryRows],
+  )
+  /* 같은 월·같은 성명은 1건이 원칙. 업로드 시 중복을 걸러냅니다. */
+  const existingSalaryNames = useMemo(
+    () => new Set(salaryRows.map((e) => String(e.counterparty || '').trim()).filter(Boolean)),
+    [salaryRows],
+  )
+  const internalProjectId = useMemo(
+    () => (projects || []).find((p) => p.name === INTERNAL_PROJECT_NAME)?.id || null,
+    [projects],
+  )
 
   const salaryTotal = useMemo(() => sumTotal(salaryRows), [salaryRows])
   const prevSalaryTotal = useMemo(() => sumTotal(prevEntries.filter(isSalary)), [prevEntries])
@@ -112,14 +141,8 @@ export default function Payroll() {
   const taxTotal = useMemo(() => sumTotal(taxRows), [taxRows])
 
   const internalCount = useMemo(
-    () => new Set(salaryRows.filter((e) => personKind(e.counterparty) === '내부').map((e) => (e.counterparty || '').trim())).size,
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [salaryRows, staffNames],
-  )
-  const externalTotal = useMemo(
-    () => sumTotal(salaryRows.filter((e) => personKind(e.counterparty) !== '내부')),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [salaryRows, staffNames],
+    () => new Set(staffSalaryRows.map((e) => String(e.counterparty || '').trim())).size,
+    [staffSalaryRows],
   )
 
   const diff = salaryTotal - prevSalaryTotal
@@ -168,10 +191,16 @@ export default function Payroll() {
           </button>
         </div>
         {isAdmin ? (
-          <button type="button" className="btn-primary" onClick={openNew}>
-            <Icon name="plus" size={16} />
-            급여 등록
-          </button>
+          <>
+            <button type="button" className="btn-ghost" onClick={() => setImportOpen(true)}>
+              <Icon name="upload" size={16} />
+              급여대장 올리기
+            </button>
+            <button type="button" className="btn-primary" onClick={openNew}>
+              <Icon name="plus" size={16} />
+              급여 등록
+            </button>
+          </>
         ) : null}
       </PageHeader>
 
@@ -197,7 +226,7 @@ export default function Payroll() {
               unit="명"
               tone="neutral"
               icon="users"
-              hint={`내부 ${internalCount}명 · 외부·단기 ${formatKRW(externalTotal)}원`}
+              hint={`내부 ${internalCount}명 · 외부·단기 ${tempHeads}명(${formatKRW(tempTotal)}원)`}
             />
             <StatCard label="4대보험 회사부담" value={insuranceTotal} tone="opex" icon="receipt" hint="건보·산재" />
             <StatCard label="세금·원천징수" value={taxTotal} tone={taxTotal > 0 ? 'loss' : 'neutral'} icon="file" hint="원천세 등" />
@@ -206,15 +235,15 @@ export default function Payroll() {
           <section className="card overflow-hidden">
             <header className="border-b border-ink-200 px-4 py-3.5">
               <h2 className="text-sm font-bold text-ink-900">
-                직원별 급여 ({salaryRows.length}건)
+                직원 급여 ({staffSalaryRows.length}건)
               </h2>
               <p className="mt-0.5 text-xs text-ink-500">
-                계정이 없는 외부·단기 인력(예: 손선욱)도 거래처명으로 그대로 잡힙니다.
+                계정이 있는 내부 직원분입니다. 합계 {formatKRW(salaryTotal - tempTotal)}원
               </p>
             </header>
-            {salaryRows.length ? (
+            {staffSalaryRows.length ? (
               <EntryTable
-                entries={salaryRows}
+                entries={staffSalaryRows}
                 projects={projects}
                 profiles={profiles}
                 attachmentsByEntry={attachmentsByEntry}
@@ -228,7 +257,36 @@ export default function Payroll() {
                 canChangeAuthor={isAdmin}
               />
             ) : (
-              <EmptyState icon="coins" title={`${y}년 ${m}월 급여 내역이 없습니다`} description="급여 등록으로 해당 월 급여를 기록하세요." />
+              <EmptyState icon="coins" title={`${y}년 ${m}월 급여 내역이 없습니다`} description="급여 등록이나 급여대장 올리기로 기록하세요." />
+            )}
+          </section>
+
+          <section className="card overflow-hidden">
+            <header className="border-b border-ink-200 px-4 py-3.5">
+              <h2 className="text-sm font-bold text-ink-900">
+                단기·외부 인력 ({tempSalaryRows.length}건)
+              </h2>
+              <p className="mt-0.5 text-xs text-ink-500">
+                계정이 없는 분(손선욱·행사 단기인력 등)은 여기서 따로 관리됩니다. 합계 {formatKRW(tempTotal)}원
+              </p>
+            </header>
+            {tempSalaryRows.length ? (
+              <EntryTable
+                entries={tempSalaryRows}
+                projects={projects}
+                profiles={profiles}
+                attachmentsByEntry={attachmentsByEntry}
+                canEdit={isAdmin}
+                onEdit={(entry) => {
+                  setEditing({ ...entry, attachments: attachmentsByEntry[entry.id] || [] })
+                  setFormOpen(true)
+                }}
+                onDelete={isAdmin ? setRemoving : undefined}
+                onOpenAttachments={setViewerFiles}
+                canChangeAuthor={isAdmin}
+              />
+            ) : (
+              <EmptyState icon="users" title="단기·외부 인력 급여가 없습니다" />
             )}
           </section>
 
@@ -294,6 +352,231 @@ export default function Payroll() {
         onClose={() => setViewerFiles(null)}
         attachments={viewerFiles || []}
       />
+
+      <PayrollImportModal
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        onDone={() => {
+          setImportOpen(false)
+          setReloadKey((k) => k + 1)
+        }}
+        ym={ym}
+        defaultProjectId={internalProjectId}
+        existingNames={existingSalaryNames}
+        staffNames={staffNames}
+        userId={user?.id}
+      />
     </div>
+  )
+}
+
+/* --------------------------- 급여대장 일괄 등록 --------------------------- */
+
+const PAYROLL_TEMPLATE = ['일자', '성명', '급여', '적요', '메모']
+
+/**
+ * 급여대장 CSV 파싱 → 장부 행 변환 (순수 함수, 검증 스크립트에서 씁니다).
+ * 같은 월·같은 성명은 1건이 원칙이라 이미 등록된 성명은 건너뜁니다.
+ */
+export function buildPayrollRows(parsed, { existingNames = new Set(), defaultProjectId = null, userId = null } = {}) {
+  const header = parsed[0].map((h) => String(h).trim())
+  const indexOf = (name) => header.indexOf(name)
+  const iDate = indexOf('일자')
+  const iName = indexOf('성명') >= 0 ? indexOf('성명') : indexOf('거래처')
+  const iPay = indexOf('급여') >= 0 ? indexOf('급여') : indexOf('공급가액')
+  if (parsed.length < 2) throw new Error('데이터 행이 없습니다.')
+  if (iDate < 0 || iName < 0 || iPay < 0) throw new Error('"일자" · "성명" · "급여" 열이 필요합니다.')
+
+  const out = []
+  const skipped = []
+  const seen = new Set()
+  for (const raw of parsed.slice(1)) {
+    const date = String(raw[iDate] || '').trim().replace(/[./]/g, '-')
+    const name = String(raw[iName] || '').trim()
+    const pay = Number(String(raw[iPay] ?? '').replace(/[^0-9.-]/g, '')) || 0
+    if (!date || !name || pay <= 0) continue
+    if (existingNames.has(name) || seen.has(name)) {
+      skipped.push({ entry_date: date, name, pay })
+      continue
+    }
+    seen.add(name)
+    out.push({
+      entry_type: 'opex',
+      source: 'manual',
+      entry_date: date,
+      counterparty: name,
+      category: '인건비',
+      description:
+        indexOf('적요') >= 0 && String(raw[indexOf('적요')] || '').trim()
+          ? String(raw[indexOf('적요')] || '').trim()
+          : `${Number(date.slice(5, 7))}월 급여`,
+      supply_amount: Math.round(pay),
+      vat_amount: 0,
+      memo: indexOf('메모') >= 0 ? String(raw[indexOf('메모')] || '').trim() : '',
+      project_id: defaultProjectId,
+      created_by: userId,
+    })
+  }
+  return { rows: out, skipped }
+}
+
+function PayrollImportModal({ open, onClose, onDone, ym, defaultProjectId, existingNames, staffNames, userId }) {
+  const toast = useToast()
+  const [rows, setRows] = useState([])
+  const [skipped, setSkipped] = useState([])
+  const [error, setError] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    if (!open) {
+      setRows([])
+      setSkipped([])
+      setError('')
+    }
+  }, [open ])
+
+  const downloadTemplate = () => {
+    downloadTextFile(
+      '급여대장_업로드_양식.csv',
+      toCSV(PAYROLL_TEMPLATE, [[`${ym}-10`, '홍길동', 2500000, `${Number(ym.slice(5))}월 급여`, '은행지급 기준']]),
+    )
+  }
+
+  const handleFile = async (e) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    setError('')
+    try {
+      const text = await file.text()
+      const parsed = parseCSV(text)
+      if (parsed.length < 2) throw new Error('데이터 행이 없습니다.')
+
+      const { rows: out, skipped: skip } = buildPayrollRows(parsed, {
+        existingNames,
+        defaultProjectId,
+        userId,
+      })
+
+      if (!out.length && !skip.length) throw new Error('등록할 행을 찾지 못했습니다.')
+      setRows(out)
+      setSkipped(skip)
+    } catch (err) {
+      setRows([])
+      setSkipped([])
+      setError(err.message)
+    }
+  }
+
+  const submit = async () => {
+    setSaving(true)
+    try {
+      await createEntries(rows)
+      toast.success(
+        `${rows.length}건이 등록되었습니다.${skipped.length ? ` (이미 등록된 ${skipped.length}건 건너뜀)` : ''}`,
+      )
+      onDone?.()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Modal
+      open={open}
+      onClose={saving ? undefined : onClose}
+      title="급여대장 올리기"
+      subtitle="엑셀에서 CSV로 저장한 급여대장을 한 번에 등록합니다. 같은 월·같은 성명은 자동으로 건너뜁니다."
+      size="lg"
+      footer={
+        <>
+          <button type="button" className="btn-ghost" onClick={onClose} disabled={saving}>
+            취소
+          </button>
+          <button type="button" className="btn-primary" onClick={submit} disabled={saving || !rows.length}>
+            {saving ? '등록 중…' : `${rows.length}건 등록`}
+          </button>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="btn-ghost cursor-pointer">
+            <Icon name="upload" size={16} />
+            CSV 파일 선택
+            <input type="file" accept=".csv,text/csv" className="hidden" onChange={handleFile} />
+          </label>
+          <button type="button" className="btn-ghost" onClick={downloadTemplate}>
+            <Icon name="download" size={16} />
+            양식 다운로드
+          </button>
+        </div>
+
+        <div className="rounded-lg border border-ink-200 bg-ink-50/60 p-3.5 text-xs leading-relaxed text-ink-600">
+          <p className="font-semibold text-ink-700">필수 열</p>
+          <p>일자(YYYY-MM-DD), 성명, 급여(원)</p>
+          <p className="mt-2 font-semibold text-ink-700">선택 열</p>
+          <p>적요(없으면 ○월 급여), 메모</p>
+          <p className="mt-2">항목은 인건비, 귀속은 비젠공통(관리)으로 자동 지정됩니다. 부가세는 0원입니다.</p>
+        </div>
+
+        {error ? <p className="text-sm font-medium text-loss">{error}</p> : null}
+
+        {skipped.length ? (
+          <p className="text-xs font-semibold text-amber-700">
+            이미 등록된 {skipped.length}건은 건너뜁니다: {skipped.map((s) => s.name).join(', ')}
+          </p>
+        ) : null}
+
+        {rows.length ? (
+          <div className="overflow-hidden rounded-lg border border-ink-200">
+            <p className="border-b border-ink-200 bg-ink-50 px-3.5 py-2 text-xs font-bold text-ink-700">
+              미리보기 · 총 {rows.length}건
+            </p>
+            <div className="max-h-64 overflow-auto">
+              <table className="w-full min-w-[520px] border-collapse text-xs">
+                <thead className="bg-white">
+                  <tr>
+                    <th className="th">일자</th>
+                    <th className="th">성명</th>
+                    <th className="th">구분</th>
+                    <th className="th text-right">급여</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-ink-100">
+                  {rows.slice(0, 20).map((row, index) => (
+                    <tr key={index}>
+                      <td className="td py-2 text-xs">{row.entry_date}</td>
+                      <td className="td py-2 text-xs">{row.counterparty}</td>
+                      <td className="td py-2 text-xs">
+                        {staffNames.has(row.counterparty) ? (
+                          <span className="chip bg-brand-50 text-brand-700">내부</span>
+                        ) : (
+                          <span className="chip bg-amber-50 text-amber-700">단기·외부</span>
+                        )}
+                      </td>
+                      <td className="td num py-2 text-xs">{formatKRW(row.supply_amount)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {rows.length > 20 ? (
+                <p className="border-t border-ink-100 px-3.5 py-2 text-xs text-ink-500">
+                  외 {rows.length - 20}건
+                </p>
+              ) : null}
+            </div>
+          </div>
+        ) : (
+          <EmptyState
+            icon="upload"
+            title="파일을 선택해 주세요"
+            description="엑셀에서 CSV(쉼표로 분리)로 저장한 뒤 올리면 됩니다."
+          />
+        )}
+      </div>
+    </Modal>
   )
 }
