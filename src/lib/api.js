@@ -210,9 +210,16 @@ export function listAllAttachments() {
 }
 
 function safeFileName(name) {
-  return String(name || 'file')
-    .replace(/[^\w.\-가-힣]+/g, '_')
-    .slice(-90)
+  // 스토리지 키는 ASCII만 허용("Invalid key" 방지). 원본 한글 이름은 DB file_name에 따로 보관됩니다.
+  const raw = String(name || 'file')
+  const dot = raw.lastIndexOf('.')
+  const ext = dot > 0 ? raw.slice(dot + 1).replace(/[^A-Za-z0-9]/g, '').slice(0, 10) : ''
+  const stem =
+    (dot > 0 ? raw.slice(0, dot) : raw)
+      .replace(/[^A-Za-z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '')
+      .slice(0, 60) || 'file'
+  return ext ? `${stem}.${ext}` : stem
 }
 
 export async function uploadAttachment(entryId, file, userId) {
