@@ -35,6 +35,20 @@ function statusChip(status) {
   return <span className="chip bg-amber-50 text-amber-700">승인대기</span>
 }
 
+function directionChip(direction) {
+  if (direction === '발생') return <span className="chip bg-emerald-50 text-emerald-700">발생</span>
+  if (direction === '취소') return <span className="chip bg-rose-50 text-loss">취소</span>
+  return <span className="chip bg-ink-100 text-ink-600">사용</span>
+}
+
+/* 사용기간 표시 (종료일이 다르면 범위) */
+function periodLabel(e) {
+  const s = e.entry_date || ''
+  const t = e.end_date || ''
+  if (t && t !== s) return `${s}~${t}`
+  return s
+}
+
 /* 대표 결재 토글 (대기·승인·반려) */
 function StatusToggle({ status, busy, onChange }) {
   const opts = [
@@ -302,10 +316,10 @@ export default function Leaves() {
                 <table className="w-full min-w-[760px] border-collapse">
                   <thead className="bg-ink-50/70">
                     <tr>
-                      <th className="th">일자</th>
+                      <th className="th">사용기간</th>
                       <th className="th">직원</th>
                       <th className="th">구분</th>
-                      <th className="th">발생/사용</th>
+                      <th className="th">발생/사용/취소</th>
                       <th className="th text-right">일수</th>
                       <th className="th">사유</th>
                       <th className="th">결재</th>
@@ -315,16 +329,10 @@ export default function Leaves() {
                   <tbody className="divide-y divide-ink-100">
                     {detailRows.slice(0, 200).map((e) => (
                       <tr key={e.id} className="transition hover:bg-ink-50/60">
-                        <td className="td whitespace-nowrap">{e.entry_date}</td>
+                        <td className="td whitespace-nowrap">{periodLabel(e)}</td>
                         <td className="td font-medium">{e.person}</td>
                         <td className="td">{e.leave_type}</td>
-                        <td className="td">
-                          <span
-                            className={`chip ${e.direction === '발생' ? 'bg-emerald-50 text-emerald-700' : 'bg-ink-100 text-ink-600'}`}
-                          >
-                            {e.direction}
-                          </span>
-                        </td>
+                        <td className="td">{directionChip(e.direction)}</td>
                         <td className="td num font-semibold">{fmtDays(e.days)}</td>
                         <td className="td max-w-[220px] truncate text-ink-500">{e.memo}</td>
                         <td className="td">
@@ -476,11 +484,13 @@ function PersonModal({ person, onClose, onRegister, rows, profiles, isAdmin, bus
           {/* 인사정보 */}
           <section>
             <h3 className="mb-2 text-xs font-bold text-ink-500">인사정보</h3>
-            <dl className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <dl className="grid grid-cols-2 gap-2 sm:grid-cols-3">
               <InfoBox label="이름" value={person} />
               <InfoBox label="부서" value={profile?.department || '—'} />
               <InfoBox label="연락처" value={profile?.phone || '—'} />
               <InfoBox label="권한" value={ROLE_LABEL[profile?.role] || '—'} />
+              <InfoBox label="생년월일" value={profile?.birth_date || '—'} />
+              <InfoBox label="입사일" value={profile?.hire_date || '—'} />
             </dl>
           </section>
 
@@ -528,7 +538,7 @@ function PersonModal({ person, onClose, onRegister, rows, profiles, isAdmin, bus
                 <table className="w-full min-w-[620px] border-collapse text-xs">
                   <thead className="sticky top-0 bg-white shadow-sm">
                     <tr>
-                      <th className="th">사용기간(일자)</th>
+                      <th className="th">사용기간</th>
                       <th className="th">구분</th>
                       <th className="th text-right">발생</th>
                       <th className="th text-right">사용</th>
@@ -540,7 +550,7 @@ function PersonModal({ person, onClose, onRegister, rows, profiles, isAdmin, bus
                   <tbody className="divide-y divide-ink-100">
                     {detail.map((e) => (
                       <tr key={e.id}>
-                        <td className="td whitespace-nowrap">{e.entry_date}</td>
+                        <td className="td whitespace-nowrap">{periodLabel(e)}</td>
                         <td className="td">{e.leave_type}</td>
                         <td className="td num">{e.direction === '발생' ? fmtDays(e.days) : '—'}</td>
                         <td className="td num">{e.direction === '사용' ? fmtDays(e.days) : '—'}</td>
@@ -586,6 +596,7 @@ function LeaveFormModal({ open, onClose, onSaved, personOptions, userId, isAdmin
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState({
     entry_date: todayISO(),
+    end_date: todayISO(),
     person: '',
     leave_type: '연차',
     direction: '사용',
@@ -599,6 +610,7 @@ function LeaveFormModal({ open, onClose, onSaved, personOptions, userId, isAdmin
       setForm((f) => ({
         ...f,
         entry_date: todayISO(),
+        end_date: todayISO(),
         person: defaultPerson || f.person || '',
         weekendHours: '',
       }))
@@ -640,6 +652,7 @@ function LeaveFormModal({ open, onClose, onSaved, personOptions, userId, isAdmin
       await createLeaveEntry(
         {
           entry_date: form.entry_date,
+          end_date: form.end_date && form.end_date !== form.entry_date ? form.end_date : null,
           person: form.person,
           leave_type: form.leave_type,
           direction: form.direction,
@@ -677,20 +690,23 @@ function LeaveFormModal({ open, onClose, onSaved, personOptions, userId, isAdmin
     >
       <div className="flex flex-col gap-4">
         <div className="grid grid-cols-2 gap-3">
-          <Field label="일자" required>
+          <Field label="시작일" required>
             <input type="date" className="input" value={form.entry_date} onChange={(e) => set('entry_date', e.target.value)} />
           </Field>
-          <Field label="직원" required>
-            <select className="input" value={form.person} onChange={(e) => set('person', e.target.value)}>
-              <option value="">선택</option>
-              {personOptions.map((n) => (
-                <option key={n} value={n}>
-                  {n}
-                </option>
-              ))}
-            </select>
+          <Field label="종료일" hint="당일이면 시작일과 같게">
+            <input type="date" className="input" value={form.end_date} onChange={(e) => set('end_date', e.target.value)} />
           </Field>
         </div>
+        <Field label="직원" required>
+          <select className="input" value={form.person} onChange={(e) => set('person', e.target.value)}>
+            <option value="">선택</option>
+            {personOptions.map((n) => (
+              <option key={n} value={n}>
+                {n}
+              </option>
+            ))}
+          </select>
+        </Field>
         <div className="grid grid-cols-3 gap-3">
           <Field label="구분" required>
             <select className="input" value={form.leave_type} onChange={(e) => set('leave_type', e.target.value)}>
@@ -701,10 +717,11 @@ function LeaveFormModal({ open, onClose, onSaved, personOptions, userId, isAdmin
               ))}
             </select>
           </Field>
-          <Field label="발생/사용" required>
+          <Field label="발생/사용/취소" required hint="취소=소멸·정산">
             <select className="input" value={form.direction} onChange={(e) => set('direction', e.target.value)}>
               <option value="사용">사용</option>
               <option value="발생">발생</option>
+              <option value="취소">취소</option>
             </select>
           </Field>
           <Field label="일수" required hint="0.5 단위">
