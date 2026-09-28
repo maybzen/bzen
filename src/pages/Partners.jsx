@@ -60,18 +60,46 @@ export default function Partners() {
   const [busy, setBusy] = useState(false)
   const [customGroupId, setCustomGroupId] = useState(null)
   const [customGroupValue, setCustomGroupValue] = useState('')
+  const [pendingGroups, setPendingGroups] = useState({})
+  const [savingAll, setSavingAll] = useState(false)
+  const pendingCount = Object.keys(pendingGroups).length
 
-  const saveGroup = async (partner, value) => {
+  /* 구분 변경은 바로 저장하지 않고 모아뒀다가 일괄 저장합니다 */
+  const stageGroup = (partner, value) => {
     const next = String(value || '').trim() || '기타'
-    if (next === (partner.group_name || '기타')) return
+    setCustomGroupId(null)
+    setPendingGroups((prev) => {
+      if (next === (partner.group_name || '기타')) {
+        if (!(partner.id in prev)) return prev
+        const n = { ...prev }
+        delete n[partner.id]
+        return n
+      }
+      return { ...prev, [partner.id]: next }
+    })
+  }
+
+  const saveAllGroups = async () => {
+    const ids = Object.keys(pendingGroups)
+    if (!ids.length) return
+    setSavingAll(true)
     try {
-      const saved = await updatePartner(partner.id, { group_name: next })
-      setPartners((list) => list.map((p) => (p.id === partner.id ? { ...p, ...saved } : p)))
-      toast.success(`구분이 '${next}'(으)로 변경되었습니다.`)
-      setCustomGroupId(null)
+      for (const id of ids) {
+        const saved = await updatePartner(id, { group_name: pendingGroups[id] })
+        setPartners((list) => list.map((p) => (p.id === id ? { ...p, ...saved } : p)))
+      }
+      setPendingGroups({})
+      toast.success(`${ids.length}건의 구분을 저장했습니다.`)
     } catch (error) {
       toast.error(error.message)
+    } finally {
+      setSavingAll(false)
     }
+  }
+
+  const resetPending = () => {
+    setPendingGroups({})
+    setCustomGroupId(null)
   }
 
   const load = useCallback(async () => {
@@ -194,6 +222,17 @@ export default function Partners() {
           <Icon name="download" size={16} />
           CSV 내보내기
         </button>
+        {isAdmin && pendingCount > 0 ? (
+          <>
+            <button type="button" className="btn-ghost" onClick={resetPending} disabled={savingAll}>
+              되돌리기
+            </button>
+            <button type="button" className="btn-primary" onClick={saveAllGroups} disabled={savingAll}>
+              <Icon name="check" size={16} />
+              {savingAll ? '저장 중…' : `일괄 저장 ${pendingCount}건`}
+            </button>
+          </>
+        ) : null}
         {isAdmin && tableState === 'ready' ? (
           <button type="button" className="btn-primary" onClick={openNew}>
             <Icon name="plus" size={16} />
@@ -282,15 +321,16 @@ export default function Partners() {
                   const bizNo = memoBizNo(p.memo)
                   const accounts = memoAccounts(p.memo)
                   const closed = (p.status || '정상') === '폐업'
+                  const effGroup = pendingGroups[p.id] ?? p.group_name
                   const groupSuggest =
-                    !p.group_name || p.group_name === '기타'
+                    !effGroup || effGroup === '기타'
                       ? suggestPartnerGroup(p.name, p.memo)
                       : null
                   const openDetail = () =>
                     isAdmin ? (setEditing(p), setFormOpen(true)) : setViewing(p)
                   return (
                     <tr key={p.id} className={`transition hover:bg-ink-50/60 ${closed ? 'opacity-60' : ''}`}>
-                      <td className="td whitespace-nowrap">
+                      <td className={`td whitespace-nowrap ${pendingGroups[p.id] ? 'bg-amber-50/60' : ''}`}>
                         {isAdmin ? (
                           customGroupId === p.id ? (
                             <span className="flex items-center gap-1">
@@ -300,32 +340,32 @@ export default function Partners() {
                                 value={customGroupValue}
                                 onChange={(e) => setCustomGroupValue(e.target.value)}
                                 onKeyDown={(e) => {
-                                  if (e.key === 'Enter') saveGroup(p, customGroupValue)
+                                  if (e.key === 'Enter') stageGroup(p, customGroupValue)
                                   if (e.key === 'Escape') setCustomGroupId(null)
                                 }}
                                 placeholder="직접 입력"
                               />
                               <button
                                 type="button"
-                                onClick={() => saveGroup(p, customGroupValue)}
+                                onClick={() => stageGroup(p, customGroupValue)}
                                 className="text-xs font-bold text-brand-700 hover:underline"
                               >
-                                저장
+                                담기
                               </button>
                             </span>
                           ) : (
                             <select
                               className="input w-auto py-1 text-xs"
-                              value={PARTNER_GROUPS.includes(p.group_name) ? p.group_name : p.group_name ? '__current' : '기타'}
+                              value={PARTNER_GROUPS.includes(effGroup) ? effGroup : effGroup ? '__current' : '기타'}
                               onChange={(e) => {
                                 const v = e.target.value
                                 if (v === '__new') {
                                   setCustomGroupId(p.id)
                                   setCustomGroupValue(
-                                    PARTNER_GROUPS.includes(p.group_name) ? '' : p.group_name || '',
+                                    PARTNER_GROUPS.includes(effGroup) ? '' : effGroup || '',
                                   )
                                 } else if (v !== '__current') {
-                                  saveGroup(p, v)
+                                  stageGroup(p, v)
                                 }
                               }}
                             >
@@ -334,8 +374,8 @@ export default function Partners() {
                                   {g}
                                 </option>
                               ))}
-                              {!PARTNER_GROUPS.includes(p.group_name) && p.group_name ? (
-                                <option value="__current">{p.group_name}</option>
+                              {!PARTNER_GROUPS.includes(effGroup) && effGroup ? (
+                                <option value="__current">{effGroup}</option>
                               ) : null}
                               <option value="__new">직접 입력…</option>
                             </select>
@@ -343,15 +383,20 @@ export default function Partners() {
                         ) : (
                           <span className="chip bg-ink-100 text-ink-600">{p.group_name || '기타'}</span>
                         )}
+                        {pendingGroups[p.id] ? (
+                          <span className="mt-1 block text-[11px] font-semibold text-amber-700">
+                            저장 대기 중
+                          </span>
+                        ) : null}
                         {isAdmin && groupSuggest && groupSuggest !== '기타' ? (
                           <span className="mt-1 block text-[11px] text-ink-500">
                             추천: <strong className="text-ink-700">{groupSuggest}</strong>{' '}
                             <button
                               type="button"
                               className="font-bold text-brand-700 hover:underline"
-                              onClick={() => saveGroup(p, groupSuggest)}
+                              onClick={() => stageGroup(p, groupSuggest)}
                             >
-                              적용
+                              담기
                             </button>
                           </span>
                         ) : null}
