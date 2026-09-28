@@ -134,6 +134,10 @@ export function upsertSlip(payload, userId) {
   return unwrap(supabase.from('payroll_slips').upsert(row, { onConflict: 'entry_id' }).select().single())
 }
 
+export function deleteSlip(entryId) {
+  return unwrap(supabase.from('payroll_slips').delete().eq('entry_id', entryId))
+}
+
 /* ------------------------------------------------------------------ */
 /* 자금관리 (계좌·대출·카드 마스터 + 잔고 스냅샷. 관리자 전용)              */
 /* ------------------------------------------------------------------ */

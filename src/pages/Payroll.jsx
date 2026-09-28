@@ -12,6 +12,7 @@ import { downloadTextFile, parseCSV, toCSV } from '../lib/csv'
 import {
   createEntries,
   deleteEntry,
+  deleteSlip,
   listAttachments,
   listEntries,
   listProfiles,
@@ -666,6 +667,29 @@ function SlipModal({ open, onClose, onSaved, entry, ym, initial, reportRows, pro
       size="lg"
       footer={
         <>
+          {initial?.id ? (
+            <button
+              type="button"
+              className="mr-auto text-xs font-semibold text-loss hover:underline"
+              disabled={saving}
+              onClick={async () => {
+                if (!window.confirm('명세서만 삭제합니다. 장부 급여 행은 남습니다. 계속할까요?')) return
+                setSaving(true)
+                setError('')
+                try {
+                  await deleteSlip(entry.id)
+                  toast.success('명세서를 삭제했습니다. 장부는 그대로 둡니다.')
+                  onSaved?.()
+                } catch (err) {
+                  setError(err.message)
+                } finally {
+                  setSaving(false)
+                }
+              }}
+            >
+              명세서만 삭제
+            </button>
+          ) : null}
           <button type="button" className="btn-ghost" onClick={onClose} disabled={saving}>
             취소
           </button>
