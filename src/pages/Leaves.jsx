@@ -203,64 +203,58 @@ export default function Leaves() {
             <StatCard label="승인 대기" value={String(totals.pending)} unit="건" tone="neutral" icon="alert" />
           </div>
 
-          {/* 총괄표 */}
-          <section className="card overflow-hidden">
-            <header className="border-b border-ink-200 px-4 py-3.5">
-              <h2 className="text-sm font-bold text-ink-900">휴무 현황 총괄표</h2>
-              <p className="mt-0.5 text-xs text-ink-500">이름을 누르면 인사정보·세부내역·결재현황을 볼 수 있습니다.</p>
-            </header>
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[820px] border-collapse">
-                <thead className="bg-ink-50/70">
-                  <tr>
-                    <th className="th">직원</th>
-                    {LEAVE_TYPES.map((t) => (
-                      <th key={t} className="th text-right">
-                        {t} 잔여
-                      </th>
-                    ))}
-                    <th className="th text-right">합계 잔여</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-ink-100">
-                  {summary.map((r) => (
-                    <tr key={r.person} className="transition hover:bg-ink-50/60">
-                      <td className="td">
-                        <button
-                          type="button"
-                          className="font-semibold text-ink-800 hover:text-brand-700 hover:underline"
-                          onClick={() => setDetailPerson(r.person)}
-                        >
-                          {r.person}
-                        </button>
-                        {r.pending ? (
-                          <span className="chip ml-1.5 bg-amber-50 text-amber-700">대기 {r.pending}</span>
+          {/* 총괄표 (이름 카드) */}
+          <section className="flex flex-col gap-3">
+            <h2 className="text-sm font-bold text-ink-900">
+              휴무 현황 총괄표
+              <span className="ml-1.5 font-medium text-ink-500">이름을 누르면 세부내역·결재현황을 볼 수 있습니다</span>
+            </h2>
+            {summary.length ? (
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                {summary.map((r) => {
+                  const types = LEAVE_TYPES.filter((t) => r.types[t])
+                  return (
+                    <button
+                      key={r.person}
+                      type="button"
+                      onClick={() => setDetailPerson(r.person)}
+                      className="card overflow-hidden p-0 text-left transition hover:shadow-pop"
+                    >
+                      <div className="flex items-center justify-between gap-2 border-b border-ink-200 px-4 py-3">
+                        <span className="text-sm font-extrabold text-ink-900">{r.person}</span>
+                        <span className="flex items-center gap-1.5">
+                          {r.pending ? (
+                            <span className="chip bg-amber-50 text-amber-700">대기 {r.pending}</span>
+                          ) : null}
+                          <span className="font-num text-sm font-extrabold tabular-nums text-brand-700">
+                            잔여 {fmtDays(r.accrued - r.used)}
+                          </span>
+                        </span>
+                      </div>
+                      <dl className="px-4 py-2">
+                        {types.map((t) => {
+                          const v = (r.types[t]?.accrued || 0) - (r.types[t]?.used || 0)
+                          return (
+                            <div key={t} className="flex items-baseline justify-between gap-2 py-1">
+                              <dt className="text-xs text-ink-500">{t}</dt>
+                              <dd className="font-num text-xs tabular-nums text-ink-500">
+                                {fmtDays(r.types[t]?.accrued || 0)} − {fmtDays(r.types[t]?.used || 0)} ={' '}
+                                <span className="text-sm font-bold text-ink-900">{fmtDays(v)}</span>
+                              </dd>
+                            </div>
+                          )
+                        })}
+                        {!types.length ? (
+                          <p className="py-3 text-center text-xs text-ink-400">내역이 없습니다.</p>
                         ) : null}
-                      </td>
-                      {LEAVE_TYPES.map((t) => {
-                        const v = (r.types[t]?.accrued || 0) - (r.types[t]?.used || 0)
-                        return (
-                          <td key={t} className="td num">
-                            <span className="font-bold">{fmtDays(v)}</span>
-                            <span className="block text-[11px] font-normal text-ink-400">
-                              발생 {fmtDays(r.types[t]?.accrued || 0)} · 사용 {fmtDays(r.types[t]?.used || 0)}
-                            </span>
-                          </td>
-                        )
-                      })}
-                      <td className="td num font-extrabold">{fmtDays(r.accrued - r.used)}</td>
-                    </tr>
-                  ))}
-                  {!summary.length ? (
-                    <tr>
-                      <td colSpan={LEAVE_TYPES.length + 2} className="empty">
-                        등록된 내역이 없습니다.
-                      </td>
-                    </tr>
-                  ) : null}
-                </tbody>
-              </table>
-            </div>
+                      </dl>
+                    </button>
+                  )
+                })}
+              </div>
+            ) : (
+              <EmptyState icon="file" title="등록된 내역이 없습니다" description="휴무 등록으로 발생·사용을 기록하세요." />
+            )}
           </section>
 
           {/* 상세 내역 */}
