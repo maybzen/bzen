@@ -154,12 +154,6 @@ export function getPeriodRange(preset) {
       const y = now.getFullYear() - 1
       return { from: `${y}-01-01`, to: `${y}-12-31`, label: `${y}년` }
     }
-    case 'last12': {
-      const s = addMonths(now, -11)
-      return { from: monthStart(s), to: monthEnd(now), label: '최근 12개월' }
-    }
-    case 'all':
-      return { from: '', to: '', label: '전체 기간' }
     default:
       return null
   }

@@ -270,12 +270,11 @@ export const ROLE_LABEL = {
   staff: '직원',
 }
 
+/** 기간 선택지. '직접 선택'(기간 직접 입력)은 PeriodPicker 가 뒤에 붙입니다. */
 export const PERIOD_PRESETS = [
   { key: 'thisMonth', label: '이번 달' },
   { key: 'lastMonth', label: '지난 달' },
   { key: 'quarter', label: '이번 분기' },
   { key: 'thisYear', label: '올해' },
   { key: 'lastYear', label: '작년' },
-  { key: 'last12', label: '최근 12개월' },
-  { key: 'all', label: '전체' },
 ]

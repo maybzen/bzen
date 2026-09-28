@@ -67,13 +67,10 @@ export function usePeriod(initial = 'thisMonth', storageKey = null) {
   return { preset, setPreset, custom, setCustom, range }
 }
 
-export default function PeriodPicker({ period, allowAll = true, className = '' }) {
+export default function PeriodPicker({ period, className = '' }) {
   const { preset, setPreset, custom, setCustom, range } = period
 
-  const options = useMemo(() => {
-    const base = PERIOD_PRESETS.filter((p) => allowAll || p.key !== 'all')
-    return [...base, { key: ALL_KEY, label: '직접 선택' }]
-  }, [allowAll])
+  const options = useMemo(() => [...PERIOD_PRESETS, { key: ALL_KEY, label: '직접 선택' }], [])
 
   return (
     <div className={`flex flex-wrap items-center gap-2 ${className}`}>
