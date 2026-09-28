@@ -345,7 +345,7 @@ export default function EntryFormModal({
         </div>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <Field label={isReport ? '지출자' : '담당자'} hint={isReport ? '지출결의를 올린 사람입니다.' : undefined}>
+          <Field label={isReport ? '지출자' : '작성자'} hint={isReport ? '지출결의를 올린 사람입니다.' : undefined}>
             {isAdmin ? (
               <select
                 className="input"

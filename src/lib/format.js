@@ -54,6 +54,13 @@ export function todayISO() {
   return toISODate(new Date())
 }
 
+/** 한국 시간(KST) 기준 오늘 날짜 (YYYY-MM-DD) */
+export function todayKST() {
+  const now = new Date()
+  const kst = new Date(now.getTime() + (9 * 60 + now.getTimezoneOffset()) * 60000)
+  return toISODate(kst)
+}
+
 export function parseISO(s) {
   if (!s) return new Date()
   const [y, m, d] = String(s).slice(0, 10).split('-').map(Number)

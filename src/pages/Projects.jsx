@@ -134,9 +134,9 @@ export default function Projects() {
             onChange={setStatusFilter}
             options={[
               { key: 'active', label: `진행중 ${statusCounts.active || 0}` },
-              { key: 'proposal', label: `제안서 ${statusCounts.proposal || 0}` },
+              { key: 'proposal', label: `${PROJECT_STATUS.proposal.label} ${statusCounts.proposal || 0}` },
               { key: 'done', label: `완료 ${statusCounts.done || 0}` },
-              { key: 'dropped', label: `탈락 ${statusCounts.dropped || 0}` },
+              { key: 'dropped', label: `${PROJECT_STATUS.dropped.label} ${statusCounts.dropped || 0}` },
               { key: 'all', label: `전체 ${statusCounts.all || 0}` },
             ]}
           />
@@ -176,7 +176,7 @@ export default function Projects() {
             const achieved =
               project.contract_amount > 0 ? (row.sale / project.contract_amount) * 100 : null
 
-            // 제안서·탈락은 장부 집계 대신 제안 정보 위주로 보여줍니다.
+            // 미진행·취소는 장부 집계 대신 제안 정보 위주로 보여줍니다.
             if (project.status === 'proposal' || project.status === 'dropped') {
               return (
                 <ProposalCard
@@ -346,7 +346,7 @@ export default function Projects() {
 }
 
 function ProposalCard({ project, row, status, isAdmin, managerName, onEdit, onDelete }) {
-  // 탈락 제안: 수기 수익금이 없으면 장부에 찍힌 투입 비용을 손실(-)로 보여줍니다.
+  // 취소 제안: 수기 수익금이 없으면 장부에 찍힌 투입 비용을 손실(-)로 보여줍니다.
   const spent = Number(row?.purchase || 0) + Number(row?.opex || 0) - Number(row?.sale || 0)
   const showLedgerLoss =
     project.status === 'dropped' && !Number(project.profit_amount) && spent > 0
@@ -427,7 +427,7 @@ function ProposalCard({ project, row, status, isAdmin, managerName, onEdit, onDe
       </dl>
       {showLedgerLoss ? (
         <p className="mt-2 text-[11px] text-ink-500">
-          탈락 제안의 선택 기간 투입 비용 {row.count}건을 손실로 집계합니다.
+          취소 제안의 선택 기간 투입 비용 {row.count}건을 손실로 집계합니다.
         </p>
       ) : null}
 

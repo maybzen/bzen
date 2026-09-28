@@ -9,7 +9,7 @@ function personName(profiles, id) {
   return p?.full_name || p?.email || '—'
 }
 
-/** 담당자 표기: 결의자 → 기타(퇴사자 코드) → 기존 방식 순 */
+/** 작성자 표기: 결의자 → 기타(퇴사자 코드) → 기존 방식 순 */
 function ownerLabel(profiles, entry) {
   if (entry.requester_id) return personName(profiles, entry.requester_id)
   if (entry.source === 'expense_report') {
@@ -75,7 +75,7 @@ export default function EntryTable({
               <th className="th text-right">부가세</th>
               <th className="th text-right">합계</th>
               <th className="th">증빙</th>
-              <th className="th">담당</th>
+              <th className="th">작성자</th>
               <th className="th text-right">관리</th>
             </tr>
           </thead>
@@ -118,10 +118,10 @@ export default function EntryTable({
                   <td className="td">
                     <AttachmentCell attachments={files} onOpen={onOpenAttachments} />
                   </td>
-                  <td className="td max-w-[110px] truncate text-xs text-ink-500">
+                  <td className="td max-w-[130px] truncate text-xs text-ink-500">
                     {ownerLabel(profiles, entry)}
                     {cardUser(entry) ? (
-                      <span className="block truncate text-[11px] text-brand-700">카드 {cardUser(entry)}</span>
+                      <span className="block truncate text-[11px] text-brand-700">이용자 {cardUser(entry)}</span>
                     ) : null}
                   </td>
                   <td className="td">
@@ -195,8 +195,8 @@ export default function EntryTable({
                   <p className="mt-0.5 truncate text-xs text-ink-500">
                     {entry.counterparty || '—'}
                     {project ? ` · ${project.name}` : ''}
-                    {entry.source === 'expense_report' ? ` · ${ownerLabel(profiles, entry)}` : ''}
-                    {cardUser(entry) ? ` · 카드 ${cardUser(entry)}` : ''}
+                    {` · 작성자 ${ownerLabel(profiles, entry)}`}
+                    {cardUser(entry) ? ` · 이용자 ${cardUser(entry)}` : ''}
                   </p>
                 </div>
                 <div className="shrink-0 text-right">

@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Icon from '../components/Icon'
 import { useToast } from '../components/Toast'
 import { ConfirmDialog, EmptyState, Field, LoadingBlock, Modal, PageHeader, StatCard } from '../components/ui'
 import { useAuth } from '../auth/AuthContext'
 import { ROLE_LABEL } from '../lib/constants'
-import { todayISO } from '../lib/format'
+import { todayKST } from '../lib/format'
 import {
   createLeaveEntry,
   deleteLeaveEntry,
@@ -14,9 +14,8 @@ import {
 } from '../lib/api'
 
 const LEAVE_TYPES = ['연차', '월차', '대휴', '동계휴가', '보건휴가', '경조사']
-const GRANT_TYPES = ['연차', '월차', '대휴', '동계휴가', '보건휴가']
 const SHEET_ORDER = ['이보람', '권혜민', '박현정', '김상희', '김혜린', '박은영', '이정현']
-/* 새해 부여 기본값 (연차 있는 분) */
+/* 새해 자동 부여 기준 (연차 있는 분) */
 const GRANT_DEFAULTS = {
   이보람: { 연차: '16' },
   권혜민: { 연차: '16' },
@@ -47,6 +46,42 @@ function periodLabel(e) {
   const t = e.end_date || ''
   if (t && t !== s) return `${s}~${t}`
   return s
+}
+
+/* 새해 자동 부여: 연차(기준표)·전년도 동계 보유자 동계 10일·전원 보건 12일 */
+async function autoGrantYear(all, profileRows, userId, grantedRef) {
+  const y = Number(todayKST().slice(0, 4))
+  if (grantedRef.current[y]) return 0
+  grantedRef.current[y] = true
+  const marker = `${y}-01-01`
+  const has = (all || []).some((e) => e.entry_date === marker && /부여/.test(e.memo || ''))
+  if (has) return 0
+  const prevWinter = new Set(
+    (all || [])
+      .filter(
+        (e) =>
+          e.leave_type === '동계휴가' &&
+          e.direction === '발생' &&
+          String(e.entry_date || '').startsWith(String(y - 1)),
+      )
+      .map((e) => e.person),
+  )
+  const names = [
+    ...new Set([...SHEET_ORDER, ...(profileRows || []).map((p) => p.full_name).filter(Boolean)]),
+  ]
+  const payloads = []
+  for (const person of names) {
+    const annual = Number(GRANT_DEFAULTS[person]?.연차 || 0)
+    if (annual > 0) {
+      payloads.push({ entry_date: marker, person, leave_type: '연차', direction: '발생', days: annual, memo: `${y}년 자동부여`, status: '승인' })
+    }
+    if (prevWinter.has(person)) {
+      payloads.push({ entry_date: marker, person, leave_type: '동계휴가', direction: '발생', days: 10, memo: `${y}년 자동부여`, status: '승인' })
+    }
+    payloads.push({ entry_date: marker, person, leave_type: '보건휴가', direction: '발생', days: 12, memo: `${y}년 자동부여`, status: '승인' })
+  }
+  for (const p of payloads) await createLeaveEntry(p, userId)
+  return payloads.length
 }
 
 /* 대표 결재 토글 (대기·승인·반려) */
@@ -89,10 +124,12 @@ export default function Leaves() {
 
   const [formOpen, setFormOpen] = useState(false)
   const [presetPerson, setPresetPerson] = useState('')
-  const [grantOpen, setGrantOpen] = useState(false)
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
   const [detailPerson, setDetailPerson] = useState(null)
   const [removing, setRemoving] = useState(null)
   const [busy, setBusy] = useState(false)
+  const grantedRef = useRef({})
 
   useEffect(() => {
     let mounted = true
@@ -100,8 +137,21 @@ export default function Leaves() {
     Promise.all([listLeaveEntries(), listProfiles()])
       .then(([leaveRows, profileRows]) => {
         if (!mounted) return
-        setRows(leaveRows || [])
+        const all = leaveRows || []
+        setRows(all)
         setProfiles(profileRows || [])
+        /* 새해 자동 부여: 해당 연도 부여 기록이 없으면 관리자가 처음 열 때 1회 등록 */
+        if (isAdmin) {
+          autoGrantYear(all, profileRows || [], user?.id, grantedRef)
+            .then((added) => {
+              if (!mounted || !added) return
+              toast.success(`${added}건을 새해 부여했습니다.`)
+              return listLeaveEntries().then((r) => {
+                if (mounted) setRows(r || [])
+              })
+            })
+            .catch(() => {})
+        }
       })
       .catch((e) => {
         if (mounted) toast.error(e.message)
@@ -113,7 +163,7 @@ export default function Leaves() {
       mounted = false
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [reloadKey])
+  }, [reloadKey, isAdmin, user?.id])
 
   /* 총괄: 승인분만 집계 + 승인대기 건수 */
   const summary = useMemo(() => {
@@ -168,12 +218,18 @@ export default function Leaves() {
   }, [summary])
 
   const detailRows = useMemo(() => {
-    const list = personFilter ? rows.filter((e) => e.person === personFilter) : rows
-    return (list || []).slice().sort((a, b) => {
-      if (a.entry_date !== b.entry_date) return a.entry_date < b.entry_date ? 1 : -1
-      return String(b.created_at || '') < String(a.created_at || '') ? -1 : 1
+    let list = rows || []
+    if (personFilter) list = list.filter((e) => e.person === personFilter)
+    if (dateFrom) list = list.filter((e) => (e.end_date || e.entry_date || '') >= dateFrom)
+    if (dateTo) list = list.filter((e) => (e.entry_date || '') <= dateTo)
+    /* 최근에 작성·수정한 순 (승인대기가 바로 보이도록) */
+    return list.slice().sort((a, b) => {
+      const ca = String(a.created_at || '')
+      const cb = String(b.created_at || '')
+      if (ca !== cb) return cb < ca ? -1 : 1
+      return (a.entry_date || '') < (b.entry_date || '') ? 1 : -1
     })
-  }, [rows, personFilter])
+  }, [rows, personFilter, dateFrom, dateTo])
 
   const personOptions = useMemo(() => {
     const names = new Set([...SHEET_ORDER, ...profiles.map((p) => p.full_name).filter(Boolean)])
@@ -224,12 +280,6 @@ export default function Leaves() {
             </option>
           ))}
         </select>
-        {isAdmin ? (
-          <button type="button" className="btn-ghost" onClick={() => setGrantOpen(true)}>
-            <Icon name="calendar" size={16} />
-            새해 일괄 부여
-          </button>
-        ) : null}
         <button type="button" className="btn-primary" onClick={() => { setPresetPerson(''); setFormOpen(true) }}>
           <Icon name="plus" size={16} />
           휴무 등록
@@ -303,13 +353,42 @@ export default function Leaves() {
 
           {/* 상세 내역 */}
           <section className="card overflow-hidden">
-            <header className="border-b border-ink-200 px-4 py-3.5">
+            <header className="flex flex-wrap items-center justify-between gap-2 border-b border-ink-200 px-4 py-3.5">
               <h2 className="text-sm font-bold text-ink-900">
                 발생·사용 내역
                 <span className="ml-2 font-num text-xs font-semibold tabular-nums text-ink-400">
                   {detailRows.length}건
                 </span>
               </h2>
+              <div className="flex items-center gap-1.5 text-xs text-ink-500">
+                <input
+                  type="date"
+                  className="input w-36 px-2 py-1.5 text-xs"
+                  value={dateFrom}
+                  onChange={(e) => setDateFrom(e.target.value)}
+                  title="시작일"
+                />
+                <span>~</span>
+                <input
+                  type="date"
+                  className="input w-36 px-2 py-1.5 text-xs"
+                  value={dateTo}
+                  onChange={(e) => setDateTo(e.target.value)}
+                  title="종료일"
+                />
+                {dateFrom || dateTo ? (
+                  <button
+                    type="button"
+                    className="shrink-0 text-xs font-semibold text-ink-400 hover:text-ink-700 hover:underline"
+                    onClick={() => {
+                      setDateFrom('')
+                      setDateTo('')
+                    }}
+                  >
+                    지우기
+                  </button>
+                ) : null}
+              </div>
             </header>
             {detailRows.length ? (
               <div className="overflow-x-auto">
@@ -382,17 +461,7 @@ export default function Leaves() {
         userId={user?.id}
         isAdmin={isAdmin}
         defaultPerson={presetPerson || personFilter}
-      />
-
-      <GrantModal
-        open={grantOpen}
-        onClose={() => setGrantOpen(false)}
-        onSaved={() => {
-          setGrantOpen(false)
-          setReloadKey((k) => k + 1)
-        }}
-        personOptions={personOptions}
-        userId={user?.id}
+        rows={rows}
       />
 
       <PersonModal
@@ -591,12 +660,12 @@ function InfoBox({ label, value }) {
 
 /* --------------------------- 휴무 등록 --------------------------- */
 
-function LeaveFormModal({ open, onClose, onSaved, personOptions, userId, isAdmin, defaultPerson }) {
+function LeaveFormModal({ open, onClose, onSaved, personOptions, userId, isAdmin, defaultPerson, rows }) {
   const toast = useToast()
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState({
-    entry_date: todayISO(),
-    end_date: todayISO(),
+    entry_date: todayKST(),
+    end_date: todayKST(),
     person: '',
     leave_type: '연차',
     direction: '사용',
@@ -609,8 +678,8 @@ function LeaveFormModal({ open, onClose, onSaved, personOptions, userId, isAdmin
     if (open) {
       setForm((f) => ({
         ...f,
-        entry_date: todayISO(),
-        end_date: todayISO(),
+        entry_date: todayKST(),
+        end_date: todayKST(),
         person: defaultPerson || f.person || '',
         weekendHours: '',
       }))
@@ -619,6 +688,19 @@ function LeaveFormModal({ open, onClose, onSaved, personOptions, userId, isAdmin
   }, [open])
 
   const set = (key, value) => setForm((f) => ({ ...f, [key]: value }))
+
+  /* 선택한 직원·구분의 현재 잔여(승인 기준) + 등록 후 예상 잔여 */
+  const currentRemain = useMemo(() => {
+    let a = 0
+    let u = 0
+    for (const e of rows || []) {
+      if (e.person !== form.person || e.leave_type !== form.leave_type || e.status !== '승인') continue
+      if (e.direction === '발생') a += Number(e.days || 0)
+      else u += Number(e.days || 0)
+    }
+    return a - u
+  }, [rows, form.person, form.leave_type])
+  const projected = currentRemain + (form.direction === '발생' ? Number(form.days || 0) : -Number(form.days || 0))
 
   /* 주말출근 → 대휴 자동 계산 (4시간 이상 1일, 미만 0.5일) */
   const applyWeekend = () => {
@@ -744,6 +826,20 @@ function LeaveFormModal({ open, onClose, onSaved, personOptions, userId, isAdmin
           />
         </Field>
 
+        {form.person && form.leave_type ? (
+          <div className="rounded-lg border border-brand-100 bg-brand-50/60 px-3.5 py-2.5 text-xs">
+            <span className="font-semibold text-ink-700">
+              {form.person} · {form.leave_type}
+            </span>
+            <span className="text-ink-600">
+              {' '}
+              현재 잔여 <strong className="font-num tabular-nums">{fmtDays(currentRemain)}일</strong>
+              {' → '}등록 후 <strong className="font-num tabular-nums">{fmtDays(projected)}일</strong> 예상
+            </span>
+            <span className="block text-[11px] text-ink-400">승인된 내역 기준입니다.</span>
+          </div>
+        ) : null}
+
         <div className="rounded-lg border border-ink-200 bg-ink-50/60 p-3.5">
           <p className="text-xs font-bold text-ink-700">주말출근 대휴 계산</p>
           <p className="mt-0.5 text-[11px] text-ink-500">4시간 이상 1일 · 4시간 미만 0.5일</p>
@@ -767,130 +863,4 @@ function LeaveFormModal({ open, onClose, onSaved, personOptions, userId, isAdmin
   )
 }
 
-/* ------------------------- 새해 일괄 부여 ------------------------- */
 
-function GrantModal({ open, onClose, onSaved, personOptions, userId }) {
-  const toast = useToast()
-  const [saving, setSaving] = useState(false)
-  const [grantYear, setGrantYear] = useState(String(Number(todayISO().slice(0, 4)) + 1))
-  const [rows, setRows] = useState({})
-
-  useEffect(() => {
-    if (open) {
-      const init = {}
-      for (const n of personOptions) {
-        init[n] = { 연차: GRANT_DEFAULTS[n]?.연차 || '', 월차: '', 대휴: '', 동계휴가: '', 보건휴가: '12' }
-      }
-      setRows(init)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open])
-
-  const setCell = (person, type, value) =>
-    setRows((prev) => ({ ...prev, [person]: { ...prev[person], [type]: value } }))
-
-  const submit = async () => {
-    const y = Number(grantYear)
-    if (!y || y < 2000 || y > 2100) {
-      toast.error('연도를 확인해 주세요.')
-      return
-    }
-    const payloads = []
-    for (const person of personOptions) {
-      for (const type of GRANT_TYPES) {
-        const days = Number(rows[person]?.[type] || 0)
-        if (days > 0) {
-          payloads.push({
-            entry_date: `${y}-01-01`,
-            person,
-            leave_type: type,
-            direction: '발생',
-            days,
-            memo: `${y}년 부여`,
-            status: '승인',
-          })
-        }
-      }
-    }
-    if (!payloads.length) {
-      toast.error('부여할 일수를 입력해 주세요.')
-      return
-    }
-    setSaving(true)
-    try {
-      for (const p of payloads) await createLeaveEntry(p, userId)
-      toast.success(`${payloads.length}건을 부여했습니다.`)
-      onSaved()
-    } catch (e) {
-      toast.error(e.message)
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  return (
-    <Modal
-      open={open}
-      onClose={saving ? undefined : onClose}
-      title="새해 일괄 부여"
-      subtitle="연차 있는 분은 연차+보건휴가 12일, 신규 입사자는 월차+보건휴가를 입력하세요."
-      size="lg"
-      footer={
-        <>
-          <button type="button" className="btn-ghost" onClick={onClose} disabled={saving}>
-            취소
-          </button>
-          <button type="button" className="btn-primary" onClick={submit} disabled={saving}>
-            {saving ? '부여 중…' : '일괄 부여'}
-          </button>
-        </>
-      }
-    >
-      <div className="flex flex-col gap-3">
-        <Field label="부여 연도" required>
-          <input
-            className="input sm:w-40"
-            value={grantYear}
-            onChange={(e) => setGrantYear(e.target.value)}
-            placeholder="2027"
-          />
-        </Field>
-        <div className="overflow-x-auto rounded-lg border border-ink-200">
-          <table className="w-full min-w-[560px] border-collapse text-sm">
-            <thead className="bg-ink-50/70">
-              <tr>
-                <th className="th">직원</th>
-                {GRANT_TYPES.map((t) => (
-                  <th key={t} className="th text-right">
-                    {t}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-ink-100">
-              {personOptions.map((n) => (
-                <tr key={n}>
-                  <td className="td font-medium">{n}</td>
-                  {GRANT_TYPES.map((t) => (
-                    <td key={t} className="td">
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.5"
-                        className="input px-2 py-1.5 text-right"
-                        value={rows[n]?.[t] ?? ''}
-                        onChange={(e) => setCell(n, t, e.target.value)}
-                        placeholder="0"
-                      />
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <p className="text-xs text-ink-500">0보다 큰 칸만 {grantYear}년 1월 1일 발생(승인)으로 등록됩니다.</p>
-      </div>
-    </Modal>
-  )
-}

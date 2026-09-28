@@ -231,7 +231,7 @@ export default function LedgerPage({ type, source = 'manual', title, description
       '부가세',
       '합계',
       '결제수단',
-      '담당',
+      '작성자',
       '비고',
     ]
     const rows = shown.map((e) => [

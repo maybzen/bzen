@@ -163,7 +163,7 @@ export default function ProjectFormModal({ open, onClose, onSaved, initial, prof
           />
         </Field>
 
-        <Field label="수익률 (%)" hint="탈락 등으로 손실이면 음수로 적어주세요.">
+        <Field label="수익률 (%)" hint="취소 등으로 손실이면 음수로 적어주세요.">
           <input
             className="input num text-left"
             inputMode="decimal"
