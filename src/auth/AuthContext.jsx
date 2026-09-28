@@ -23,6 +23,24 @@ export function AuthProvider({ children }) {
   const [session, setSession] = useState(null)
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
+  /* 직원 화면 미리보기 (관리자 전용). 켜면 메뉴·권한·버튼이 직원 기준으로 보입니다.
+     실제 세션·DB 권한은 그대로라 서버 보호는 유지됩니다. */
+  const [staffView, setStaffViewState] = useState(() => {
+    try {
+      return window.localStorage.getItem('bzen.staffView') === '1'
+    } catch {
+      return false
+    }
+  })
+
+  const setStaffView = useCallback((on) => {
+    setStaffViewState(Boolean(on))
+    try {
+      window.localStorage.setItem('bzen.staffView', on ? '1' : '0')
+    } catch {
+      /* 저장 실패 무시 */
+    }
+  }, [])
 
   const loadProfile = useCallback(async (user) => {
     if (!user) {
@@ -116,13 +134,19 @@ export function AuthProvider({ children }) {
     return null
   }, [loadProfile])
 
+  const realIsAdmin = profile?.role === 'admin' && profile?.active === true
+
   const value = useMemo(
     () => ({
       session,
       user: session?.user ?? null,
       profile,
       loading,
-      isAdmin: profile?.role === 'admin' && profile?.active === true,
+      /* 미리보기 중에는 전 화면이 직 기준으로 동작합니다 */
+      isAdmin: realIsAdmin && !staffView,
+      realIsAdmin,
+      staffView,
+      setStaffView,
       isActive: profile?.active === true,
       displayName: profile?.full_name || profile?.email || '',
       signIn,
@@ -131,7 +155,7 @@ export function AuthProvider({ children }) {
       refreshProfile,
       setProfile,
     }),
-    [session, profile, loading, signIn, signOut, refreshProfile],
+    [session, profile, loading, realIsAdmin, staffView, setStaffView, signIn, signOut, refreshProfile],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

@@ -32,8 +32,15 @@ check('관세 → 세금(분류상)', isTaxRow({ counterparty: '인천세관장'
 // 프로젝트 매입은 급여 페이지에 안 나와야 함
 check('엑시움 매입 → 셋 다 아님', isSalary({ counterparty: '엑시움', category: '외주용역비' }) || isInsurance({ counterparty: '엑시움' }) || isTaxRow({ counterparty: '엑시움', category: '외주용역비' }), false)
 
+console.log('\n== 귀속월 ==')
+import { attrMonth, buildPayrollRows } from '../src/pages/Payroll.jsx'
+
+// 장부는 지급일 기준이라 한 달 밀림. 적요의 "N월 급여"를 귀속월로 씁니다.
+check('9/10 지급 8월 급여 → 08', attrMonth({ entry_date: '2026-09-10', description: '2026년 8월 급여' }), '2026-08')
+check('적요 7월 급여 → 07', attrMonth({ entry_date: '2026-08-10', description: '7월 급여 (행사 도움)' }), '2026-07')
+check('적요 없으면 입력월', attrMonth({ entry_date: '2026-09-10', description: '급여', memo: '' }), '2026-09')
+
 console.log('\n== 급여대장 업로드 매핑 ==')
-import { buildPayrollRows } from '../src/pages/Payroll.jsx'
 
 const sheet = [
   ['일자', '성명', '급여', '적요', '메모'],

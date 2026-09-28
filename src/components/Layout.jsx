@@ -18,19 +18,20 @@ export const NAV = [
   { to: '/projects', label: '프로젝트', icon: 'folder', perm: 'projects' },
   { to: '/partners', label: '거래처', icon: 'building', perm: 'partners' },
   { to: '/fixed-costs', label: '고정비', icon: 'coins', perm: 'fixed' },
+  { to: '/payroll', label: '급여관리', icon: 'coins', adminOnly: true },
   { to: '/leaves', label: '휴무대장', icon: 'file', perm: 'leaves' },
   { to: '/tax', label: '세금관리', icon: 'calendar', perm: 'tax' },
   { to: '/reports', label: '보고서', icon: 'chart', perm: 'reports' },
   { to: '/users', label: '계정관리', icon: 'users', adminOnly: true },
-  { to: '/payroll', label: '급여관리', icon: 'coins', adminOnly: true },
   { to: '/settings', label: '설정', icon: 'settings', base: true },
 ]
 
 const NAV_GROUPS = [
   { title: '장부', items: ['/dashboard', '/sales', '/purchases', '/collections', '/expenses', '/cards', '/expense-reports'] },
-  { title: '사업', items: ['/projects', '/partners', '/fixed-costs', '/leaves'] },
+  { title: '사업', items: ['/projects', '/partners'] },
+  { title: '인사·급여', items: ['/fixed-costs', '/payroll', '/leaves'] },
   { title: '세금·정산', items: ['/tax', '/reports'] },
-  { title: '관리', items: ['/users', '/payroll', '/settings'] },
+  { title: '관리', items: ['/users', '/settings'] },
 ]
 
 function Brand({ company, compact = false, onHome }) {
@@ -81,8 +82,8 @@ function NavList({ items, onNavigate }) {
 }
 
 export default function Layout() {
-  const { profile, isAdmin, signOut } = useAuth()
-  const { perms } = useStaffPermissions(profile)
+  const { profile, isAdmin, realIsAdmin, staffView, setStaffView, signOut } = useAuth()
+  const { perms, global } = useStaffPermissions(profile)
   const toast = useToast()
   const location = useLocation()
   const navigate = useNavigate()
@@ -92,8 +93,10 @@ export default function Layout() {
   const [company, setCompany] = useState(DEFAULT_COMPANY)
   const menuRef = useRef(null)
 
+  /* 미리보기 중에는 개인 추가분을 뺀 전체 공통 권한으로 봅니다 */
+  const effPerms = staffView ? global : perms
   const visible = NAV.filter(
-    (item) => isAdmin || item.base || (item.perm && perms.includes(item.perm)),
+    (item) => isAdmin || item.base || (item.perm && effPerms.includes(item.perm)),
   )
   const current = visible.find((item) => location.pathname.startsWith(item.to))
 
@@ -232,6 +235,21 @@ export default function Layout() {
       ) : null}
 
       <div className="flex min-w-0 flex-1 flex-col lg:pl-64 print:pl-0">
+        {staffView && realIsAdmin ? (
+          <div className="flex items-center justify-center gap-2 bg-amber-500 px-4 py-1.5 text-xs font-bold text-white print:hidden">
+            <span>직원 화면으로 보는 중입니다 (관리자 기능 숨김)</span>
+            <button
+              type="button"
+              onClick={() => {
+                setStaffView(false)
+                navigate('/dashboard')
+              }}
+              className="rounded-md bg-white/20 px-2 py-0.5 transition hover:bg-white/30"
+            >
+              돌아가기
+            </button>
+          </div>
+        ) : null}
         <header className="sticky top-0 z-40 flex h-14 items-center gap-3 border-b border-ink-200 bg-white/85 px-4 backdrop-blur print:hidden sm:px-6">
           <button
             type="button"

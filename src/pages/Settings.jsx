@@ -10,7 +10,7 @@ import { formatDateHuman } from '../lib/format'
 import { callAdminFn, getSettings, updateProfile, updateSettings } from '../lib/api'
 
 export default function Settings() {
-  const { profile, isAdmin, refreshProfile, signOut, user } = useAuth()
+  const { profile, isAdmin, realIsAdmin, staffView, setStaffView, refreshProfile, signOut, user } = useAuth()
   const toast = useToast()
   const navigate = useNavigate()
 
@@ -307,6 +307,31 @@ export default function Settings() {
                 </div>
               </form>
             )}
+          </section>
+        ) : null}
+
+        {/* 직원 화면 미리보기 */}
+        {realIsAdmin ? (
+          <section className="card p-5">
+            <header className="mb-4">
+              <h2 className="text-sm font-bold text-ink-900">직원 화면으로 보기</h2>
+              <p className="mt-0.5 text-xs text-ink-500">
+                켜면 메뉴·권한·버튼이 직원 기준으로 보입니다. 실제 로그인과 DB 권한은 그대로입니다.
+              </p>
+            </header>
+            <label className="flex cursor-pointer items-center justify-between gap-3 rounded-lg border border-ink-200 px-3.5 py-2.5 transition hover:bg-ink-50/60">
+              <span className="text-sm font-semibold text-ink-800">직원 미리보기</span>
+              <input
+                type="checkbox"
+                className="h-4 w-4 accent-brand-600"
+                checked={staffView}
+                onChange={(e) => {
+                  setStaffView(e.target.checked)
+                  toast.info(e.target.checked ? '직원 화면으로 봅니다.' : '관리자 화면으로 돌아갑니다.')
+                  navigate('/dashboard', { replace: true })
+                }}
+              />
+            </label>
           </section>
         ) : null}
 

@@ -49,6 +49,8 @@ export default function EntryTable({
   onBulkDelete = null,
   /* 등록자(작성자) 일괄 변경. 입사 전 자료 정정용이라 관리자 화면에서만 켭니다. */
   canChangeAuthor = false,
+  /* 명세서 버튼 (급여관리). 주면 행마다 명세서 버튼이 생깁니다. */
+  onSlip = null,
 }) {
   const [rowEdits, setRowEdits] = useState({})
   const [savingId, setSavingId] = useState(null)
@@ -448,6 +450,16 @@ export default function EntryTable({
                   <td className="td">
                     {canEdit ? (
                       <div className="flex items-center justify-end gap-1 whitespace-nowrap">
+                        {onSlip ? (
+                          <button
+                            type="button"
+                            onClick={() => onSlip?.(entry)}
+                            className="rounded-md px-1.5 py-1.5 text-xs font-semibold text-ink-500 transition hover:bg-brand-50 hover:text-brand-700"
+                            title="명세서"
+                          >
+                            명세서
+                          </button>
+                        ) : null}
                         <button
                           type="button"
                           onClick={() => onEdit?.(entry)}

@@ -108,6 +108,21 @@ export function deleteCollection(id) {
 }
 
 /* ------------------------------------------------------------------ */
+/* 급여명세서 (월별 breakdown. migration_payroll_slips.sql 1회 실행 후 사용) */
+/* ------------------------------------------------------------------ */
+
+export function listSlips(ym) {
+  let q = supabase.from('payroll_slips').select('*').order('person', { ascending: true })
+  if (ym) q = q.eq('ym', ym)
+  return unwrap(q)
+}
+
+export function upsertSlip(payload, userId) {
+  const row = { ...payload, created_by: userId, updated_at: new Date().toISOString() }
+  return unwrap(supabase.from('payroll_slips').upsert(row, { onConflict: 'entry_id' }).select().single())
+}
+
+/* ------------------------------------------------------------------ */
 /* 장부 (매출 / 매입 / 운영비 / 지출결의)                                */
 /* ------------------------------------------------------------------ */
 

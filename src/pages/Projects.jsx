@@ -93,6 +93,21 @@ export default function Projects() {
   const [busy, setBusy] = useState(false)
   const [reloadKey, setReloadKey] = useState(0)
   const [statusFilter, setStatusFilter] = useState('active')
+  const [sortOrder, setSortOrder] = useState(() => {
+    try {
+      return localStorage.getItem('bzen.sort.projects') || 'desc'
+    } catch {
+      return 'desc'
+    }
+  })
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('bzen.sort.projects', sortOrder)
+    } catch {
+      /* 저장 실패 무시 */
+    }
+  }, [sortOrder])
   const [yearFilter, setYearFilter] = useState(() => {
     try {
       return localStorage.getItem('bzen.year.projects') || ''
@@ -171,14 +186,20 @@ export default function Projects() {
     const map = new Map(grouped.map((r) => [r.project?.id || 'none', r]))
     const all = visible.map((p) => map.get(p.id) || { project: p, sale: 0, purchase: 0, opex: 0, gross: 0, profit: 0, margin: null, count: 0 })
     const filtered = statusFilter === 'all' ? all : all.filter((r) => r.project.status === statusFilter)
-    // 최신순: 시작일 내림차순 (없으면 등록순)
+    // 기간순: 시작일 기준. 시작일 없으면 등록순. 시작일 없는 건 뒤로 보냅니다.
+    const dir = sortOrder === 'asc' ? 1 : -1
     return filtered.sort((a, b) => {
       const da = a.project.start_date || ''
       const db = b.project.start_date || ''
-      if (da !== db) return db.localeCompare(da)
-      return String(b.project.created_at || '').localeCompare(String(a.project.created_at || ''))
+      if (!da && !db) {
+        return dir * String(a.project.created_at || '').localeCompare(String(b.project.created_at || ''))
+      }
+      if (!da) return 1
+      if (!db) return -1
+      if (da !== db) return dir * da.localeCompare(db)
+      return dir * String(a.project.created_at || '').localeCompare(String(b.project.created_at || ''))
     })
-  }, [entries, yearScoped, statusFilter])
+  }, [entries, yearScoped, statusFilter, sortOrder])
 
   const statusCounts = useMemo(() => {
     const counts = { all: yearScoped.length }
@@ -247,10 +268,11 @@ export default function Projects() {
 
       <div className="card overflow-hidden">
         <div className="flex flex-col gap-3 border-b border-ink-200 px-4 py-3.5">
-          <SegmentedControl
-            size="sm"
-            value={statusFilter}
-            onChange={setStatusFilter}
+          <div className="flex flex-wrap items-center gap-2">
+            <SegmentedControl
+              size="sm"
+              value={statusFilter}
+              onChange={setStatusFilter}
             options={[
               { key: 'active', label: `진행중 ${statusCounts.active || 0}` },
               { key: 'proposal', label: `${PROJECT_STATUS.proposal.label} ${statusCounts.proposal || 0}` },
@@ -259,6 +281,16 @@ export default function Projects() {
               { key: 'all', label: `전체 ${statusCounts.all || 0}` },
             ]}
           />
+            <SegmentedControl
+              size="sm"
+              value={sortOrder}
+              onChange={setSortOrder}
+              options={[
+                { key: 'desc', label: '최신순' },
+                { key: 'asc', label: '과거순' },
+              ]}
+            />
+          </div>
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-xs font-semibold text-ink-500">연도</span>
             <div className="inline-flex flex-wrap gap-1">

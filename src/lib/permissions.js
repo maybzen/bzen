@@ -67,5 +67,10 @@ export function useStaffPermissions(profile) {
       mounted = false
     }
   }, [])
-  return { perms: effectivePerms(settings, profile), loading: settings === null }
+  return {
+    perms: effectivePerms(settings, profile),
+    /* 직원 미리보기용: 개인 추가분 제외한 전체 공통 권한 */
+    global: settings?.global || [],
+    loading: settings === null,
+  }
 }
