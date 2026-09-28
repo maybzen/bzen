@@ -213,11 +213,11 @@ export function suggestCategory(merchant, memo, entryType = null) {
 
 export const PROJECT_STATUS = {
   planned: { label: '예정', chip: 'bg-ink-100 text-ink-600' },
-  proposal: { label: '미진행', chip: 'bg-sky-50 text-sky-700' },
+  proposal: { label: '제안서', chip: 'bg-sky-50 text-sky-700' },
   active: { label: '진행중', chip: 'bg-brand-50 text-brand-700' },
   hold: { label: '보류', chip: 'bg-amber-50 text-amber-700' },
   done: { label: '완료', chip: 'bg-emerald-50 text-emerald-700' },
-  dropped: { label: '취소', chip: 'bg-ink-100 text-ink-400' },
+  dropped: { label: '미진행', chip: 'bg-ink-100 text-ink-400' },
 }
 
 export const PROJECT_STATUS_KEYS = ['planned', 'proposal', 'active', 'hold', 'done', 'dropped']

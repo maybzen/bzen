@@ -176,7 +176,7 @@ export default function Projects() {
             const achieved =
               project.contract_amount > 0 ? (row.sale / project.contract_amount) * 100 : null
 
-            // 미진행·취소는 장부 집계 대신 제안 정보 위주로 보여줍니다.
+            // 제안서·미진행은 장부 집계 대신 제안 정보 위주로 보여줍니다.
             if (project.status === 'proposal' || project.status === 'dropped') {
               return (
                 <ProposalCard
@@ -346,7 +346,7 @@ export default function Projects() {
 }
 
 function ProposalCard({ project, row, status, isAdmin, managerName, onEdit, onDelete }) {
-  // 취소 제안: 수기 수익금이 없으면 장부에 찍힌 투입 비용을 손실(-)로 보여줍니다.
+  // 미진행 제안: 수기 수익금이 없으면 장부에 찍힌 투입 비용을 손실(-)로 보여줍니다.
   const spent = Number(row?.purchase || 0) + Number(row?.opex || 0) - Number(row?.sale || 0)
   const showLedgerLoss =
     project.status === 'dropped' && !Number(project.profit_amount) && spent > 0
@@ -427,7 +427,7 @@ function ProposalCard({ project, row, status, isAdmin, managerName, onEdit, onDe
       </dl>
       {showLedgerLoss ? (
         <p className="mt-2 text-[11px] text-ink-500">
-          취소 제안의 선택 기간 투입 비용 {row.count}건을 손실로 집계합니다.
+          미진행 제안의 선택 기간 투입 비용 {row.count}건을 손실로 집계합니다.
         </p>
       ) : null}
 

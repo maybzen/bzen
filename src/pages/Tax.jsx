@@ -265,6 +265,8 @@ export default function Tax() {
   const upcoming = useMemo(() => getUpcoming(deadlines, today, state), [deadlines, today, state])
   const vatRows = useMemo(() => vatEstimateByFiling(entries, year), [entries, year])
   const scheduleList = useMemo(() => deadlines.filter((d) => matchTaxFilter(d, taxFilter)), [deadlines, taxFilter])
+  const currentSchedule = useMemo(() => scheduleList.filter((d) => d.due >= today), [scheduleList, today])
+  const pastSchedule = useMemo(() => scheduleList.filter((d) => d.due < today), [scheduleList, today])
 
   /* 4대보험 회사부담분 장부(월별) — 고지서 PDF 첨부 대상 */
   const insuranceByMonth = useMemo(() => {
@@ -462,24 +464,50 @@ export default function Tax() {
             {(taxFilter === 'all' || taxFilter === 'withholding') && (
               <p className="text-xs text-ink-500">원천세(매월 10일)는 납부확인 체크만으로 충분합니다.</p>
             )}
-            {scheduleList.length ? (
-              scheduleList.map((d) => (
-                <DeadlineCard
-                  key={d.id}
-                  deadline={d}
-                  state={state}
-                  today={today}
-                  open={openId === d.id}
-                  onToggleOpen={() => setOpenId((v) => (v === d.id ? null : d.id))}
-                  onToggleCheck={toggleCheck}
-                  onToggleDone={toggleDone}
-                  onExport={exportFiling}
-                  {...insuranceProps(d)}
-                />
-              ))
-            ) : (
+            {currentSchedule.map((d) => (
+              <DeadlineCard
+                key={d.id}
+                deadline={d}
+                state={state}
+                today={today}
+                open={openId === d.id}
+                onToggleOpen={() => setOpenId((v) => (v === d.id ? null : d.id))}
+                onToggleCheck={toggleCheck}
+                onToggleDone={toggleDone}
+                onExport={exportFiling}
+                {...insuranceProps(d)}
+              />
+            ))}
+            {!scheduleList.length ? (
               <p className="card px-4 py-6 text-center text-xs text-ink-400">해당 종류의 일정이 없습니다.</p>
-            )}
+            ) : null}
+            {pastSchedule.length ? (
+              <details className="card overflow-hidden">
+                <summary className="cursor-pointer list-none px-4 py-3.5 transition hover:bg-ink-50/60">
+                  <span className="flex items-center gap-2 text-sm font-bold text-ink-900">
+                    <Icon name="chevron-right" size={15} className="text-ink-400" />
+                    지난 일정 {pastSchedule.length}건
+                    <span className="font-medium text-ink-400">펼쳐서 한 번에 보기</span>
+                  </span>
+                </summary>
+                <div className="flex flex-col gap-3 border-t border-ink-100 px-4 py-4">
+                  {pastSchedule.map((d) => (
+                    <DeadlineCard
+                      key={d.id}
+                      deadline={d}
+                      state={state}
+                      today={today}
+                      open={openId === d.id}
+                      onToggleOpen={() => setOpenId((v) => (v === d.id ? null : d.id))}
+                      onToggleCheck={toggleCheck}
+                      onToggleDone={toggleDone}
+                      onExport={exportFiling}
+                      {...insuranceProps(d)}
+                    />
+                  ))}
+                </div>
+              </details>
+            ) : null}
           </section>
 
           <p className="pb-2 text-center text-xs text-ink-400">

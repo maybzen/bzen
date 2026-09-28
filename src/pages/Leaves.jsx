@@ -48,7 +48,7 @@ function periodLabel(e) {
   return s
 }
 
-/* 새해 자동 부여: 연차(기준표)·전년도 동계 보유자 동계 10일·전원 보건 12일 */
+/* 새해 자동 부여: 연차 15일~ (기준표 우선)·동계 10일·전원 보건 12일 */
 async function autoGrantYear(all, profileRows, userId, grantedRef) {
   const y = Number(todayKST().slice(0, 4))
   if (grantedRef.current[y]) return 0
@@ -56,28 +56,14 @@ async function autoGrantYear(all, profileRows, userId, grantedRef) {
   const marker = `${y}-01-01`
   const has = (all || []).some((e) => e.entry_date === marker && /부여/.test(e.memo || ''))
   if (has) return 0
-  const prevWinter = new Set(
-    (all || [])
-      .filter(
-        (e) =>
-          e.leave_type === '동계휴가' &&
-          e.direction === '발생' &&
-          String(e.entry_date || '').startsWith(String(y - 1)),
-      )
-      .map((e) => e.person),
-  )
   const names = [
     ...new Set([...SHEET_ORDER, ...(profileRows || []).map((p) => p.full_name).filter(Boolean)]),
   ]
   const payloads = []
   for (const person of names) {
-    const annual = Number(GRANT_DEFAULTS[person]?.연차 || 0)
-    if (annual > 0) {
-      payloads.push({ entry_date: marker, person, leave_type: '연차', direction: '발생', days: annual, memo: `${y}년 자동부여`, status: '승인' })
-    }
-    if (prevWinter.has(person)) {
-      payloads.push({ entry_date: marker, person, leave_type: '동계휴가', direction: '발생', days: 10, memo: `${y}년 자동부여`, status: '승인' })
-    }
+    const annual = Number(GRANT_DEFAULTS[person]?.연차 || 15)
+    payloads.push({ entry_date: marker, person, leave_type: '연차', direction: '발생', days: annual, memo: `${y}년 자동부여`, status: '승인' })
+    payloads.push({ entry_date: marker, person, leave_type: '동계휴가', direction: '발생', days: 10, memo: `${y}년 자동부여`, status: '승인' })
     payloads.push({ entry_date: marker, person, leave_type: '보건휴가', direction: '발생', days: 12, memo: `${y}년 자동부여`, status: '승인' })
   }
   for (const p of payloads) await createLeaveEntry(p, userId)
