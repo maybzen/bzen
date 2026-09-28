@@ -145,10 +145,19 @@ export default function LedgerPage({ type, source = 'manual', title, description
   const base = useMemo(() => entries, [entries])
 
   /** 지출결의: 직원 필터 + 직원별 소계 (날짜가 아니라 사람 기준으로 봅니다) */
+  const [oldestFirst, setOldestFirst] = useState(false)
   const shown = useMemo(() => {
-    if (!isReport || !effectiveFilter) return base
-    return base.filter((e) => ownerKey(e) === effectiveFilter)
-  }, [base, isReport, effectiveFilter])
+    const rows = !isReport || !effectiveFilter ? [...base] : base.filter((e) => ownerKey(e) === effectiveFilter)
+    rows.sort(
+      (a, b) =>
+        oldestFirst
+          ? String(a.entry_date).localeCompare(String(b.entry_date)) ||
+            String(a.created_at || '').localeCompare(String(b.created_at || ''))
+          : String(b.entry_date).localeCompare(String(a.entry_date)) ||
+            String(b.created_at || '').localeCompare(String(a.created_at || '')),
+    )
+    return rows
+  }, [base, isReport, effectiveFilter, oldestFirst])
 
   const byPerson = useMemo(() => {
     if (!isReport) return []
@@ -217,7 +226,7 @@ export default function LedgerPage({ type, source = 'manual', title, description
   }
 
   /* 운영비 목록 직접 수정 (법인카드식 단계 저장) */
-  const bulkEdit = type === 'opex' && source === 'manual'
+  const bulkEdit = true
   const handleSaveRow = async (entry, payload) => {
     const saved = await updateEntry(entry.id, payload)
     setEntries((rows) => rows.map((r) => (r.id === entry.id ? { ...r, ...saved } : r)))
@@ -402,6 +411,15 @@ export default function LedgerPage({ type, source = 'manual', title, description
               </select>
             ) : null}
 
+            <button
+              type="button"
+              className="btn-ghost shrink-0"
+              onClick={() => setOldestFirst((v) => !v)}
+              title="일자 정렬 전환"
+            >
+              <Icon name={oldestFirst ? 'arrow-up' : 'arrow-down'} size={16} />
+              <span className="hidden sm:inline">일자 {oldestFirst ? '오래된순' : '최신순'}</span>
+            </button>
             <button
               type="button"
               className="btn-ghost shrink-0"

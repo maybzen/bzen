@@ -5,7 +5,7 @@ import { useToast } from '../components/Toast'
 import { EmptyState, LoadingBlock, PageHeader, SegmentedControl, StatCard } from '../components/ui'
 import { formatKRW, monthEnd, monthKey, monthKeyOf, monthLabel, todayISO, toISODate } from '../lib/format'
 import { detectFixedCosts } from '../lib/summary'
-import { listEntries } from '../lib/api'
+import { listEntries, listProjects } from '../lib/api'
 
 /**
  * 고정비 현황 (별도 메뉴).
@@ -39,6 +39,7 @@ export default function FixedCosts() {
   const navigate = useNavigate()
   const [loading, setLoading] = useState(true)
   const [entries, setEntries] = useState([])
+  const [internalId, setInternalId] = useState('')
   const [excluded, setExcluded] = useState(() => {
     try {
       const raw = localStorage.getItem('bzen.fixed.excluded.v1')
@@ -63,10 +64,11 @@ export default function FixedCosts() {
     setLoading(true)
     const now = new Date()
     const from = toISODate(new Date(now.getFullYear(), now.getMonth() - 11, 1))
-    Promise.all([listEntries({ from, to: toISODate(now), maxRows: 20000 })])
-      .then(([rows]) => {
+    Promise.all([listEntries({ from, to: toISODate(now), maxRows: 20000 }), listProjects()])
+      .then(([rows, projectRows]) => {
         if (!alive) return
         setEntries(rows || [])
+        setInternalId((projectRows || []).find((p) => p.name === '비젠내부')?.id || '')
       })
       .catch((e) => toast.error(e.message))
       .finally(() => {
@@ -130,21 +132,22 @@ export default function FixedCosts() {
     }
     return { rows, months }
   }, [entries])
-  /** 법인카드 월별 지출 (source=card, 매입+운영비) */
-  const cardByMonth = useMemo(() => {
+  /** 공통(비젠내부) 월별 지출 — 프로젝트 미지정분이 모이는 곳 */
+  const internalByMonth = useMemo(() => {
+    if (!internalId) return []
     const map = new Map()
     for (const e of entries) {
-      if (e.source !== 'card') continue
+      if (e.project_id !== internalId) continue
       if (e.entry_type !== 'purchase' && e.entry_type !== 'opex') continue
       const mk = monthKeyOf(e.entry_date)
       if (!mk) continue
       map.set(mk, (map.get(mk) || 0) + Number(e.total_amount || 0))
     }
     return [...map.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1)).slice(-12)
-  }, [entries])
-  const cardAvg = useMemo(
-    () => (cardByMonth.length ? Math.round(cardByMonth.reduce((a, [, v]) => a + v, 0) / cardByMonth.length) : 0),
-    [cardByMonth],
+  }, [entries, internalId])
+  const internalAvg = useMemo(
+    () => (internalByMonth.length ? Math.round(internalByMonth.reduce((a, [, v]) => a + v, 0) / internalByMonth.length) : 0),
+    [internalByMonth],
   )
 
   return (
@@ -180,7 +183,7 @@ export default function FixedCosts() {
                 { key: 'overhead', label: '항목표' },
                 { key: 'fixed', label: `고정비 (${items.length})` },
                 { key: 'payroll', label: '월별급여' },
-                { key: 'card', label: '카드월별지출' },
+                { key: 'internal', label: '공통월별지출' },
               ]}
             />
           </div>
@@ -283,23 +286,23 @@ export default function FixedCosts() {
             </section>
           ) : null}
 
-          {tab === 'card' && cardByMonth.length ? (
+          {tab === 'internal' && internalByMonth.length ? (
             <section className="card overflow-hidden">
               <header className="flex flex-wrap items-center justify-between gap-2 border-b border-ink-200 px-4 py-3.5">
-                <h2 className="text-sm font-bold text-ink-900">법인카드 월별 지출</h2>
+                <h2 className="text-sm font-bold text-ink-900">공통(비젠내부) 월별 지출</h2>
                 <p className="text-xs text-ink-500">
-                  월 평균 <strong className="font-num tabular-nums text-brand-700">{formatKRW(cardAvg)}원</strong>
+                  월 평균 <strong className="font-num tabular-nums text-brand-700">{formatKRW(internalAvg)}원</strong>
                 </p>
               </header>
               <div className="grid grid-cols-2 gap-2.5 p-4 sm:grid-cols-3 xl:grid-cols-4">
-                {cardByMonth.map(([mk, v]) => {
+                {internalByMonth.map(([mk, v]) => {
                   const [y, m] = mk.split('-').map(Number)
                   const from = `${mk}-01`
                   const to = monthEnd(new Date(y, m, 0))
                   return (
                     <Link
                       key={mk}
-                      to={`/expenses?search=${encodeURIComponent('법카')}&from=${from}&to=${to}`}
+                      to={`/expenses?project=${internalId}&from=${from}&to=${to}`}
                       className="group rounded-xl border border-ink-200 px-3.5 py-3 transition hover:border-brand-300 hover:shadow-card"
                     >
                       <p className="text-xs font-semibold text-ink-500">{monthLabel(mk)}</p>
@@ -315,7 +318,7 @@ export default function FixedCosts() {
                 })}
               </div>
               <p className="border-t border-ink-100 px-4 py-3 text-xs leading-relaxed text-ink-500">
-                법인카드로 결제한 내역만 월별로 모았습니다. 카드를 누르면 운영비 내역으로 이동합니다.
+                프로젝트 미지정분은 모두 여기로 모입니다. 카드를 누르면 운영비 내역으로 이동합니다.
               </p>
             </section>
           ) : null}

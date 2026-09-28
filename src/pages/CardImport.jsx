@@ -196,6 +196,7 @@ export default function CardImport() {
   const [regSort, setRegSort] = useState('date-desc')
   const [regProjectFilter, setRegProjectFilter] = useState('')
   const [regCardFilter, setRegCardFilter] = useState('')
+  const [regMonthFilter, setRegMonthFilter] = useState('')
 
   const cardOf = (entry) => {
     const m = String(entry.memo || '').match(/(법카\s*\d+(?:→\d+)?|카드의정석\s*[\d-]+)/)
@@ -676,6 +677,25 @@ export default function CardImport() {
 
   const fixedSet = useMemo(() => new Set(fixedCosts.map((f) => f.name)), [fixedCosts])
 
+  const monthGroups = useMemo(() => {
+    const map = new Map()
+    for (const e of registered) {
+      if (regProjectFilter) {
+        if (regProjectFilter === '__none') {
+          if (e.project_id) continue
+        } else if (e.project_id !== regProjectFilter) continue
+      }
+      if (regCardFilter && cardOf(e) !== regCardFilter) continue
+      const mk = String(e.entry_date || '').slice(0, 7)
+      if (!mk) continue
+      const g = map.get(mk) || { mk, n: 0, total: 0 }
+      g.n += 1
+      g.total += Number(e.total_amount || 0)
+      map.set(mk, g)
+    }
+    return [...map.values()].sort((a, b) => (a.mk < b.mk ? 1 : -1))
+  }, [registered, regProjectFilter, regCardFilter])
+
   const visibleRegistered = useMemo(() => {
     const rows = registered.filter((e) => {
       if (regProjectFilter) {
@@ -684,6 +704,7 @@ export default function CardImport() {
         } else if (e.project_id !== regProjectFilter) return false
       }
       if (regCardFilter && cardOf(e) !== regCardFilter) return false
+      if (regMonthFilter && String(e.entry_date || '').slice(0, 7) !== regMonthFilter) return false
       return true
     })
     rows.sort((a, b) =>
@@ -692,7 +713,7 @@ export default function CardImport() {
         : String(b.entry_date).localeCompare(String(a.entry_date)),
     )
     return rows
-  }, [registered, regProjectFilter, regCardFilter, regSort])
+  }, [registered, regProjectFilter, regCardFilter, regMonthFilter, regSort])
 
   const selectedIds = useMemo(
     () => visibleRegistered.filter((e) => selected[e.id]).map((e) => e.id),
@@ -1159,6 +1180,33 @@ export default function CardImport() {
               </button>
               <span className="text-xs text-ink-500 sm:ml-auto">{visibleRegistered.length}건</span>
             </div>
+            {monthGroups.length > 1 ? (
+              <div className="flex flex-wrap gap-1.5 border-b border-ink-200 px-4 py-3">
+                {monthGroups.map((g) => {
+                  const on = regMonthFilter === g.mk
+                  return (
+                    <button
+                      key={g.mk}
+                      type="button"
+                      onClick={() => setRegMonthFilter((f) => (f === g.mk ? '' : g.mk))}
+                      className={`rounded-lg border px-2.5 py-1.5 text-left transition ${
+                        on
+                          ? 'border-brand-600 bg-brand-50'
+                          : 'border-ink-200 bg-white hover:border-brand-300'
+                      }`}
+                      title="클릭하면 해당 월만 표시"
+                    >
+                      <span className={`block text-xs font-bold ${on ? 'text-brand-700' : 'text-ink-800'}`}>
+                        {g.mk.slice(0, 4)}년 {Number(g.mk.slice(5))}월
+                      </span>
+                      <span className="block font-num text-[11px] tabular-nums text-ink-500">
+                        {formatKRW(g.total)}원 · {g.n}건
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
+            ) : null}
             <div className="grid grid-cols-2 gap-3 border-b border-ink-200 px-4 py-3.5 lg:grid-cols-4">
               <StatCard label="등록 건수" value={String(visibleRegistered.length)} unit="건" tone="neutral" icon="card" />
               <StatCard

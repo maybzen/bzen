@@ -66,6 +66,7 @@ export default function Dashboard() {
   const [attachmentsByEntry, setAttachmentsByEntry] = useState({})
   const [showRecent, setShowRecent] = useState(false)
   const [homeChecks, setHomeChecks] = useState(() => loadHomeChecks())
+  const [showDone, setShowDone] = useState(false)
 
   const toggleHomeCheck = (i) => {
     setHomeChecks((prev) => {
@@ -81,6 +82,7 @@ export default function Dashboard() {
     })
   }
   const homeOpen = HOME_ALERTS.filter((_, i) => !homeChecks[i])
+  const homeDone = HOME_ALERTS.filter((_, i) => homeChecks[i])
   const [alertsOpen, setAlertsOpen] = useState(() => {
     try {
       return localStorage.getItem('bzen.home.alerts.open.v1') !== '0'
@@ -305,6 +307,43 @@ export default function Dashboard() {
                   ),
                 )}
               </ul>
+              ) : null}
+            </section>
+          ) : null}
+          {homeDone.length ? (
+            <section className="card overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setShowDone((v) => !v)}
+                className="flex w-full items-center gap-1.5 px-4 py-3 text-left"
+                aria-expanded={showDone}
+              >
+                <h2 className="truncate text-sm font-bold text-ink-500">
+                  완료됨
+                  <span className="ml-1.5 font-medium text-ink-400">{homeDone.length}건</span>
+                </h2>
+                <Icon name={showDone ? 'chevron-down' : 'chevron-right'} size={15} className="shrink-0 text-ink-400" />
+              </button>
+              {showDone ? (
+                <ul className="divide-y divide-ink-100 border-t border-ink-100">
+                  {HOME_ALERTS.map((text, i) =>
+                    homeChecks[i] ? (
+                      <li key={text}>
+                        <button
+                          type="button"
+                          onClick={() => toggleHomeCheck(i)}
+                          className="flex w-full items-start gap-2.5 px-4 py-2.5 text-left transition hover:bg-ink-50/60"
+                          title="클릭하면 미완료로 되돌립니다"
+                        >
+                          <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-emerald-600 text-white">
+                            <Icon name="check" size={13} strokeWidth={2.6} />
+                          </span>
+                          <span className="text-sm text-ink-400 line-through">{text}</span>
+                        </button>
+                      </li>
+                    ) : null,
+                  )}
+                </ul>
               ) : null}
             </section>
           ) : null}
