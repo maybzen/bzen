@@ -383,6 +383,13 @@ export default function CardImport() {
     return m ? m[1].trim() : ''
   }
 
+  /** 등록자 표기 (전직원이 쓰는 메뉴라 누가 올렸는지 보여줍니다) */
+  const regName = (id) => {
+    if (!id) return '—'
+    const p = (regProfiles || []).find((x) => x.id === id)
+    return p?.full_name || p?.email || '—'
+  }
+
   const withMemoUser = (memo, user) => {
     const base = String(memo || '').replace(/\s*·\s*이용자\s+[^·]*/, '').trim()
     const u = String(user || '').trim()
@@ -1412,6 +1419,7 @@ export default function CardImport() {
                     <th className="th">유형</th>
                     <th className="th">항목</th>
                     <th className="th">이용자</th>
+                    <th className="th">등록자</th>
                     <th className="th text-right">공급가액</th>
                     <th className="th text-right">부가세</th>
                     <th className="th text-right">합계</th>
@@ -1524,6 +1532,9 @@ export default function CardImport() {
                             value={cardUser}
                             onChange={(v) => setCell(entry.id, { cardUser: v })}
                           />
+                        </td>
+                        <td className="td max-w-[110px] truncate text-xs text-ink-500">
+                          {regName(entry.created_by)}
                         </td>
                         <td className="td num">
                           <input

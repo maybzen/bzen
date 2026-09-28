@@ -14,6 +14,7 @@ import {
   listCollections,
   listPartnerDocs,
   listPartners,
+  listProfiles,
   partnersTableExists,
   updatePartner,
 } from '../lib/api'
@@ -51,6 +52,12 @@ export default function Partners() {
   const [partners, setPartners] = useState([])
   const [docsByPartner, setDocsByPartner] = useState({})
   const [collections, setCollections] = useState([])
+  const [profiles, setProfiles] = useState([])
+  const profileName = (id) => {
+    if (!id) return ''
+    const p = profiles.find((x) => x.id === id)
+    return p?.full_name || p?.email || ''
+  }
   const [tableState, setTableState] = useState('checking')
   const [searchParams] = useSearchParams()
   const [search, setSearch] = useState(() => searchParams.get('search') || '')
@@ -177,6 +184,8 @@ export default function Partners() {
         }
         /* 수금관리 역링크용. 수금 테이블/권한이 없으면 조용히 비워 둡니다. */
         setCollections(await listCollections().catch(() => []))
+        /* 등록자 표기용 */
+        setProfiles(await listProfiles().catch(() => []))
       } else {
         setTableState('missing')
         setPartners([])
@@ -391,6 +400,7 @@ export default function Partners() {
                   <th className="th">계좌</th>
                   <th className="th text-right">서류</th>
                   <th className="th text-right">수금</th>
+                  <th className="th">등록자</th>
                   {isAdmin ? <th className="th text-right">관리</th> : null}
                 </tr>
               </thead>
@@ -530,6 +540,9 @@ export default function Partners() {
                         ) : (
                           <span className="text-xs text-ink-300">—</span>
                         )}
+                      </td>
+                      <td className="td max-w-[110px] truncate text-xs text-ink-500">
+                        {profileName(p.created_by) || <span className="text-ink-300">—</span>}
                       </td>
                       {isAdmin ? (
                         <td className="td num whitespace-nowrap">

@@ -46,7 +46,7 @@ console.log('시트 유효행:', sheet.length)
 const { data: projects } = await sb.from('projects').select('id,name')
 const projByName = Object.fromEntries(projects.map((p) => [p.name, p.id]))
 const PROJMAP = {
-  '비젠': '비젠내부',
+  '비젠': '비젠공통(관리)',
   'WDC 부산 컨퍼런스': '2028 세계디자인수도부산 국제컨퍼런스',
   'NR2026': 'Next Rise 2026',
   'KCCV': 'KCCV2026',

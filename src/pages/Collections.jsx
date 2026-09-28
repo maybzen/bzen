@@ -10,6 +10,7 @@ import {
   listCollections,
   listEntries,
   listPartners,
+  listProfiles,
   listProjects,
 } from '../lib/api'
 import { formatDateHuman, formatKRW, formatPercent, normalizeVendorName, todayISO } from '../lib/format'
@@ -38,6 +39,12 @@ export default function Collections() {
   const [entries, setEntries] = useState([])
   const [collections, setCollections] = useState([])
   const [partners, setPartners] = useState([])
+  const [profiles, setProfiles] = useState([])
+  const profileName = (id) => {
+    if (!id) return ''
+    const p = profiles.find((x) => x.id === id)
+    return p?.full_name || p?.email || ''
+  }
   const [formOpen, setFormOpen] = useState(false)
   const [viewTab, setViewTab] = useState('project')
   const [form, setForm] = useState({ project_id: '', counterparty: '', collected_on: todayISO(), amount: '', memo: '' })
@@ -47,11 +54,12 @@ export default function Collections() {
   const load = async () => {
     setLoading(true)
     try {
-      const [p, e, c, pt] = await Promise.all([listProjects(), listEntries({}), listCollections(), listPartners().catch(() => [])])
+      const [p, e, c, pt, pf] = await Promise.all([listProjects(), listEntries({}), listCollections(), listPartners().catch(() => []), listProfiles().catch(() => [])])
       setProjects(p || [])
       setEntries(e || [])
       setCollections(c || [])
       setPartners(pt || [])
+      setProfiles(pf || [])
       setMissingTable(false)
     } catch (err) {
       if (isMissingTable(err)) setMissingTable(true)
@@ -456,6 +464,7 @@ export default function Collections() {
                       {projects.find((p) => p.id === c.project_id)?.name || '미지정'}
                       {c.counterparty ? <span className="ml-1.5 font-normal text-ink-500">{c.counterparty}</span> : null}
                       {c.memo ? <span className="ml-1.5 font-normal text-ink-400">· {c.memo}</span> : null}
+                      {profileName(c.created_by) ? <span className="ml-1.5 font-normal text-ink-400">· 등록 {profileName(c.created_by)}</span> : null}
                     </span>
                     <span className="shrink-0 font-num text-sm font-extrabold tabular-nums text-ink-900">
                       {formatKRW(c.amount)}원

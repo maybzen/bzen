@@ -133,7 +133,7 @@ export default function Projects() {
     load()
   }, [load, reloadKey]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // 내부 귀속용(비젠내부·비젠채용)은 목록에서 숨기고 선택지에는 둡니다.
+  // 내부 귀속용(사내 공통)은 목록에서 숨기고 선택지에는 둡니다.
   const visibleProjects = useMemo(() => projects.filter((p) => !p.is_hidden), [projects])
 
   /** 프로젝트별 활동 연도. 거래가 있는 연도 + 시작일 연도 + 종료일 연도. */
@@ -379,6 +379,7 @@ export default function Projects() {
                         ? `담당 ${managerName(project.manager_id)}`
                         : '담당 미지정'}
                       {project.venue ? ` · ${project.venue}` : ''}
+                      {managerName(project.created_by) ? ` · 등록 ${managerName(project.created_by)}` : ''}
                     </p>
                     {project.contract_amount > 0 ? (
                       <p className="mt-0.5 truncate text-xs font-semibold text-ink-700">

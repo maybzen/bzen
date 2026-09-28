@@ -30,7 +30,7 @@ if (authErr || !auth?.user) {
 
 const { data: projects } = await supabase.from('projects').select('id,name')
 const findProj = (name) => (projects || []).find((p) => p.name === name)?.id || null
-const bizProj = findProj('비젠내부')
+const bizProj = findProj('비젠공통(관리)') || findProj('비젠내부')
 const wadaProj = findProj('WADA총회')
 
 const rows = [

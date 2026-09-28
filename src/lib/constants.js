@@ -239,6 +239,12 @@ export function suggestCategory(merchant, memo, entryType = null) {
   return null
 }
 
+/**
+ * 사내 공통 귀속 프로젝트 (사내고정비·공통경비가 모이는 곳).
+ * 예전 이름 '비젠내부' — id는 그대로라 장부 내역·이력은 유지됩니다.
+ */
+export const INTERNAL_PROJECT_NAME = '비젠공통(관리)'
+
 export const PROJECT_STATUS = {
   planned: { label: '예정', chip: 'bg-ink-100 text-ink-600' },
   proposal: { label: '제안서', chip: 'bg-sky-50 text-sky-700' },

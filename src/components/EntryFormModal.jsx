@@ -3,7 +3,7 @@ import Icon from './Icon'
 import CardUserSelect from './CardUserSelect'
 import { Field, InlineAlert, Modal, Spinner } from './ui'
 import { useToast } from './Toast'
-import { CATEGORIES, ENTRY_META, PAYMENT_METHODS, categoryHint, suggestCategory } from '../lib/constants'
+import { CATEGORIES, ENTRY_META, INTERNAL_PROJECT_NAME, PAYMENT_METHODS, categoryHint, suggestCategory } from '../lib/constants'
 import { formatFileSize, formatKRW, todayISO } from '../lib/format'
 import { createEntry, deleteAttachment, updateEntry, uploadAttachment } from '../lib/api'
 
@@ -58,9 +58,9 @@ export default function EntryFormModal({
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
-  /** 신규 등록 시 프로젝트 미선택이면 비젠내부(공통)로 자동 지정 (effect보다 먼저 선언) */
+  /** 신규 등록 시 프로젝트 미선택이면 사내 공통(비젠공통·관리)으로 자동 지정 (effect보다 먼저 선언) */
   const internalProjectId = useMemo(
-    () => projects.find((p) => p.name === '비젠내부')?.id || '',
+    () => projects.find((p) => p.name === INTERNAL_PROJECT_NAME)?.id || '',
     [projects],
   )
 

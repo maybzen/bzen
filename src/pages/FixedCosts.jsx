@@ -4,6 +4,7 @@ import Icon from '../components/Icon'
 import { useToast } from '../components/Toast'
 import { EmptyState, LoadingBlock, PageHeader, SegmentedControl, StatCard } from '../components/ui'
 import { formatKRW, monthEnd, monthKey, monthKeyOf, monthLabel, todayISO, toISODate } from '../lib/format'
+import { INTERNAL_PROJECT_NAME } from '../lib/constants'
 import { detectFixedCosts } from '../lib/summary'
 import { listEntries, listProjects } from '../lib/api'
 
@@ -68,7 +69,7 @@ export default function FixedCosts() {
       .then(([rows, projectRows]) => {
         if (!alive) return
         setEntries(rows || [])
-        setInternalId((projectRows || []).find((p) => p.name === '비젠내부')?.id || '')
+        setInternalId((projectRows || []).find((p) => p.name === INTERNAL_PROJECT_NAME)?.id || '')
       })
       .catch((e) => toast.error(e.message))
       .finally(() => {
@@ -132,7 +133,7 @@ export default function FixedCosts() {
     }
     return { rows, months }
   }, [entries])
-  /** 공통(비젠내부) 월별 지출 — 프로젝트 미지정분이 모이는 곳 */
+  /** 공통(사내 귀속) 월별 지출 — 프로젝트 미지정분이 모이는 곳 */
   const internalByMonth = useMemo(() => {
     if (!internalId) return []
     const map = new Map()
@@ -289,7 +290,7 @@ export default function FixedCosts() {
           {tab === 'internal' && internalByMonth.length ? (
             <section className="card overflow-hidden">
               <header className="flex flex-wrap items-center justify-between gap-2 border-b border-ink-200 px-4 py-3.5">
-                <h2 className="text-sm font-bold text-ink-900">공통(비젠내부) 월별 지출</h2>
+                <h2 className="text-sm font-bold text-ink-900">공통 월별 지출</h2>
                 <p className="text-xs text-ink-500">
                   월 평균 <strong className="font-num tabular-nums text-brand-700">{formatKRW(internalAvg)}원</strong>
                 </p>
