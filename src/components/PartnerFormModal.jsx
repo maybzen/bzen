@@ -18,6 +18,7 @@ import { formatDateTime, formatFileSize } from '../lib/format'
 const EMPTY = {
   name: '',
   group_name: '',
+  status: '정상',
   contact_person: '',
   job_title: '',
   email: '',
@@ -182,6 +183,7 @@ export default function PartnerFormModal({ open, onClose, onSaved, initial, read
       setForm({
         name: initial.name || '',
         group_name: initial.group_name || '',
+        status: initial.status || '정상',
         contact_person: initial.contact_person || '',
         job_title: initial.job_title || '',
         email: initial.email || '',
@@ -219,6 +221,7 @@ export default function PartnerFormModal({ open, onClose, onSaved, initial, read
       const payload = {
         name: form.name.trim(),
         group_name: form.group_name.trim() || '기타',
+        status: form.status === '폐업' ? '폐업' : '정상',
         contact_person: form.contact_person.trim(),
         job_title: form.job_title.trim(),
         email: form.email.trim(),
@@ -325,6 +328,13 @@ export default function PartnerFormModal({ open, onClose, onSaved, initial, read
               <option key={g} value={g} />
             ))}
           </datalist>
+        </Field>
+
+        <Field label="영업상태">
+          <select className="input" value={form.status} onChange={set('status')} disabled={readOnly}>
+            <option value="정상">정상</option>
+            <option value="폐업">폐업</option>
+          </select>
         </Field>
 
         <Field label="담당자">

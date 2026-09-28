@@ -49,6 +49,8 @@ export default function Partners() {
   const [tableState, setTableState] = useState('checking')
   const [search, setSearch] = useState('')
   const [groupFilter, setGroupFilter] = useState('')
+  const [statusFilter, setStatusFilter] = useState('active')
+  const [sortKey, setSortKey] = useState('name')
   const [reloadKey, setReloadKey] = useState(0)
 
   const [formOpen, setFormOpen] = useState(false)
@@ -115,14 +117,28 @@ export default function Partners() {
 
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase()
-    return partners.filter((p) => {
+    const filtered = partners.filter((p) => {
+      const st = p.status || '정상'
+      if (statusFilter === 'active' && st === '폐업') return false
+      if (statusFilter === 'closed' && st !== '폐업') return false
       if (groupFilter && (p.group_name || '기타') !== groupFilter) return false
       if (!q) return true
       return [p.name, p.group_name, p.contact_person, p.job_title, p.phone_main, p.phone, p.email, p.memo].some((v) =>
         String(v || '').toLowerCase().includes(q),
       )
     })
-  }, [partners, search, groupFilter])
+    const byName = (a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'ko')
+    if (sortKey === 'group') {
+      return filtered.slice().sort((a, b) => {
+        const g = String(a.group_name || '기타').localeCompare(String(b.group_name || '기타'), 'ko')
+        return g !== 0 ? g : byName(a, b)
+      })
+    }
+    if (sortKey === 'recent') {
+      return filtered.slice().sort((a, b) => String(b.created_at || '') < String(a.created_at || '') ? -1 : 1)
+    }
+    return filtered.slice().sort(byName)
+  }, [partners, search, groupFilter, statusFilter, sortKey])
 
   const docTotal = useMemo(
     () => Object.values(docsByPartner).reduce((a, list) => a + list.length, 0),
@@ -154,10 +170,11 @@ export default function Partners() {
       toast.info('내보낼 거래처가 없습니다.')
       return
     }
-    const headers = ['구분', '거래처명', '담당자', '직함', '대표번호', '휴대폰', '이메일', '사업자번호', '계좌', '메모']
+    const headers = ['구분', '거래처명', '영업상태', '담당자', '직함', '대표번호', '휴대폰', '이메일', '사업자번호', '계좌', '메모']
     const body = rows.map((p) => [
       p.group_name || '기타',
       p.name,
+      p.status || '정상',
       p.contact_person,
       p.job_title,
       p.phone_main,
@@ -226,6 +243,16 @@ export default function Partners() {
                 </option>
               ))}
             </select>
+            <select className="input sm:w-40" value={sortKey} onChange={(e) => setSortKey(e.target.value)}>
+              <option value="name">가나다순</option>
+              <option value="group">구분별</option>
+              <option value="recent">최근등록순</option>
+            </select>
+            <select className="input sm:w-36" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+              <option value="active">정상만</option>
+              <option value="all">전체(폐업 포함)</option>
+              <option value="closed">폐업만</option>
+            </select>
           </div>
         </div>
 
@@ -254,10 +281,11 @@ export default function Partners() {
                   const docs = docsByPartner[p.id] || []
                   const bizNo = memoBizNo(p.memo)
                   const accounts = memoAccounts(p.memo)
+                  const closed = (p.status || '정상') === '폐업'
                   const openDetail = () =>
                     isAdmin ? (setEditing(p), setFormOpen(true)) : setViewing(p)
                   return (
-                    <tr key={p.id} className="transition hover:bg-ink-50/60">
+                    <tr key={p.id} className={`transition hover:bg-ink-50/60 ${closed ? 'opacity-60' : ''}`}>
                       <td className="td whitespace-nowrap">
                         {isAdmin ? (
                           customGroupId === p.id ? (
@@ -320,6 +348,9 @@ export default function Partners() {
                         >
                           {p.name}
                         </button>
+                        {closed ? (
+                          <span className="chip mt-1 bg-ink-100 text-ink-500">폐업</span>
+                        ) : null}
                       </td>
                       <td className="td whitespace-nowrap">{p.contact_person || <span className="text-ink-300">—</span>}</td>
                       <td className="td whitespace-nowrap">{p.job_title || <span className="text-ink-300">—</span>}</td>

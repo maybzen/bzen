@@ -35,6 +35,34 @@ function statusChip(status) {
   return <span className="chip bg-amber-50 text-amber-700">승인대기</span>
 }
 
+/* 대표 결재 토글 (대기·승인·반려) */
+function StatusToggle({ status, busy, onChange }) {
+  const opts = [
+    { key: '요청', label: '대기' },
+    { key: '승인', label: '승인' },
+    { key: '반려', label: '반려' },
+  ]
+  return (
+    <div className="inline-flex gap-1 rounded-lg bg-ink-100 p-1">
+      {opts.map((o) => (
+        <button
+          key={o.key}
+          type="button"
+          disabled={busy}
+          onClick={() => {
+            if (status !== o.key) onChange(o.key)
+          }}
+          className={`rounded-md px-2 py-1 text-[11px] font-bold transition ${
+            status === o.key ? 'bg-white text-ink-900 shadow-sm' : 'text-ink-400 hover:text-ink-700'
+          }`}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
 export default function Leaves() {
   const { isAdmin, user } = useAuth()
   const toast = useToast()
@@ -46,6 +74,7 @@ export default function Leaves() {
   const [reloadKey, setReloadKey] = useState(0)
 
   const [formOpen, setFormOpen] = useState(false)
+  const [presetPerson, setPresetPerson] = useState('')
   const [grantOpen, setGrantOpen] = useState(false)
   const [detailPerson, setDetailPerson] = useState(null)
   const [removing, setRemoving] = useState(null)
@@ -137,15 +166,16 @@ export default function Leaves() {
     return [...names]
   }, [profiles])
 
-  const decide = async (entry, ok) => {
+  const decide = async (entry, next) => {
+    if (entry.status === next) return
     setBusy(true)
     try {
       await updateLeaveEntry(entry.id, {
-        status: ok ? '승인' : '반려',
-        decided_by: user?.id,
-        decided_at: new Date().toISOString(),
+        status: next,
+        decided_by: next === '요청' ? null : user?.id,
+        decided_at: next === '요청' ? null : new Date().toISOString(),
       })
-      toast.success(ok ? '승인했습니다.' : '반려했습니다.')
+      toast.success(next === '승인' ? '승인했습니다.' : next === '반려' ? '반려했습니다.' : '대기로 되돌렸습니다.')
       setReloadKey((k) => k + 1)
     } catch (e) {
       toast.error(e.message)
@@ -186,7 +216,7 @@ export default function Leaves() {
             새해 일괄 부여
           </button>
         ) : null}
-        <button type="button" className="btn-primary" onClick={() => setFormOpen(true)}>
+        <button type="button" className="btn-primary" onClick={() => { setPresetPerson(''); setFormOpen(true) }}>
           <Icon name="plus" size={16} />
           휴무 등록
         </button>
@@ -278,8 +308,8 @@ export default function Leaves() {
                       <th className="th">발생/사용</th>
                       <th className="th text-right">일수</th>
                       <th className="th">사유</th>
-                      <th className="th">결재현황</th>
-                      {isAdmin ? <th className="th w-28">승인</th> : null}
+                      <th className="th">결재</th>
+                      {isAdmin ? <th className="th w-14">삭제</th> : null}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-ink-100">
@@ -297,41 +327,23 @@ export default function Leaves() {
                         </td>
                         <td className="td num font-semibold">{fmtDays(e.days)}</td>
                         <td className="td max-w-[220px] truncate text-ink-500">{e.memo}</td>
-                        <td className="td">{statusChip(e.status)}</td>
+                        <td className="td">
+                          {isAdmin ? (
+                            <StatusToggle status={e.status} busy={busy} onChange={(next) => decide(e, next)} />
+                          ) : (
+                            statusChip(e.status)
+                          )}
+                        </td>
                         {isAdmin ? (
                           <td className="td">
-                            <div className="flex items-center gap-1">
-                              {e.status !== '승인' ? (
-                                <button
-                                  type="button"
-                                  className="rounded-lg p-1.5 text-ink-400 transition hover:bg-emerald-50 hover:text-emerald-700"
-                                  onClick={() => decide(e, true)}
-                                  disabled={busy}
-                                  title="승인"
-                                >
-                                  <Icon name="check" size={15} />
-                                </button>
-                              ) : null}
-                              {e.status !== '반려' ? (
-                                <button
-                                  type="button"
-                                  className="rounded-lg p-1.5 text-ink-400 transition hover:bg-rose-50 hover:text-loss"
-                                  onClick={() => decide(e, false)}
-                                  disabled={busy}
-                                  title="반려"
-                                >
-                                  <Icon name="close" size={15} />
-                                </button>
-                              ) : null}
-                              <button
-                                type="button"
-                                className="rounded-lg p-1.5 text-ink-400 transition hover:bg-rose-50 hover:text-loss"
-                                onClick={() => setRemoving(e)}
-                                title="삭제"
-                              >
-                                <Icon name="trash" size={15} />
-                              </button>
-                            </div>
+                            <button
+                              type="button"
+                              className="rounded-lg p-1.5 text-ink-400 transition hover:bg-rose-50 hover:text-loss"
+                              onClick={() => setRemoving(e)}
+                              title="삭제"
+                            >
+                              <Icon name="trash" size={15} />
+                            </button>
                           </td>
                         ) : null}
                       </tr>
@@ -361,7 +373,7 @@ export default function Leaves() {
         personOptions={personOptions}
         userId={user?.id}
         isAdmin={isAdmin}
-        defaultPerson={personFilter}
+        defaultPerson={presetPerson || personFilter}
       />
 
       <GrantModal
@@ -378,6 +390,11 @@ export default function Leaves() {
       <PersonModal
         person={detailPerson}
         onClose={() => setDetailPerson(null)}
+        onRegister={(p) => {
+          setDetailPerson(null)
+          setPresetPerson(p)
+          setFormOpen(true)
+        }}
         rows={rows}
         profiles={profiles}
         isAdmin={isAdmin}
@@ -399,7 +416,7 @@ export default function Leaves() {
 
 /* ------------------------- 직원별 상세 ------------------------- */
 
-function PersonModal({ person, onClose, rows, profiles, isAdmin, busy, onDecide }) {
+function PersonModal({ person, onClose, onRegister, rows, profiles, isAdmin, busy, onDecide }) {
   const profile = useMemo(
     () => (profiles || []).find((p) => p.full_name === person),
     [profiles, person],
@@ -443,9 +460,15 @@ function PersonModal({ person, onClose, rows, profiles, isAdmin, busy, onDecide 
       subtitle="인사정보 · 총괄 · 세부내역 · 결재현황"
       size="lg"
       footer={
-        <button type="button" className="btn-ghost" onClick={onClose}>
-          닫기
-        </button>
+        <>
+          <button type="button" className="btn-ghost" onClick={onClose}>
+            닫기
+          </button>
+          <button type="button" className="btn-primary" onClick={() => onRegister?.(person)}>
+            <Icon name="plus" size={15} />
+            휴무 등록
+          </button>
+        </>
       }
     >
       {!person ? null : (
@@ -511,8 +534,7 @@ function PersonModal({ person, onClose, rows, profiles, isAdmin, busy, onDecide 
                       <th className="th text-right">사용</th>
                       <th className="th text-right">잔여</th>
                       <th className="th">세부내역</th>
-                      <th className="th">결재현황</th>
-                      {isAdmin ? <th className="th w-20">승인</th> : null}
+                      <th className="th">결재</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-ink-100">
@@ -524,35 +546,13 @@ function PersonModal({ person, onClose, rows, profiles, isAdmin, busy, onDecide 
                         <td className="td num">{e.direction === '사용' ? fmtDays(e.days) : '—'}</td>
                         <td className="td num font-bold">{fmtDays(e.balance)}</td>
                         <td className="td max-w-[180px] truncate text-ink-500">{e.memo}</td>
-                        <td className="td">{statusChip(e.status)}</td>
-                        {isAdmin ? (
-                          <td className="td">
-                            {e.status !== '승인' ? (
-                              <div className="flex items-center gap-1">
-                                <button
-                                  type="button"
-                                  className="rounded-lg p-1.5 text-ink-400 transition hover:bg-emerald-50 hover:text-emerald-700"
-                                  onClick={() => onDecide(e, true)}
-                                  disabled={busy}
-                                  title="승인"
-                                >
-                                  <Icon name="check" size={15} />
-                                </button>
-                                <button
-                                  type="button"
-                                  className="rounded-lg p-1.5 text-ink-400 transition hover:bg-rose-50 hover:text-loss"
-                                  onClick={() => onDecide(e, false)}
-                                  disabled={busy}
-                                  title="반려"
-                                >
-                                  <Icon name="close" size={15} />
-                                </button>
-                              </div>
-                            ) : (
-                              <span className="text-xs text-ink-300">—</span>
-                            )}
-                          </td>
-                        ) : null}
+                        <td className="td">
+                          {isAdmin ? (
+                            <StatusToggle status={e.status} busy={busy} onChange={(next) => onDecide(e, next)} />
+                          ) : (
+                            statusChip(e.status)
+                          )}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
