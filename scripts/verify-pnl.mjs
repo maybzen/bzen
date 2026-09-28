@@ -62,6 +62,23 @@ if (formatPercent(k.margin) !== '66.1%') {
   console.log(' FAIL  KCCV2026 영업이익률 불일치')
 }
 
+console.log('\n== contractSplit ==')
+import { contractSplit } from '../src/lib/format.js'
+
+// 마이그레이션 전: 합계만 있으면 역산
+const old = contractSplit({ contract_amount: 222330207 })
+check('KCCV 합계 유지', old.total, 222330207)
+check('KCCV 공급가액 역산', old.supply, 202118370)
+check('KCCV 부가세 역산', old.vat, 20211837)
+// 마이그레이션 후: 저장값 우선
+const now = contractSplit({ contract_amount: 222330207, contract_supply: 202118370, contract_vat: 20211837 })
+check('분리값 우선 합계', now.total, 222330207)
+check('분리값 우선 공급가액', now.supply, 202118370)
+check('분리값 우선 부가세', now.vat, 20211837)
+// 0원
+const zero = contractSplit({ contract_amount: 0 })
+check('0원 합계', zero.total, 0)
+
 console.log('\n== summarize ==')
 const t = summarize(entries)
 /* 355,624,511 − (63,735,308 + 26,782,508) − 4,569,208 = 260,537,487 */

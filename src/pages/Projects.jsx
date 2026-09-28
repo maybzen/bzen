@@ -7,7 +7,7 @@ import { useToast } from '../components/Toast'
 import { ConfirmDialog, EmptyState, LoadingBlock, PageHeader, SegmentedControl, StatCard } from '../components/ui'
 import { useAuth } from '../auth/AuthContext'
 import { PROJECT_STATUS } from '../lib/constants'
-import { formatDateHuman, formatKRW, formatPercent } from '../lib/format'
+import { contractSplit, formatDateHuman, formatKRW, formatPercent } from '../lib/format'
 import { buildPnl, groupByProject, summarize } from '../lib/summary'
 import { deleteProject, listEntries, listProfiles, listProjects } from '../lib/api'
 
@@ -365,8 +365,9 @@ export default function Projects() {
           {rows.map((row) => {
             const project = row.project
             const status = PROJECT_STATUS[project.status] || PROJECT_STATUS.active
-            const achieved =
-              project.contract_amount > 0 ? (row.sale / project.contract_amount) * 100 : null
+            /* 계약 대비 매출은 공급가액끼리 비교해야 맞습니다 */
+            const csplit = contractSplit(project)
+            const achieved = csplit.supply > 0 ? (row.sale / csplit.supply) * 100 : null
 
             // 제안서·미진행은 장부 집계 대신 제안 정보 위주로 보여줍니다.
             if (project.status === 'proposal' || project.status === 'dropped') {
@@ -413,9 +414,10 @@ export default function Projects() {
                       {project.venue ? ` · ${project.venue}` : ''}
                       {managerName(project.created_by) ? ` · 등록 ${managerName(project.created_by)}` : ''}
                     </p>
-                    {project.contract_amount > 0 ? (
+                    {csplit.total > 0 ? (
                       <p className="mt-0.5 truncate text-xs font-semibold text-ink-700">
-                        계약 {formatKRW(project.contract_amount)}원
+                        계약 {formatKRW(csplit.supply)}원
+                        <span className="font-normal text-ink-400"> (합계 {formatKRW(csplit.total)}원)</span>
                       </p>
                     ) : null}
                   </div>
@@ -448,7 +450,7 @@ export default function Projects() {
                 <PnlGrid
                   pnl={buildPnl(row.sale, row.purchase, row.opex)}
                   achieved={achieved}
-                  contractAmount={project.contract_amount}
+                  contractAmount={csplit.supply}
                   showContract
                 />
 

@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react'
 import { Field, InlineAlert, Modal, Spinner } from './ui'
 import { useToast } from './Toast'
 import { PROJECT_STATUS, PROJECT_STATUS_KEYS, sortManagers } from '../lib/constants'
-import { createProject, updateProject } from '../lib/api'
+import { contractSplit } from '../lib/format'
+import { createProject, projectContractSplitAvailable, updateProject } from '../lib/api'
 
 const EMPTY = {
   name: '',
@@ -10,29 +11,39 @@ const EMPTY = {
   status: 'active',
   start_date: '',
   end_date: '',
-  contract_amount: '',
+  contract_supply: '',
+  contract_vat: '',
+  contract_total: '',
   venue: '',
   manager_id: '',
   memo: '',
 }
+
+const toNum = (v) => Math.round(Number(String(v ?? '').replace(/[^0-9.-]/g, '')) || 0)
 
 export default function ProjectFormModal({ open, onClose, onSaved, initial, profiles = [], userId }) {
   const toast = useToast()
   const [form, setForm] = useState(EMPTY)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  /* 분리 컬럼 마이그레이션 전에는 합계 한 칸만 보여줍니다 */
+  const [splitOK, setSplitOK] = useState(false)
 
   useEffect(() => {
     if (!open) return
     setError('')
+    projectContractSplitAvailable().then(setSplitOK).catch(() => setSplitOK(false))
     if (initial) {
+      const split = contractSplit(initial)
       setForm({
         name: initial.name || '',
         client: initial.client || '',
         status: initial.status || 'active',
         start_date: initial.start_date || '',
         end_date: initial.end_date || '',
-        contract_amount: String(initial.contract_amount ?? ''),
+        contract_supply: split.supply ? String(split.supply) : '',
+        contract_vat: split.vat ? String(split.vat) : '',
+        contract_total: split.total ? String(split.total) : '',
         venue: initial.venue || '',
         manager_id: initial.manager_id || '',
         memo: initial.memo || '',
@@ -51,13 +62,18 @@ export default function ProjectFormModal({ open, onClose, onSaved, initial, prof
     setSaving(true)
     setError('')
     try {
+      const supply = toNum(form.contract_supply)
+      const vat = toNum(form.contract_vat)
+      const total = supply + vat
       const payload = {
         name: form.name.trim(),
         client: form.client.trim(),
         status: form.status,
         start_date: form.start_date || null,
         end_date: form.end_date || null,
-        contract_amount: Math.round(Number(String(form.contract_amount).replace(/[^0-9.-]/g, '')) || 0),
+        contract_amount: total,
+        // 분리 컬럼이 있을 때만 함께 저장합니다 (마이그레이션 전에는 합계만).
+        ...(splitOK ? { contract_supply: supply, contract_vat: vat } : {}),
         venue: form.venue.trim(),
         manager_id: form.manager_id || null,
         memo: form.memo.trim(),
@@ -147,15 +163,68 @@ export default function ProjectFormModal({ open, onClose, onSaved, initial, prof
           <input type="date" className="input" value={form.end_date} onChange={set('end_date')} />
         </Field>
 
-        <Field label="계약 금액" hint="부가세 포함 합계 기준으로 입력해 주세요.">
-          <input
-            className="input num text-left"
-            inputMode="numeric"
-            value={form.contract_amount}
-            onChange={set('contract_amount')}
-            placeholder="0"
-          />
-        </Field>
+        <div className="sm:col-span-2 rounded-xl border border-ink-200 bg-ink-50/60 p-4">
+          <p className="mb-3 text-xs font-bold text-ink-700">
+            계약 금액 {splitOK ? '' : '(합계 한 칸 — 분리 저장은 SQL 1회 실행 후)'}
+          </p>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <Field label="공급가액" required={false}>
+              <input
+                className="input num text-left"
+                inputMode="numeric"
+                value={form.contract_supply}
+                onChange={set('contract_supply')}
+                placeholder="0"
+              />
+            </Field>
+            <Field label="부가세">
+              <div className="flex gap-1.5">
+                <input
+                  className="input num text-left"
+                  inputMode="numeric"
+                  value={form.contract_vat}
+                  onChange={set('contract_vat')}
+                  placeholder="0"
+                />
+                <button
+                  type="button"
+                  className="btn-ghost shrink-0 whitespace-nowrap px-2.5 py-2 text-xs"
+                  onClick={() =>
+                    setForm((f) => ({ ...f, contract_vat: String(Math.round(toNum(f.contract_supply) * 0.1)) }))
+                  }
+                  title="공급가액의 10%로 계산"
+                >
+                  10%
+                </button>
+              </div>
+            </Field>
+            <Field label="합계" hint="합계를 치면 공급가액·부가세로 자동 분리됩니다">
+              <input
+                className="input num text-left"
+                inputMode="numeric"
+                value={form.contract_total}
+                placeholder={String(toNum(form.contract_supply) + toNum(form.contract_vat) || '')}
+                onChange={(e) => {
+                  const raw = e.target.value
+                  setForm((f) => ({ ...f, contract_total: raw }))
+                  const t = toNum(raw)
+                  if (!t) return
+                  const supply = Math.round(t / 1.1)
+                  setForm((f) => ({ ...f, contract_supply: String(supply), contract_vat: String(t - supply) }))
+                }}
+                onBlur={() =>
+                  setForm((f) => ({ ...f, contract_total: String(toNum(f.contract_supply) + toNum(f.contract_vat) || '') }))
+                }
+              />
+            </Field>
+          </div>
+          {!splitOK ? (
+            <p className="mt-2 text-[11px] text-ink-500">
+              분리 저장을 쓰려면 Supabase SQL Editor에서 <code>supabase/migration_projects_contract.sql</code>을
+              1회 실행하세요. 그 전에는 합계만 저장됩니다.
+            </p>
+          ) : null}
+        </div>
 
         <div className="sm:col-span-2">
           <InlineAlert tone="info">

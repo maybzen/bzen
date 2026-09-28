@@ -83,6 +83,14 @@ export function deleteProject(id) {
   return unwrap(supabase.from('projects').delete().eq('id', id))
 }
 
+/** 계약금액 분리 컬럼(contract_supply/vat)이 있는지 확인 (마이그레이션 여부 감지용) */
+export async function projectContractSplitAvailable() {
+  const { error } = await supabase.from('projects').select('contract_supply').limit(1)
+  if (!error) return true
+  const msg = String(error?.message || '')
+  return !/column .* does not exist|42703|schema cache/i.test(msg)
+}
+
 /* ------------------------------------------------------------------ */
 /* 수금 (프로젝트별 입금 내역)                                           */
 /* ------------------------------------------------------------------ */

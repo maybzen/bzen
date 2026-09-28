@@ -10,7 +10,7 @@ import { useToast } from '../components/Toast'
 import { ConfirmDialog, EmptyState, LoadingBlock, SegmentedControl, StatCard } from '../components/ui'
 import { useAuth } from '../auth/AuthContext'
 import { ENTRY_META, PROJECT_STATUS } from '../lib/constants'
-import { formatDateHuman, formatKRW, formatPercent, monthLabel } from '../lib/format'
+import { contractSplit, formatDateHuman, formatKRW, formatPercent, monthLabel } from '../lib/format'
 import { groupByMonth, summarize } from '../lib/summary'
 import { deleteEntry, listAttachments, listEntries, listProfiles, listProjects } from '../lib/api'
 
@@ -131,7 +131,9 @@ export default function ProjectDetail() {
   }
 
   const status = PROJECT_STATUS[project.status] || PROJECT_STATUS.active
-  const achieved = project.contract_amount > 0 ? (stats.revenue / project.contract_amount) * 100 : null
+  /* 계약 대비 순매출은 공급가액끼리 비교해야 맞습니다 */
+  const csplit = contractSplit(project)
+  const achieved = csplit.supply > 0 ? (stats.revenue / csplit.supply) * 100 : null
 
   return (
     <div className="flex flex-col gap-5">
@@ -164,9 +166,10 @@ export default function ProjectDetail() {
                 : '담당 미지정'}
               {project.venue ? ` · ${project.venue}` : ''}
             </p>
-            {project.contract_amount > 0 ? (
+            {csplit.total > 0 ? (
               <p className="mt-1 text-sm font-semibold text-ink-800">
-                계약 {formatKRW(project.contract_amount)}원
+                계약 {formatKRW(csplit.supply)}원
+                <span className="font-normal text-ink-400"> (합계 {formatKRW(csplit.total)}원)</span>
               </p>
             ) : null}
           </div>
@@ -207,20 +210,20 @@ export default function ProjectDetail() {
         />
       </div>
 
-      {project.contract_amount > 0 ? (
+      {csplit.total > 0 ? (
         <div className="card p-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="text-sm font-bold text-ink-800">계약 대비 순매출</p>
             <p className="text-xs text-ink-500">
-              계약 {formatKRW(project.contract_amount)}원 · 순매출 {formatKRW(stats.revenue)}원 ·{' '}
+              계약(공급가액) {formatKRW(csplit.supply)}원 · 순매출 {formatKRW(stats.revenue)}원 ·{' '}
               <strong className="font-semibold text-brand-700">{formatPercent(achieved, 0)}</strong>
             </p>
           </div>
           <p className="mt-1 text-[11px] text-ink-400">
-            계약 금액은 부가세 포함 합계, 순매출액은 공급가액 기준이라 두 값이 그대로 맞지 않습니다. 참고용입니다.
+            공급가액끼리 비교한 값입니다. 계약 합계(부가세 포함)는 {formatKRW(csplit.total)}원입니다.
           </p>
           <div className="mt-2.5">
-            <ProfitBar value={stats.revenue} max={project.contract_amount} tone="sale" />
+            <ProfitBar value={stats.revenue} max={csplit.supply} tone="sale" />
           </div>
           {project.memo ? (
             <p className="mt-3 whitespace-pre-line border-t border-ink-100 pt-3 text-xs leading-relaxed text-ink-600">

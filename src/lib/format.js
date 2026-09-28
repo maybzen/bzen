@@ -53,6 +53,24 @@ export function normalizeVendorName(name) {
     .toLowerCase()
 }
 
+/**
+ * 프로젝트 계약금액 3종 (합계·공급가액·부가세).
+ * migration_projects_contract.sql 실행 전에는 합계만 있어서 합계/1.1로 역산합니다.
+ * 계약 대비 매출 비교는 공급가액끼리 해야 맞아서 supply 기준을 씁니다.
+ */
+export function contractSplit(p) {
+  const total = Math.round(Number(p?.contract_amount) || 0)
+  if (!total) return { total: 0, supply: 0, vat: 0 }
+  const hasSplit = p?.contract_supply !== undefined && p?.contract_supply !== null
+  if (hasSplit && (Number(p.contract_supply) || Number(p.contract_vat))) {
+    const supply = Math.round(Number(p.contract_supply) || 0)
+    const vat = Math.round(Number(p.contract_vat) || 0)
+    return { total, supply, vat }
+  }
+  const supply = Math.round(total / 1.1)
+  return { total, supply, vat: total - supply }
+}
+
 function pad2(n) {
   return String(n).padStart(2, '0')
 }
