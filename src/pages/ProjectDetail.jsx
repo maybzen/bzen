@@ -46,8 +46,7 @@ export default function ProjectDetail() {
     try {
       const [projectRows, entryRows, profileRows] = await Promise.all([
         listProjects(),
-        // 직원에게는 남의 지출결의(개인 지출)가 보이지 않게 제외합니다
-        listEntries({ projectId: id, ...(!isAdmin ? { excludeSource: 'expense_report' } : {}) }),
+        listEntries({ projectId: id }),
         listProfiles(),
       ])
       const found = projectRows.find((p) => p.id === id)
@@ -67,7 +66,7 @@ export default function ProjectDetail() {
     } finally {
       setLoading(false)
     }
-  }, [id, isAdmin, toast])
+  }, [id, toast])
 
   useEffect(() => {
     load()
@@ -84,6 +83,14 @@ export default function ProjectDetail() {
     () => (tab === 'all' ? entries : entries.filter((e) => e.entry_type === tab)),
     [entries, tab],
   )
+
+  /* 직원은 운영비 행만 봅니다. 매출·매입은 관리자가 관리합니다 */
+  const staffRows = useMemo(
+    () => filtered.filter((e) => e.entry_type === 'opex'),
+    [filtered],
+  )
+  const shown = isAdmin ? filtered : staffRows
+  const staffTabs = useMemo(() => TABS.filter((t) => t.key === 'all' || t.key === 'opex'), [])
 
   const maxMonthly = Math.max(1, ...monthly.map((m) => Math.max(m.sale, Math.abs(m.profit))))
 
@@ -232,7 +239,7 @@ export default function ProjectDetail() {
         </div>
       ) : null}
 
-      {monthly.length ? (
+      {isAdmin && monthly.length ? (
         <section className="card overflow-hidden">
           <header className="border-b border-ink-200 px-4 py-3.5">
             <h2 className="text-sm font-bold text-ink-900">월별 손익</h2>
@@ -282,11 +289,14 @@ export default function ProjectDetail() {
 
       <section className="card overflow-hidden">
         <header className="flex flex-col gap-3 border-b border-ink-200 px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between">
-          <h2 className="text-sm font-bold text-ink-900">거래 내역 ({entries.length}건)</h2>
-          <SegmentedControl size="sm" options={TABS} value={tab} onChange={setTab} />
+          <h2 className="text-sm font-bold text-ink-900">
+            거래 내역 ({shown.length}건)
+            {!isAdmin ? <span className="ml-1.5 font-normal text-ink-400">· 운영비만 표시됩니다</span> : null}
+          </h2>
+          <SegmentedControl size="sm" options={isAdmin ? TABS : staffTabs} value={tab} onChange={setTab} />
         </header>
         <EntryTable
-          entries={filtered}
+          entries={shown}
           projects={[project]}
           profiles={profiles}
           attachmentsByEntry={attachmentsByEntry}

@@ -173,15 +173,7 @@ export default function Dashboard() {
       ])
       const ql = q.toLowerCase()
       const match = (...vals) => vals.some((v) => String(v || '').toLowerCase().includes(ql))
-      // 직원에게는 남의 지출결의(개인 지출)를 검색 결과에서 뺍니다
-      const visibleEntries = isAdmin
-        ? entryRows || []
-        : (entryRows || []).filter(
-            (e) =>
-              e.source !== 'expense_report' ||
-              e?.created_by === user?.id ||
-              e?.requester_id === user?.id,
-          )
+      const visibleEntries = entryRows || []
       setResults({
         q,
         projects: (projectRows || [])
