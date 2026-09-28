@@ -5,7 +5,7 @@ import { Field, InlineAlert, Modal, Spinner } from './ui'
 import { useToast } from './Toast'
 import { CATEGORIES, ENTRY_META, INTERNAL_PROJECT_NAME, PAYMENT_METHODS, categoryHint, suggestCategory } from '../lib/constants'
 import { formatFileSize, formatKRW, todayISO } from '../lib/format'
-import { createEntry, deleteAttachment, updateEntry, uploadAttachment } from '../lib/api'
+import { createEntry, deleteAttachment, listFundRows, updateEntry, uploadAttachment } from '../lib/api'
 
 const MAX_FILE = 20 * 1024 * 1024
 
@@ -24,6 +24,25 @@ function withMemoUser(memo, user) {
   const base = String(memo || '').replace(/\s*·\s*이용자\s+[^·]*/, '').trim()
   const u = String(user || '').trim()
   return u ? `${base} · 이용자 ${u}` : base
+}
+
+/** 메모의 "· 법카 2381" 읽기/쓰기. 뒤 4자리 기준으로 통일합니다 */
+function memoCard(memo) {
+  const m = String(memo || '').match(/법카\s+([^·]+)/)
+  if (!m) return ''
+  const d = (m[1].match(/(\d{4})(?!.*\d)/) || [])[1]
+  return d ? `법카 ${d}` : ''
+}
+
+function withMemoCard(memo, label) {
+  const base = String(memo || '').replace(/\s*·\s*법카\s+[^·]*/, '').trim()
+  const v = String(label || '').trim()
+  return v ? `${base} · ${v}` : base
+}
+
+function cardLast4(number) {
+  const digits = String(number || '').replace(/[^0-9]/g, '')
+  return digits.slice(-4)
 }
 
 const LABELS = {
@@ -57,6 +76,8 @@ export default function EntryFormModal({
   const [removed, setRemoved] = useState([])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  /* 자금관리에 등록된 법인카드 목록 (결제수단=카드 선택 시) */
+  const [fundCards, setFundCards] = useState([])
 
   /** 신규 등록 시 프로젝트 미선택이면 사내 공통(비젠공통·관리)으로 자동 지정 (effect보다 먼저 선언) */
   const internalProjectId = useMemo(
@@ -66,6 +87,9 @@ export default function EntryFormModal({
 
   useEffect(() => {
     if (!open) return
+    listFundRows('fund_cards')
+      .then((rows) => setFundCards((rows || []).filter((c) => c.is_active !== false)))
+      .catch(() => setFundCards([]))
     setError('')
     setFiles([])
     setRemoved([])
@@ -83,6 +107,7 @@ export default function EntryFormModal({
         payment_method: initial.payment_method || '',
         memo: initial.memo || '',
         card_user: memoUser(initial.memo),
+        card_label: memoCard(initial.memo),
         requester_id: initial.requester_id || userId || '',
         author_id: initial.created_by || userId || '',
       })
@@ -146,7 +171,10 @@ export default function EntryFormModal({
         supply_amount: supply,
         vat_amount: vat,
         payment_method: form.payment_method,
-        memo: withMemoUser(form.memo, form.card_user),
+        memo: withMemoCard(
+          withMemoUser(form.memo, form.card_user),
+          form.payment_method === '카드' ? form.card_label : '',
+        ),
         requester_id: isReport ? form.requester_id || userId : form.requester_id || null,
         // 등록자(작성자) 수정은 기존 내역만. 관리자가 바꿀 수 있고, 입사 전 자료 정정용입니다.
         // 신규 등록은 RLS가 created_by = 로그인 계정으로 강제하므로 키를 보내지 않습니다.
@@ -412,6 +440,30 @@ export default function EntryFormModal({
             </select>
           </Field>
 
+          {form.payment_method === '카드' ? (
+            <Field
+              label="사용 카드"
+              hint="나중에 같은 내역을 카드 파일로 올리면 중복으로 자동 제외됩니다"
+            >
+              <select
+                className="input"
+                value={form.card_label}
+                onChange={set('card_label')}
+              >
+                <option value="">선택 안 함</option>
+                {fundCards.map((c) => {
+                  const last4 = cardLast4(c.number)
+                  return (
+                    <option key={c.id} value={last4 ? `법카 ${last4}` : ''} disabled={!last4}>
+                      {c.issuer} {last4 ? `····${last4}` : ''} {c.name}
+                      {c.holder ? ` · ${c.holder}` : ''}
+                    </option>
+                  )
+                })}
+              </select>
+            </Field>
+          ) : null}
+
           {entryType === 'opex' || entryType === 'purchase' ? (
             <Field label="카드 이용자" hint="여러 명이면 체크, 목록에 없으면 기타에 직접 입력">
               <CardUserSelect
@@ -506,6 +558,7 @@ function emptyForm(entryType, source, userId) {
     payment_method: '',
     memo: '',
     card_user: '',
+    card_label: '',
     requester_id: source === 'expense_report' ? userId || '' : '',
     author_id: userId || '',
   }
