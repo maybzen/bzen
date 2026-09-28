@@ -3,16 +3,36 @@ import Icon from '../components/Icon'
 import { useToast } from '../components/Toast'
 import { ConfirmDialog, EmptyState, Field, LoadingBlock, Modal, PageHeader, StatCard } from '../components/ui'
 import { useAuth } from '../auth/AuthContext'
+import { ROLE_LABEL } from '../lib/constants'
 import { todayISO } from '../lib/format'
-import { createLeaveEntry, deleteLeaveEntry, listLeaveEntries, listProfiles } from '../lib/api'
+import {
+  createLeaveEntry,
+  deleteLeaveEntry,
+  listLeaveEntries,
+  listProfiles,
+  updateLeaveEntry,
+} from '../lib/api'
 
-const LEAVE_TYPES = ['연차', '대휴', '동계휴가', '보건휴가', '경조사']
+const LEAVE_TYPES = ['연차', '월차', '대휴', '동계휴가', '보건휴가', '경조사']
+const GRANT_TYPES = ['연차', '월차', '대휴', '동계휴가', '보건휴가']
 const SHEET_ORDER = ['이보람', '권혜민', '박현정', '김상희', '김혜린', '박은영', '이정현']
+/* 새해 부여 기본값 (연차 있는 분) */
+const GRANT_DEFAULTS = {
+  이보람: { 연차: '16' },
+  권혜민: { 연차: '16' },
+  박현정: { 연차: '15' },
+  김상희: { 연차: '15' },
+}
 
-function remain(r, type) {
-  const t = r.types[type]
-  if (!t) return 0
-  return t.accrued - t.used
+function fmtDays(v) {
+  const n = Number(v || 0)
+  return Number.isInteger(n) ? String(n) : String(Math.round(n * 10) / 10)
+}
+
+function statusChip(status) {
+  if (status === '승인') return <span className="chip bg-emerald-50 text-emerald-700">승인</span>
+  if (status === '반려') return <span className="chip bg-ink-100 text-ink-400">반려</span>
+  return <span className="chip bg-amber-50 text-amber-700">승인대기</span>
 }
 
 export default function Leaves() {
@@ -27,6 +47,7 @@ export default function Leaves() {
 
   const [formOpen, setFormOpen] = useState(false)
   const [grantOpen, setGrantOpen] = useState(false)
+  const [detailPerson, setDetailPerson] = useState(null)
   const [removing, setRemoving] = useState(null)
   const [busy, setBusy] = useState(false)
 
@@ -51,12 +72,18 @@ export default function Leaves() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reloadKey])
 
+  /* 총괄: 승인분만 집계 + 승인대기 건수 */
   const summary = useMemo(() => {
     const map = new Map()
     for (const e of rows || []) {
+      if (e.status === '반려') continue
       const p = (e.person || '').trim() || '(미지정)'
-      if (!map.has(p)) map.set(p, { person: p, types: {}, accrued: 0, used: 0 })
+      if (!map.has(p)) map.set(p, { person: p, types: {}, accrued: 0, used: 0, pending: 0 })
       const r = map.get(p)
+      if (e.status !== '승인') {
+        r.pending += 1
+        continue
+      }
       const t = e.leave_type || '미분류'
       if (!r.types[t]) r.types[t] = { accrued: 0, used: 0 }
       const d = Number(e.days || 0)
@@ -79,17 +106,22 @@ export default function Leaves() {
   }, [rows])
 
   const totals = useMemo(() => {
-    const acc = { accrued: 0, used: 0, types: {} }
+    const acc = { accrued: 0, used: 0, annual: 0, pending: 0 }
     for (const r of summary) {
       acc.accrued += r.accrued
       acc.used += r.used
-      for (const t of LEAVE_TYPES) {
-        if (!acc.types[t]) acc.types[t] = { accrued: 0, used: 0 }
-        acc.types[t].accrued += r.types[t]?.accrued || 0
-        acc.types[t].used += r.types[t]?.used || 0
+      acc.pending += r.pending
+      for (const t of ['연차', '월차']) {
+        acc.annual += (r.types[t]?.accrued || 0) - (r.types[t]?.used || 0)
       }
     }
     return acc
+  }, [summary])
+
+  const leaveRemain = useMemo(() => {
+    let v = 0
+    for (const r of summary) v += (r.types['대휴']?.accrued || 0) - (r.types['대휴']?.used || 0)
+    return v
   }, [summary])
 
   const detailRows = useMemo(() => {
@@ -104,6 +136,23 @@ export default function Leaves() {
     const names = new Set([...SHEET_ORDER, ...profiles.map((p) => p.full_name).filter(Boolean)])
     return [...names]
   }, [profiles])
+
+  const decide = async (entry, ok) => {
+    setBusy(true)
+    try {
+      await updateLeaveEntry(entry.id, {
+        status: ok ? '승인' : '반려',
+        decided_by: user?.id,
+        decided_at: new Date().toISOString(),
+      })
+      toast.success(ok ? '승인했습니다.' : '반려했습니다.')
+      setReloadKey((k) => k + 1)
+    } catch (e) {
+      toast.error(e.message)
+    } finally {
+      setBusy(false)
+    }
+  }
 
   const handleDelete = async () => {
     if (!removing) return
@@ -122,7 +171,7 @@ export default function Leaves() {
 
   return (
     <div className="flex flex-col gap-5">
-      <PageHeader title="휴무대장" description="연차·대휴·동계휴가·보건휴가 발생과 사용을 기록합니다.">
+      <PageHeader title="휴무대장" description="연차·월차·대휴·동계휴가·보건휴가 발생과 사용을 기록합니다.">
         <select className="input sm:w-44" value={personFilter} onChange={(e) => setPersonFilter(e.target.value)}>
           <option value="">전체 직원</option>
           {summary.map((r) => (
@@ -148,29 +197,20 @@ export default function Leaves() {
       ) : (
         <>
           <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-            <StatCard label="전체 잔여" value={fmtDays(totals.accrued - totals.used)} tone="brand" icon="file" />
-            <StatCard
-              label="연차 잔여"
-              value={fmtDays((totals.types['연차']?.accrued || 0) - (totals.types['연차']?.used || 0))}
-              tone="neutral"
-              icon="calendar"
-            />
-            <StatCard
-              label="대휴 잔여"
-              value={fmtDays((totals.types['대휴']?.accrued || 0) - (totals.types['대휴']?.used || 0))}
-              tone="neutral"
-              icon="coins"
-            />
-            <StatCard label="등록 건수" value={String(rows.length)} unit="건" tone="neutral" icon="receipt" />
+            <StatCard label="전체 잔여" value={fmtDays(totals.accrued - totals.used)} unit="일" tone="brand" icon="file" />
+            <StatCard label="연차·월차 잔여" value={fmtDays(totals.annual)} unit="일" tone="neutral" icon="calendar" />
+            <StatCard label="대휴 잔여" value={fmtDays(leaveRemain)} unit="일" tone="neutral" icon="coins" />
+            <StatCard label="승인 대기" value={String(totals.pending)} unit="건" tone="neutral" icon="alert" />
           </div>
 
           {/* 총괄표 */}
           <section className="card overflow-hidden">
             <header className="border-b border-ink-200 px-4 py-3.5">
               <h2 className="text-sm font-bold text-ink-900">휴무 현황 총괄표</h2>
+              <p className="mt-0.5 text-xs text-ink-500">이름을 누르면 인사정보·세부내역·결재현황을 볼 수 있습니다.</p>
             </header>
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[760px] border-collapse">
+              <table className="w-full min-w-[820px] border-collapse">
                 <thead className="bg-ink-50/70">
                   <tr>
                     <th className="th">직원</th>
@@ -185,9 +225,20 @@ export default function Leaves() {
                 <tbody className="divide-y divide-ink-100">
                   {summary.map((r) => (
                     <tr key={r.person} className="transition hover:bg-ink-50/60">
-                      <td className="td font-semibold">{r.person}</td>
+                      <td className="td">
+                        <button
+                          type="button"
+                          className="font-semibold text-ink-800 hover:text-brand-700 hover:underline"
+                          onClick={() => setDetailPerson(r.person)}
+                        >
+                          {r.person}
+                        </button>
+                        {r.pending ? (
+                          <span className="chip ml-1.5 bg-amber-50 text-amber-700">대기 {r.pending}</span>
+                        ) : null}
+                      </td>
                       {LEAVE_TYPES.map((t) => {
-                        const v = remain(r, t)
+                        const v = (r.types[t]?.accrued || 0) - (r.types[t]?.used || 0)
                         return (
                           <td key={t} className="td num">
                             <span className="font-bold">{fmtDays(v)}</span>
@@ -224,7 +275,7 @@ export default function Leaves() {
             </header>
             {detailRows.length ? (
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[680px] border-collapse">
+                <table className="w-full min-w-[760px] border-collapse">
                   <thead className="bg-ink-50/70">
                     <tr>
                       <th className="th">일자</th>
@@ -233,7 +284,8 @@ export default function Leaves() {
                       <th className="th">발생/사용</th>
                       <th className="th text-right">일수</th>
                       <th className="th">사유</th>
-                      {isAdmin ? <th className="th w-16" /> : null}
+                      <th className="th">결재현황</th>
+                      {isAdmin ? <th className="th w-28">승인</th> : null}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-ink-100">
@@ -250,17 +302,42 @@ export default function Leaves() {
                           </span>
                         </td>
                         <td className="td num font-semibold">{fmtDays(e.days)}</td>
-                        <td className="td max-w-[260px] truncate text-ink-500">{e.memo}</td>
+                        <td className="td max-w-[220px] truncate text-ink-500">{e.memo}</td>
+                        <td className="td">{statusChip(e.status)}</td>
                         {isAdmin ? (
                           <td className="td">
-                            <button
-                              type="button"
-                              className="rounded-lg p-1.5 text-ink-400 transition hover:bg-rose-50 hover:text-loss"
-                              onClick={() => setRemoving(e)}
-                              title="삭제"
-                            >
-                              <Icon name="trash" size={15} />
-                            </button>
+                            <div className="flex items-center gap-1">
+                              {e.status !== '승인' ? (
+                                <button
+                                  type="button"
+                                  className="rounded-lg p-1.5 text-ink-400 transition hover:bg-emerald-50 hover:text-emerald-700"
+                                  onClick={() => decide(e, true)}
+                                  disabled={busy}
+                                  title="승인"
+                                >
+                                  <Icon name="check" size={15} />
+                                </button>
+                              ) : null}
+                              {e.status !== '반려' ? (
+                                <button
+                                  type="button"
+                                  className="rounded-lg p-1.5 text-ink-400 transition hover:bg-rose-50 hover:text-loss"
+                                  onClick={() => decide(e, false)}
+                                  disabled={busy}
+                                  title="반려"
+                                >
+                                  <Icon name="close" size={15} />
+                                </button>
+                              ) : null}
+                              <button
+                                type="button"
+                                className="rounded-lg p-1.5 text-ink-400 transition hover:bg-rose-50 hover:text-loss"
+                                onClick={() => setRemoving(e)}
+                                title="삭제"
+                              >
+                                <Icon name="trash" size={15} />
+                              </button>
+                            </div>
                           </td>
                         ) : null}
                       </tr>
@@ -289,6 +366,7 @@ export default function Leaves() {
         }}
         personOptions={personOptions}
         userId={user?.id}
+        isAdmin={isAdmin}
         defaultPerson={personFilter}
       />
 
@@ -303,6 +381,16 @@ export default function Leaves() {
         userId={user?.id}
       />
 
+      <PersonModal
+        person={detailPerson}
+        onClose={() => setDetailPerson(null)}
+        rows={rows}
+        profiles={profiles}
+        isAdmin={isAdmin}
+        busy={busy}
+        onDecide={decide}
+      />
+
       <ConfirmDialog
         open={Boolean(removing)}
         busy={busy}
@@ -315,14 +403,191 @@ export default function Leaves() {
   )
 }
 
-function fmtDays(v) {
-  const n = Number(v || 0)
-  return Number.isInteger(n) ? String(n) : String(Math.round(n * 10) / 10)
+/* ------------------------- 직원별 상세 ------------------------- */
+
+function PersonModal({ person, onClose, rows, profiles, isAdmin, busy, onDecide }) {
+  const profile = useMemo(
+    () => (profiles || []).find((p) => p.full_name === person),
+    [profiles, person],
+  )
+
+  /* 세부내역: 오래된 순으로 잔여 누적 후 최신 순으로 표시 */
+  const detail = useMemo(() => {
+    if (!person) return []
+    const list = (rows || [])
+      .filter((e) => e.person === person && e.status !== '반려')
+      .slice()
+      .sort((a, b) => (a.entry_date < b.entry_date ? -1 : a.entry_date > b.entry_date ? 1 : 0))
+    const run = {}
+    const withBalance = list.map((e) => {
+      const t = e.leave_type || '미분류'
+      run[t] = (run[t] || 0) + (e.direction === '발생' ? Number(e.days || 0) : -Number(e.days || 0))
+      return { ...e, balance: run[t] }
+    })
+    return withBalance.reverse()
+  }, [rows, person])
+
+  const total = useMemo(() => {
+    const map = {}
+    for (const e of detail) {
+      if (e.status !== '승인') continue
+      const t = e.leave_type || '미분류'
+      if (!map[t]) map[t] = { accrued: 0, used: 0 }
+      if (e.direction === '발생') map[t].accrued += Number(e.days || 0)
+      else map[t].used += Number(e.days || 0)
+    }
+    return map
+  }, [detail])
+
+  const pending = useMemo(() => detail.filter((e) => e.status !== '승인').length, [detail])
+
+  return (
+    <Modal
+      open={Boolean(person)}
+      onClose={onClose}
+      title={person ? `${person} 휴무 현황` : ''}
+      subtitle="인사정보 · 총괄 · 세부내역 · 결재현황"
+      size="lg"
+      footer={
+        <button type="button" className="btn-ghost" onClick={onClose}>
+          닫기
+        </button>
+      }
+    >
+      {!person ? null : (
+        <div className="flex flex-col gap-5">
+          {/* 인사정보 */}
+          <section>
+            <h3 className="mb-2 text-xs font-bold text-ink-500">인사정보</h3>
+            <dl className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              <InfoBox label="이름" value={person} />
+              <InfoBox label="부서" value={profile?.department || '—'} />
+              <InfoBox label="연락처" value={profile?.phone || '—'} />
+              <InfoBox label="권한" value={ROLE_LABEL[profile?.role] || '—'} />
+            </dl>
+          </section>
+
+          {/* 총괄 */}
+          <section>
+            <h3 className="mb-2 text-xs font-bold text-ink-500">
+              총괄{pending ? <span className="chip ml-1.5 bg-amber-50 text-amber-700">승인대기 {pending}건</span> : null}
+            </h3>
+            <div className="overflow-x-auto rounded-lg border border-ink-200">
+              <table className="w-full min-w-[480px] border-collapse text-sm">
+                <thead className="bg-ink-50/70">
+                  <tr>
+                    <th className="th">구분</th>
+                    <th className="th text-right">발생일수</th>
+                    <th className="th text-right">사용일수</th>
+                    <th className="th text-right">잔여일수</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-ink-100">
+                  {LEAVE_TYPES.filter((t) => total[t]).map((t) => (
+                    <tr key={t}>
+                      <td className="td font-medium">{t}</td>
+                      <td className="td num">{fmtDays(total[t].accrued)}</td>
+                      <td className="td num">{fmtDays(total[t].used)}</td>
+                      <td className="td num font-bold">{fmtDays(total[t].accrued - total[t].used)}</td>
+                    </tr>
+                  ))}
+                  {!Object.keys(total).length ? (
+                    <tr>
+                      <td colSpan={4} className="empty">
+                        승인된 내역이 없습니다.
+                      </td>
+                    </tr>
+                  ) : null}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          {/* 세부내역 */}
+          <section>
+            <h3 className="mb-2 text-xs font-bold text-ink-500">세부내역</h3>
+            {detail.length ? (
+              <div className="max-h-80 overflow-auto rounded-lg border border-ink-200">
+                <table className="w-full min-w-[620px] border-collapse text-xs">
+                  <thead className="sticky top-0 bg-white shadow-sm">
+                    <tr>
+                      <th className="th">사용기간(일자)</th>
+                      <th className="th">구분</th>
+                      <th className="th text-right">발생</th>
+                      <th className="th text-right">사용</th>
+                      <th className="th text-right">잔여</th>
+                      <th className="th">세부내역</th>
+                      <th className="th">결재현황</th>
+                      {isAdmin ? <th className="th w-20">승인</th> : null}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-ink-100">
+                    {detail.map((e) => (
+                      <tr key={e.id}>
+                        <td className="td whitespace-nowrap">{e.entry_date}</td>
+                        <td className="td">{e.leave_type}</td>
+                        <td className="td num">{e.direction === '발생' ? fmtDays(e.days) : '—'}</td>
+                        <td className="td num">{e.direction === '사용' ? fmtDays(e.days) : '—'}</td>
+                        <td className="td num font-bold">{fmtDays(e.balance)}</td>
+                        <td className="td max-w-[180px] truncate text-ink-500">{e.memo}</td>
+                        <td className="td">{statusChip(e.status)}</td>
+                        {isAdmin ? (
+                          <td className="td">
+                            {e.status !== '승인' ? (
+                              <div className="flex items-center gap-1">
+                                <button
+                                  type="button"
+                                  className="rounded-lg p-1.5 text-ink-400 transition hover:bg-emerald-50 hover:text-emerald-700"
+                                  onClick={() => onDecide(e, true)}
+                                  disabled={busy}
+                                  title="승인"
+                                >
+                                  <Icon name="check" size={15} />
+                                </button>
+                                <button
+                                  type="button"
+                                  className="rounded-lg p-1.5 text-ink-400 transition hover:bg-rose-50 hover:text-loss"
+                                  onClick={() => onDecide(e, false)}
+                                  disabled={busy}
+                                  title="반려"
+                                >
+                                  <Icon name="close" size={15} />
+                                </button>
+                              </div>
+                            ) : (
+                              <span className="text-xs text-ink-300">—</span>
+                            )}
+                          </td>
+                        ) : null}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p className="rounded-lg border border-ink-200 px-4 py-6 text-center text-xs text-ink-400">
+                내역이 없습니다.
+              </p>
+            )}
+          </section>
+        </div>
+      )}
+    </Modal>
+  )
+}
+
+function InfoBox({ label, value }) {
+  return (
+    <div className="rounded-lg border border-ink-200 px-3 py-2">
+      <p className="text-[11px] font-semibold text-ink-500">{label}</p>
+      <p className="mt-0.5 truncate text-sm font-bold text-ink-900">{value}</p>
+    </div>
+  )
 }
 
 /* --------------------------- 휴무 등록 --------------------------- */
 
-function LeaveFormModal({ open, onClose, onSaved, personOptions, userId, defaultPerson }) {
+function LeaveFormModal({ open, onClose, onSaved, personOptions, userId, isAdmin, defaultPerson }) {
   const toast = useToast()
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState({
@@ -345,7 +610,7 @@ function LeaveFormModal({ open, onClose, onSaved, personOptions, userId, default
       }))
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open ])
+  }, [open])
 
   const set = (key, value) => setForm((f) => ({ ...f, [key]: value }))
 
@@ -386,10 +651,11 @@ function LeaveFormModal({ open, onClose, onSaved, personOptions, userId, default
           direction: form.direction,
           days,
           memo: form.memo.trim(),
+          status: isAdmin ? '승인' : '요청',
         },
         userId,
       )
-      toast.success('등록되었습니다.')
+      toast.success(isAdmin ? '등록되었습니다.' : '승인 요청되었습니다. 대표 승인 후 반영됩니다.')
       onSaved()
     } catch (e) {
       toast.error(e.message)
@@ -403,14 +669,14 @@ function LeaveFormModal({ open, onClose, onSaved, personOptions, userId, default
       open={open}
       onClose={saving ? undefined : onClose}
       title="휴무 등록"
-      subtitle="발생과 사용을 기록하면 잔여가 자동 계산됩니다."
+      subtitle={isAdmin ? '발생과 사용을 기록하면 잔여가 자동 계산됩니다.' : '등록하면 대표 승인 후 잔여에 반영됩니다.'}
       footer={
         <>
           <button type="button" className="btn-ghost" onClick={onClose} disabled={saving}>
             취소
           </button>
           <button type="button" className="btn-primary" onClick={submit} disabled={saving}>
-            {saving ? '등록 중…' : '등록'}
+            {saving ? '등록 중…' : isAdmin ? '등록' : '승인 요청'}
           </button>
         </>
       }
@@ -501,11 +767,13 @@ function GrantModal({ open, onClose, onSaved, personOptions, userId }) {
   useEffect(() => {
     if (open) {
       const init = {}
-      for (const n of personOptions) init[n] = { 연차: '', 대휴: '', 동계휴가: '', 보건휴가: '12' }
+      for (const n of personOptions) {
+        init[n] = { 연차: GRANT_DEFAULTS[n]?.연차 || '', 월차: '', 대휴: '', 동계휴가: '', 보건휴가: '12' }
+      }
       setRows(init)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open ])
+  }, [open])
 
   const setCell = (person, type, value) =>
     setRows((prev) => ({ ...prev, [person]: { ...prev[person], [type]: value } }))
@@ -518,7 +786,7 @@ function GrantModal({ open, onClose, onSaved, personOptions, userId }) {
     }
     const payloads = []
     for (const person of personOptions) {
-      for (const type of ['연차', '대휴', '동계휴가', '보건휴가']) {
+      for (const type of GRANT_TYPES) {
         const days = Number(rows[person]?.[type] || 0)
         if (days > 0) {
           payloads.push({
@@ -528,6 +796,7 @@ function GrantModal({ open, onClose, onSaved, personOptions, userId }) {
             direction: '발생',
             days,
             memo: `${y}년 부여`,
+            status: '승인',
           })
         }
       }
@@ -553,7 +822,7 @@ function GrantModal({ open, onClose, onSaved, personOptions, userId }) {
       open={open}
       onClose={saving ? undefined : onClose}
       title="새해 일괄 부여"
-      subtitle="연차가 있는 분 기준으로 보건휴가 12일 등을 한 번에 부여합니다."
+      subtitle="연차 있는 분은 연차+보건휴가 12일, 신규 입사자는 월차+보건휴가를 입력하세요."
       size="lg"
       footer={
         <>
@@ -576,11 +845,11 @@ function GrantModal({ open, onClose, onSaved, personOptions, userId }) {
           />
         </Field>
         <div className="overflow-x-auto rounded-lg border border-ink-200">
-          <table className="w-full min-w-[520px] border-collapse text-sm">
+          <table className="w-full min-w-[560px] border-collapse text-sm">
             <thead className="bg-ink-50/70">
               <tr>
                 <th className="th">직원</th>
-                {['연차', '대휴', '동계휴가', '보건휴가'].map((t) => (
+                {GRANT_TYPES.map((t) => (
                   <th key={t} className="th text-right">
                     {t}
                   </th>
@@ -591,7 +860,7 @@ function GrantModal({ open, onClose, onSaved, personOptions, userId }) {
               {personOptions.map((n) => (
                 <tr key={n}>
                   <td className="td font-medium">{n}</td>
-                  {['연차', '대휴', '동계휴가', '보건휴가'].map((t) => (
+                  {GRANT_TYPES.map((t) => (
                     <td key={t} className="td">
                       <input
                         type="number"
@@ -609,7 +878,7 @@ function GrantModal({ open, onClose, onSaved, personOptions, userId }) {
             </tbody>
           </table>
         </div>
-        <p className="text-xs text-ink-500">0보다 큰 칸만 {grantYear}년 1월 1일 발생으로 등록됩니다.</p>
+        <p className="text-xs text-ink-500">0보다 큰 칸만 {grantYear}년 1월 1일 발생(승인)으로 등록됩니다.</p>
       </div>
     </Modal>
   )

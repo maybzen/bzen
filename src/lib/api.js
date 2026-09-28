@@ -403,6 +403,13 @@ export function createLeaveEntry(payload, userId) {
   return unwrap(supabase.from('leave_entries').insert(row).select().single())
 }
 
+export function updateLeaveEntry(id, patch) {
+  const row = { ...patch }
+  delete row.id
+  delete row.created_at
+  return unwrap(supabase.from('leave_entries').update(row).eq('id', id).select().single())
+}
+
 export function deleteLeaveEntry(id) {
   return unwrap(supabase.from('leave_entries').delete().eq('id', id))
 }
