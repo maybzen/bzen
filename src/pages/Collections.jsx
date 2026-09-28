@@ -27,7 +27,7 @@ export default function Collections() {
   const [entries, setEntries] = useState([])
   const [collections, setCollections] = useState([])
   const [formOpen, setFormOpen] = useState(false)
-  const [form, setForm] = useState({ project_id: '', collected_on: todayISO(), amount: '', memo: '' })
+  const [form, setForm] = useState({ project_id: '', counterparty: '', collected_on: todayISO(), amount: '', memo: '' })
   const [saving, setSaving] = useState(false)
   const [removing, setRemoving] = useState(null)
 
@@ -105,6 +105,7 @@ export default function Collections() {
       await createCollection(
         {
           project_id: form.project_id || null,
+          counterparty: form.counterparty.trim(),
           collected_on: form.collected_on,
           amount,
           memo: form.memo.trim(),
@@ -113,7 +114,7 @@ export default function Collections() {
       )
       toast.success('입금을 등록했습니다.')
       setFormOpen(false)
-      setForm({ project_id: '', collected_on: todayISO(), amount: '', memo: '' })
+      setForm({ project_id: '', counterparty: '', collected_on: todayISO(), amount: '', memo: '' })
       load()
     } catch (err) {
       toast.error(err.message)
@@ -229,7 +230,8 @@ export default function Collections() {
                     </span>
                     <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink-800">
                       {projects.find((p) => p.id === c.project_id)?.name || '미지정'}
-                      {c.memo ? <span className="ml-1.5 font-normal text-ink-500">{c.memo}</span> : null}
+                      {c.counterparty ? <span className="ml-1.5 font-normal text-ink-500">{c.counterparty}</span> : null}
+                      {c.memo ? <span className="ml-1.5 font-normal text-ink-400">· {c.memo}</span> : null}
                     </span>
                     <span className="shrink-0 font-num text-sm font-extrabold tabular-nums text-ink-900">
                       {formatKRW(c.amount)}원
@@ -277,6 +279,15 @@ export default function Collections() {
                     </option>
                   ))}
                 </select>
+              </label>
+              <label className="label">
+                입금처(거래처)
+                <input
+                  className="input mt-1.5"
+                  placeholder="예: (주)이즈피엠피"
+                  value={form.counterparty}
+                  onChange={(e) => setForm((f) => ({ ...f, counterparty: e.target.value }))}
+                />
               </label>
               <label className="label">
                 입금일
