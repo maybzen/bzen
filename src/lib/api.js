@@ -455,6 +455,19 @@ export function updatePartner(id, patch) {
   return unwrap(supabase.from('counterparties').update(sanitizePartner(patch)).eq('id', id).select().single())
 }
 
+/* 이름으로 찾아 없으면 자동 등록 (프로젝트 폼의 발주처 입력용).
+   법인격 표기 차이((주) 등)는 같은 곳으로 보고 새로 만들지 않습니다. */
+export async function ensurePartnerByName(name, userId) {
+  const clean = String(name || '').trim()
+  if (!clean) return null
+  const { normalizeVendorName } = await import('./format')
+  const rows = await listPartners()
+  const target = normalizeVendorName(clean)
+  const hit = (rows || []).find((p) => normalizeVendorName(p.name) === target)
+  if (hit) return hit
+  return createPartner({ name: clean, group_name: '기타', status: '정상' }, userId)
+}
+
 export async function deletePartner(partner) {
   const docs = await listPartnerDocs([partner.id]).catch(() => [])
   const paths = (docs || []).map((d) => d.file_path).filter(Boolean)

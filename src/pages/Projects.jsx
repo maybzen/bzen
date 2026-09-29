@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import Icon from '../components/Icon'
 import ProjectFormModal from '../components/ProjectFormModal'
+import PartnerPicker from '../components/PartnerPicker'
 import { ProfitBar } from '../components/Charts'
 import { useToast } from '../components/Toast'
 import { AmountInput, ConfirmDialog, EmptyState, Field, InlineAlert, LoadingBlock, Modal, PageHeader, SegmentedControl, StatCard } from '../components/ui'
@@ -9,7 +10,7 @@ import { useAuth } from '../auth/AuthContext'
 import { PROJECT_STATUS } from '../lib/constants'
 import { contractSplit, formatDateHuman, formatKRW, formatPercent, normalizeVendorName } from '../lib/format'
 import { buildPnl, groupByProject, summarize } from '../lib/summary'
-import { createEntry, createProject, deleteProject, isMissingTableError, linkProjectPartner, listEntries, listPartners, listProfiles, listProjectPartners, listProjects } from '../lib/api'
+import { createEntry, createProject, deleteProject, ensurePartnerByName, isMissingTableError, linkProjectPartner, listEntries, listPartners, listProfiles, listProjectPartners, listProjects } from '../lib/api'
 
 /**
  * 카드에 쓰는 손익 표기. 세무·회계 표현을 그대로 씁니다.
@@ -746,10 +747,27 @@ export default function Projects() {
  * 행사이름·발주처·대행업체·총계약·수수료를 받아 프로젝트(계약=수수료) +
  * 대행 연결 + 수수료 매출까지 한 번에 만듭니다. 없는 업체는 거래처에서 먼저 등록하세요.
  */
-function AgencyDealModal({ partners, userId, onClose, onSaved }) {
+function AgencyDealModal({ partners, userId, initial = null, onClose, onSaved }) {
   const toast = useToast()
-  const [form, setForm] = useState({ name: '', client: '', partnerId: '', total: '', rate: '3', fee: '', start: '', end: '', memo: '' })
-  const [feeTouched, setFeeTouched] = useState(false)
+  const parseTotalRate = (memo) => {
+    const t = String(memo || '').match(/총계약 ([\d,]+)원/)
+    const r = String(memo || '').match(/수수료 ([\d.]+)%/)
+    return { total: t ? t[1].replace(/,/g, '') : '', rate: r ? r[1] : '3' }
+  }
+  const initParsed = initial?.project ? parseTotalRate(initial.project.memo) : { total: '', rate: '3' }
+  const [form, setForm] = useState({
+    name: initial?.project?.name || '',
+    client: initial?.project?.client || '',
+    partnerId: initial?.partnerId || '',
+    total: initParsed.total,
+    rate: initParsed.rate,
+    fee: initial?.project?.contract_amount ? String(initial.project.contract_amount) : '',
+    start: initial?.project?.start_date || '',
+    end: initial?.project?.end_date || '',
+    referrer: initial?.project?.referrer || '',
+    memo: '',
+  })
+  const [feeTouched, setFeeTouched] = useState(Boolean(initial))
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
@@ -795,6 +813,9 @@ function AgencyDealModal({ partners, userId, onClose, onSaved }) {
           .join('\n'),
       })
       await linkProjectPartner(project.id, partner.id, userId, '대행')
+      if (form.client.trim()) {
+        ensurePartnerByName(form.client.trim(), userId).catch(() => {})
+      }
       if (feeNum > 0) {
         const supply = Math.round(feeNum / 1.1)
         await createEntry(
@@ -849,7 +870,7 @@ function AgencyDealModal({ partners, userId, onClose, onSaved }) {
           <input className="input" value={form.name} onChange={set('name')} placeholder="예: BMICE 인증제 관광 개발 컨설팅 및 운영" />
         </Field>
         <Field label="발주처 (원청)" required>
-          <input className="input" value={form.client} onChange={set('client')} placeholder="예: 부산관광고등학교" />
+          <PartnerPicker value={form.client} onChange={set('client')} placeholder="예: 부산관광고등학교" />
         </Field>
         <Field label="대행업체 (실제 수행사)" required>
           <select className="input" value={form.partnerId} onChange={set('partnerId')}>
