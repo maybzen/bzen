@@ -3,7 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import Icon from '../components/Icon'
 import PartnerFormModal from '../components/PartnerFormModal'
 import { useToast } from '../components/Toast'
-import { ConfirmDialog, EmptyState, InlineAlert, LoadingBlock, PageHeader, StatCard } from '../components/ui'
+import { ConfirmDialog, EmptyState, InlineAlert, LoadingBlock, Modal, PageHeader, StatCard } from '../components/ui'
 import { useAuth } from '../auth/AuthContext'
 import { PARTNER_GROUPS, suggestPartnerGroup } from '../lib/constants'
 import { supabase } from '../lib/supabase'
@@ -94,6 +94,106 @@ export default function Partners() {
   })
   const [savingAll, setSavingAll] = useState(false)
   const pendingCount = Object.keys(pendingGroups).length
+
+  /* 같은 거래처 합치기 (관리자) */
+  const [selected, setSelected] = useState({})
+  const [mergeOpen, setMergeOpen] = useState(false)
+  const [mergeTarget, setMergeTarget] = useState('')
+  const [mergeStats, setMergeStats] = useState(null)
+  const [merging, setMerging] = useState(false)
+
+  const selectedPartners = useMemo(
+    () => Object.keys(selected).filter((id) => selected[id]).map((id) => partners.find((p) => p.id === id)).filter(Boolean),
+    [selected, partners],
+  )
+
+  /* 표기만 다른 중복 의심 그룹 */
+  const dupGroups = useMemo(() => {
+    const map = new Map()
+    for (const p of partners) {
+      const k = normalizeVendorName(p.name)
+      if (!k) continue
+      if (!map.has(k)) map.set(k, [])
+      map.get(k).push(p)
+    }
+    return [...map.values()].filter((g) => g.length > 1)
+  }, [partners])
+
+  const openMerge = async () => {
+    if (selectedPartners.length < 2) return
+    setMergeTarget(selectedPartners[0].id)
+    setMergeStats(null)
+    setMergeOpen(true)
+    try {
+      const stats = {}
+      for (const p of selectedPartners) {
+        const [er, cr, lr] = await Promise.all([
+          supabase.from('entries').select('id', { count: 'exact', head: true }).eq('counterparty', p.name),
+          supabase.from('collections').select('id', { count: 'exact', head: true }).eq('counterparty', p.name),
+          supabase.from('project_partners').select('project_id').eq('partner_id', p.id),
+        ])
+        stats[p.id] = {
+          entries: er.count ?? 0,
+          collections: cr.count ?? 0,
+          links: (lr.data || []).length,
+          docs: (docsByPartner[p.id] || []).length,
+        }
+      }
+      setMergeStats(stats)
+    } catch (e) {
+      toast.error(e.message)
+    }
+  }
+
+  const doMerge = async () => {
+    const keep = partners.find((p) => p.id === mergeTarget)
+    const sources = selectedPartners.filter((p) => p.id !== mergeTarget)
+    if (!keep || !sources.length) return
+    setMerging(true)
+    try {
+      let movedEntries = 0
+      let movedCols = 0
+      let addPayable = 0
+      for (const s of sources) {
+        const er = await supabase.from('entries').update({ counterparty: keep.name }).eq('counterparty', s.name).select('id')
+        if (er.error) throw er.error
+        movedEntries += (er.data || []).length
+        const cr = await supabase.from('collections').update({ counterparty: keep.name }).eq('counterparty', s.name).select('id')
+        if (cr.error) throw cr.error
+        movedCols += (cr.data || []).length
+        const dr = await supabase.from('partner_attachments').update({ partner_id: keep.id }).eq('partner_id', s.id)
+        if (dr.error) throw dr.error
+        const { data: slinks, error: lerr } = await supabase.from('project_partners').select('project_id,role').eq('partner_id', s.id)
+        if (lerr) throw lerr
+        for (const l of slinks || []) {
+          const up = await supabase
+            .from('project_partners')
+            .upsert({ project_id: l.project_id, partner_id: keep.id, role: l.role || '협력', created_by: user?.id }, { onConflict: 'project_id,partner_id' })
+          if (up.error) throw up.error
+        }
+        const dl = await supabase.from('project_partners').delete().eq('partner_id', s.id)
+        if (dl.error) throw dl.error
+        addPayable += Number(s.payable_balance || 0)
+        const del = await supabase.from('counterparties').delete().eq('id', s.id)
+        if (del.error) throw del.error
+      }
+      if (addPayable) {
+        const up = await supabase
+          .from('counterparties')
+          .update({ payable_balance: Number(keep.payable_balance || 0) + addPayable })
+          .eq('id', keep.id)
+        if (up.error) throw up.error
+      }
+      toast.success(`${sources.length}곳을 '${keep.name}'(으)로 합쳤습니다. 장부 ${movedEntries}건·수금 ${movedCols}건 이동.`)
+      setMergeOpen(false)
+      setSelected({})
+      setReloadKey((k) => k + 1)
+    } catch (e) {
+      toast.error(e.message)
+    } finally {
+      setMerging(false)
+    }
+  }
 
   /* 구분 변경은 바로 저장하지 않고 모아뒀다가 일괄 저장합니다 */
   const stageGroup = (partner, value) => {
@@ -286,6 +386,8 @@ export default function Partners() {
     return filtered.slice().sort(byName)
   }, [partners, search, groupFilter, statusFilter, sortKey])
 
+  const visibleSelectedIds = useMemo(() => rows.filter((p) => selected[p.id]).map((p) => p.id), [rows, selected])
+
   const docTotal = useMemo(
     () => Object.values(docsByPartner).reduce((a, list) => a + list.length, 0),
     [docsByPartner],
@@ -435,6 +537,51 @@ export default function Partners() {
           </div>
         </div>
 
+        {isAdmin && dupGroups.length ? (
+          <div className="card border-amber-200 px-4 py-3">
+            <p className="text-xs font-bold text-ink-800">
+              중복 의심 {dupGroups.length}건 <span className="font-normal text-ink-500">· 표기만 다른 같은 업체입니다. 선택 후 합치세요.</span>
+            </p>
+            <div className="mt-2 flex flex-col gap-1.5">
+              {dupGroups.slice(0, 8).map((g, i) => (
+                <div key={i} className="flex flex-wrap items-center gap-1.5 text-xs">
+                  <span className="min-w-0 flex-1 truncate text-ink-700">{g.map((p) => p.name).join(' ↔ ')}</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelected((m) => {
+                        const next = { ...m }
+                        for (const p of g) next[p.id] = true
+                        return next
+                      })
+                    }}
+                    className="shrink-0 font-bold text-brand-700 hover:underline"
+                  >
+                    선택
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
+        {isAdmin && selectedPartners.length >= 2 ? (
+          <div className="card flex flex-wrap items-center gap-2 border-brand-200 bg-brand-50/50 px-4 py-2.5 text-xs">
+            <span className="font-semibold text-ink-800">{selectedPartners.length}곳 선택됨</span>
+            <span className="max-w-full truncate text-ink-500">{selectedPartners.map((p) => p.name).join(' · ')}</span>
+            <button type="button" onClick={openMerge} className="font-bold text-brand-700 hover:underline">
+              합치기
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelected({})}
+              className="font-semibold text-ink-500 hover:underline"
+            >
+              선택 해제
+            </button>
+          </div>
+        ) : null}
+
         {loading || tableState === 'checking' ? (
           <LoadingBlock />
         ) : rows.length ? (
@@ -442,6 +589,25 @@ export default function Partners() {
             <table className="w-full min-w-[1080px] border-collapse text-xs">
               <thead className="bg-ink-50/70">
                 <tr>
+                  {isAdmin ? (
+                    <th className="th w-10 text-center">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 accent-brand-600"
+                        checked={rows.length > 0 && visibleSelectedIds.length === rows.length}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            const next = {}
+                            for (const p of rows) next[p.id] = true
+                            setSelected(next)
+                          } else {
+                            setSelected({})
+                          }
+                        }}
+                        aria-label="전체 선택"
+                      />
+                    </th>
+                  ) : null}
                   <th className="th">구분</th>
                   <th className="th">거래처명</th>
                   <th className="th">담당자</th>
@@ -477,6 +643,19 @@ export default function Partners() {
                   const collected = collectionStats.get(normalizeVendorName(p.name))
                   return (
                     <tr key={p.id} className={`transition hover:bg-ink-50/60 ${closed ? 'opacity-60' : ''}`}>
+                      {isAdmin ? (
+                        <td className="td text-center">
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4 accent-brand-600"
+                            checked={Boolean(selected[p.id])}
+                            onChange={(e) =>
+                              setSelected((m) => ({ ...m, [p.id]: e.target.checked || undefined }))
+                            }
+                            aria-label="선택"
+                          />
+                        </td>
+                      ) : null}
                       <td className={`td whitespace-nowrap ${pendingGroups[p.id] ? 'bg-amber-50/60' : ''}`}>
                         {customGroupId === p.id ? (
                             <span className="flex items-center gap-1">
@@ -660,6 +839,68 @@ export default function Partners() {
             : null
         }
       />
+
+      <Modal
+        open={mergeOpen}
+        onClose={merging ? undefined : () => setMergeOpen(false)}
+        title="거래처 합치기"
+        subtitle="장부·수금·서류·프로젝트 연결을 유지되는 쪽으로 옮기고 나머지는 삭제합니다."
+        footer={
+          <>
+            <button type="button" className="btn-ghost" onClick={() => setMergeOpen(false)} disabled={merging}>
+              취소
+            </button>
+            <button
+              type="button"
+              className="btn-primary"
+              onClick={doMerge}
+              disabled={merging || !mergeTarget || selectedPartners.length < 2}
+            >
+              {merging ? '합치는 중…' : '합치기'}
+            </button>
+          </>
+        }
+      >
+        <div className="flex flex-col gap-3">
+          <label className="label">
+            유지되는 거래처
+            <select className="input mt-1.5" value={mergeTarget} onChange={(e) => setMergeTarget(e.target.value)}>
+              {selectedPartners.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          {!mergeStats ? (
+            <p className="text-xs text-ink-500">이동 내역을 집계하는 중…</p>
+          ) : (
+            <ul className="flex flex-col gap-1.5">
+              {selectedPartners.map((p) => {
+                const s = mergeStats[p.id] || { entries: 0, collections: 0, links: 0, docs: 0 }
+                const keep = p.id === mergeTarget
+                return (
+                  <li
+                    key={p.id}
+                    className={`rounded-lg border px-3 py-2 text-xs ${keep ? 'border-brand-300 bg-brand-50/60' : 'border-ink-200'}`}
+                  >
+                    <p className="font-bold text-ink-900">
+                      {p.name} {keep ? <span className="text-brand-700">· 유지</span> : <span className="text-ink-400">· 삭제됨</span>}
+                    </p>
+                    <p className="mt-0.5 text-ink-500">
+                      장부 {s.entries}건 · 수금 {s.collections}건 · 프로젝트 연결 {s.links}곳 · 서류 {s.docs}건
+                      {Number(p.payable_balance || 0) ? ` · 미지급 ${formatKRW(p.payable_balance)}원` : ''}
+                    </p>
+                  </li>
+                )
+              })}
+            </ul>
+          )}
+          <p className="text-xs leading-relaxed text-ink-500">
+            미지급 잔액은 유지되는 쪽에 합산됩니다. 담당자·메모 등 대장 정보는 유지되는 쪽 기준이며, 삭제는 되돌릴 수 없습니다.
+          </p>
+        </div>
+      </Modal>
 
       <ConfirmDialog
         open={Boolean(removing)}
