@@ -15,6 +15,7 @@ import {
   listChecklistItems,
   listCollections,
   listEntries,
+  listFundRows,
   listPartners,
   listProfiles,
   listProjects,
@@ -22,6 +23,8 @@ import {
 } from '../lib/api'
 import { refreshLedgerIndex, useLedgerIndex } from '../lib/ledgerIndex'
 import { ISSUE_META, summarizeAudit } from '../lib/validate'
+import ScheduleModal from '../components/ScheduleModal'
+import { SCHEDULE_LIST, buildSchedule, dday, ddayLabel, dueDateSupported } from '../lib/schedule'
 import { isStaffVisible, staffIdsFromProfiles } from '../lib/permissions'
 import {
   changeRate,
@@ -552,6 +555,8 @@ export default function Dashboard() {
       <TaxAlertBanner />
 
       {isAdmin ? <DataAuditPanel /> : null}
+
+      {isAdmin ? <ScheduleCard userId={user?.id} /> : null}
 
       {loading ? (
         <LoadingBlock />
@@ -1302,6 +1307,98 @@ function DataAuditPanel() {
         </div>
       ) : null}
     </section>
+  )
+}
+
+/* ------------------------------------------------------------------ */
+/* 이번 달 챙길 일 — 자동(대출·세금) + 직접 등록. 관리자만. 누르면 일정 화면 */
+/* ------------------------------------------------------------------ */
+
+function ScheduleCard({ userId }) {
+  const [open, setOpen] = useState(false)
+  const [loans, setLoans] = useState([])
+  const [manuals, setManuals] = useState([])
+  const [dateOk, setDateOk] = useState(false)
+  const [loading, setLoading] = useState(true)
+
+  const loadAll = useCallback(async () => {
+    setLoading(true)
+    try {
+      const [loanRows, schedRows, supported] = await Promise.all([
+        listFundRows('fund_loans').catch(() => []),
+        listChecklistItems(SCHEDULE_LIST).catch(() => []),
+        dueDateSupported().catch(() => false),
+      ])
+      setLoans(loanRows || [])
+      setManuals(schedRows || [])
+      setDateOk(!!supported)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    loadAll()
+  }, [loadAll])
+
+  // 모달을 다시 열 때마다 최신 목록으로 (다른 탭·직접 등록분 반영)
+  useEffect(() => {
+    if (open) loadAll()
+  }, [open, loadAll])
+
+  const items = useMemo(() => {
+    const base = new Date()
+    const from = `${base.getFullYear()}-${String(base.getMonth() + 1).padStart(2, '0')}-${String(base.getDate()).padStart(2, '0')}`
+    const end = new Date(base)
+    end.setDate(end.getDate() + 35)
+    const to = `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, '0')}-${String(end.getDate()).padStart(2, '0')}`
+    return buildSchedule({ loans, manuals, fromISO: from, toISO: to })
+  }, [loans, manuals])
+
+  const overdue = items.filter((it) => it.date && dday(it.date) < 0)
+  const top = items.filter((it) => !it.date || dday(it.date) >= 0).slice(0, 4)
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="flex w-full items-center gap-3 rounded-xl border border-brand-100 bg-brand-50 px-4 py-3 text-left transition hover:shadow-pop"
+      >
+        <Icon name="calendar" size={16} className="shrink-0 text-brand-700" />
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-bold text-brand-800">
+            이번 달 챙길 일 · {items.length}건
+            {overdue.length ? (
+              <span className="ml-1.5 rounded-full bg-rose-500 px-2 py-0.5 text-[10px] font-bold text-white">
+                지남 {overdue.length}
+              </span>
+            ) : null}
+          </span>
+          <span className="mt-0.5 block truncate text-[11px] text-brand-800/70">
+            {loading
+              ? '불러오는 중…'
+              : top.length
+                ? top
+                    .slice(0, 2)
+                    .map((it) => `${ddayLabel(it.date)} ${it.title}`)
+                    .join(' · ')
+                : '잡힌 일정이 없습니다. 눌러서 등록하세요.'}
+          </span>
+        </span>
+        <Icon name="chevron-right" size={16} className="shrink-0 text-brand-300" />
+      </button>
+
+      <ScheduleModal
+        open={open}
+        onClose={() => setOpen(false)}
+        loans={loans}
+        manuals={manuals}
+        dateSupported={dateOk}
+        userId={userId}
+        onChanged={loadAll}
+      />
+    </>
   )
 }
 

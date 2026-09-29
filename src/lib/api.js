@@ -190,10 +190,11 @@ export function listChecklistItems(list) {
   )
 }
 
-export function addChecklistItem(list, text, userId) {
-  return unwrap(
-    supabase.from('checklist_items').insert({ list, text, created_by: userId }).select().single(),
-  )
+export function addChecklistItem(list, text, userId, extra = {}) {
+  const row = { list, text, created_by: userId }
+  // due_date는 migration_schedules.sql 실행 전이면 컬럼이 없어 실패하므로 있을 때만 보냅니다
+  if (extra && extra.due_date) row.due_date = extra.due_date
+  return unwrap(supabase.from('checklist_items').insert(row).select().single())
 }
 
 export function updateChecklistItem(id, patch) {
