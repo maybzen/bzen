@@ -11,6 +11,7 @@ import { INTERNAL_PROJECT_NAME, sortManagers } from '../lib/constants'
 import { downloadTextFile, parseCSV, toCSV } from '../lib/csv'
 import {
   createEntries,
+  deleteAttachment,
   deleteEntry,
   deleteSlip,
   listAttachments,
@@ -19,6 +20,7 @@ import {
   listProjects,
   listSlips,
   updateEntry,
+  uploadAttachment,
   upsertSlip,
 } from '../lib/api'
 
@@ -473,13 +475,13 @@ export default function Payroll() {
                 profiles={profiles}
                 attachmentsByEntry={attachmentsByEntry}
                 canEdit={isAdmin}
-                onEdit={openEdit}
                 onDelete={isAdmin ? setRemoving : undefined}
                 onOpenAttachments={setViewerFiles}
                 canChangeAuthor={isAdmin}
                 onSlip={slipsMissing ? undefined : setSlipEntry}
                 slipEntryIds={slipIds}
-                hideVat
+                slipLabel="상세"
+                extraPayMap={Object.fromEntries(reportByPerson)}
               />
             ) : (
               <EmptyState icon="coins" title={`${y}년 ${m}월 급여 내역이 없습니다`} description="급여대장 올리기로 기록하세요." />
@@ -506,13 +508,13 @@ export default function Payroll() {
                 profiles={profiles}
                 attachmentsByEntry={attachmentsByEntry}
                 canEdit={isAdmin}
-                onEdit={openEdit}
                 onDelete={isAdmin ? setRemoving : undefined}
                 onOpenAttachments={setViewerFiles}
                 canChangeAuthor={isAdmin}
                 onSlip={slipsMissing ? undefined : setSlipEntry}
                 slipEntryIds={slipIds}
-                hideVat
+                slipLabel="상세"
+                extraPayMap={Object.fromEntries(reportByPerson)}
               />
             ) : (
               <EmptyState icon="users" title="단기·외부 인력 급여가 없습니다" />
@@ -536,7 +538,6 @@ export default function Payroll() {
                 onDelete={isAdmin ? setRemoving : undefined}
                 onOpenAttachments={setViewerFiles}
                 canChangeAuthor={isAdmin}
-                hideVat
               />
             ) : (
               <EmptyState icon="file" title="내역이 없습니다" />
@@ -609,6 +610,8 @@ export default function Payroll() {
           projects={projects}
           personId={profileIdOf(slipEntry.counterparty)}
           userId={user?.id}
+          attachments={attachmentsByEntry[slipEntry.id] || []}
+          onOpenAttachments={setViewerFiles}
         />
       ) : null}
     </div>
@@ -617,12 +620,16 @@ export default function Payroll() {
 
 /* --------------------------- 급여명세서 (breakdown) --------------------------- */
 
-function SlipModal({ open, onClose, onSaved, entry, ym, initial, reportRows, projects, personId, userId }) {
+function SlipModal({ open, onClose, onSaved, entry, ym, initial, reportRows, projects, personId, userId, attachments = [], onOpenAttachments }) {
   const toast = useToast()
   const [form, setForm] = useState({})
   const [checked, setChecked] = useState({})
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  /* 장부 함께 수정 (상세 통합) */
+  const [book, setBook] = useState({ entry_date: '', description: '', project_id: '' })
+  const [atts, setAtts] = useState([])
+  const [uploading, setUploading] = useState(false)
 
   const name = String(entry?.counterparty || '').trim()
 
@@ -648,6 +655,8 @@ function SlipModal({ open, onClose, onSaved, entry, ym, initial, reportRows, pro
     const next = {}
     for (const r of mine) next[r.id] = true
     setChecked(next)
+    setBook({ entry_date: entry.entry_date || '', description: entry.description || '', project_id: entry.project_id || '' })
+    setAtts(attachments || [])
   }, [open, entry, initial, mineTotal]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const setNum = (key) => (e) => {
@@ -685,7 +694,13 @@ function SlipModal({ open, onClose, onSaved, entry, ym, initial, reportRows, pro
         },
         userId,
       )
-      await updateEntry(entry.id, { supply_amount: bookAmount, vat_amount: 0 })
+      await updateEntry(entry.id, {
+        supply_amount: bookAmount,
+        vat_amount: 0,
+        entry_date: book.entry_date || entry.entry_date,
+        description: String(book.description || '').trim(),
+        project_id: book.project_id || null,
+      })
       toast.success(`명세서 저장 + 장부 급여분 ${formatKRW(bookAmount)}원 반영`)
       onSaved?.()
     } catch (err) {
@@ -695,13 +710,49 @@ function SlipModal({ open, onClose, onSaved, entry, ym, initial, reportRows, pro
     }
   }
 
+  const onPickFiles = async (e) => {
+    const picked = Array.from(e.target.files || [])
+    e.target.value = ''
+    const accepted = picked.filter((f) => {
+      if (f.size > 20 * 1024 * 1024) {
+        toast.error(`"${f.name}" 은(는) 20MB 를 넘어 제외했습니다.`)
+        return false
+      }
+      return true
+    })
+    if (!accepted.length) return
+    setUploading(true)
+    try {
+      for (const file of accepted) {
+        // eslint-disable-next-line no-await-in-loop
+        const saved = await uploadAttachment(entry.id, file, userId)
+        setAtts((prev) => [...prev, saved])
+      }
+      toast.success('증빙을 올렸습니다.')
+    } catch (err) {
+      toast.error(err.message)
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  const removeAtt = async (file) => {
+    if (!window.confirm(`"${file.file_name}" 증빙을 삭제하시겠습니까?`)) return
+    try {
+      await deleteAttachment(file)
+      setAtts((prev) => prev.filter((f) => f.id !== file.id))
+    } catch (err) {
+      toast.error(err.message)
+    }
+  }
+
   if (!entry) return null
 
   return (
     <Modal
       open={open}
       onClose={saving ? undefined : onClose}
-      title={`${name} · ${ym.slice(0, 4)}년 ${Number(ym.slice(5))}월 급여명세서`}
+      title={`${name} · ${ym.slice(0, 4)}년 ${Number(ym.slice(5))}월 급여 상세`}
       subtitle={`귀속 ${ym.slice(0, 4)}년 ${Number(ym.slice(5))}월 · 지급일 ${entry.entry_date || '—'} · 장부 합계 ${formatKRW(entry.total_amount)}원 · 저장하면 급여분 ${formatKRW(bookAmount)}원(실지급 ${formatKRW(net)} − 지출결의 ${formatKRW(expensePay)})으로 맞춰집니다.`}
       size="lg"
       footer={
@@ -740,6 +791,79 @@ function SlipModal({ open, onClose, onSaved, entry, ym, initial, reportRows, pro
     >
       <form id="slip-form" onSubmit={submit} className="flex flex-col gap-4">
         {error ? <InlineAlert tone="error">{error}</InlineAlert> : null}
+
+        <div className="rounded-lg border border-ink-200 p-3.5">
+          <p className="mb-2 text-xs font-bold text-ink-700">장부 (상세)</p>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+            <label className="flex flex-col gap-1 text-xs">
+              <span className="font-semibold text-ink-600">지급일</span>
+              <input
+                type="date"
+                className="input py-1 text-xs"
+                value={book.entry_date || ''}
+                onChange={(e) => setBook((b) => ({ ...b, entry_date: e.target.value }))}
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-xs sm:col-span-2">
+              <span className="font-semibold text-ink-600">적요</span>
+              <input
+                className="input py-1 text-xs"
+                value={book.description || ''}
+                onChange={(e) => setBook((b) => ({ ...b, description: e.target.value }))}
+                placeholder="예: 8월 급여"
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-xs sm:col-span-3">
+              <span className="font-semibold text-ink-600">프로젝트</span>
+              <select
+                className="input py-1 text-xs"
+                value={book.project_id || ''}
+                onChange={(e) => setBook((b) => ({ ...b, project_id: e.target.value }))}
+              >
+                <option value="">미지정</option>
+                {(projects || []).map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-ink-200 p-3.5">
+          <div className="mb-2 flex items-center justify-between">
+            <p className="text-xs font-bold text-ink-700">증빙 ({atts.length}건)</p>
+            <label className="btn-ghost cursor-pointer px-2.5 py-1.5 text-xs">
+              {uploading ? '올리는 중…' : '+ 올리기'}
+              <input type="file" multiple className="hidden" disabled={uploading} onChange={onPickFiles} />
+            </label>
+          </div>
+          {atts.length ? (
+            <ul className="flex flex-col gap-1.5">
+              {atts.map((f) => (
+                <li key={f.id} className="flex items-center gap-2 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => onOpenAttachments?.([f])}
+                    className="min-w-0 flex-1 truncate text-left font-semibold text-ink-700 hover:text-brand-700 hover:underline"
+                  >
+                    {f.file_name}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => removeAtt(f)}
+                    className="shrink-0 font-semibold text-loss hover:underline"
+                  >
+                    삭제
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-xs text-ink-400">올라온 증빙이 없습니다.</p>
+          )}
+        </div>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="rounded-lg border border-ink-200 p-3.5">

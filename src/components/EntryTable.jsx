@@ -53,11 +53,15 @@ export default function EntryTable({
   onSlip = null,
   /* 명세서가 저장된 행 id 목록. 버튼에 ✓가 붙습니다. */
   slipEntryIds = null,
+  /* 명세서 버튼 라벨 (기본 '명세서') */
+  slipLabel = '명세서',
   /* 행별 수정·삭제 가능 여부 (직원 본인 행만 허용할 때 사용) */
   canEditEntry = null,
   canDeleteEntry = null,
   /* 부가세 열 숨기기 (급여처럼 전부 0원일 때) */
   hideVat = false,
+  /* 이름별 추가 지급액 (급여 지출결의 등) → 실지급 열 표시 */
+  extraPayMap = null,
 }) {
   const [rowEdits, setRowEdits] = useState({})
   const [savingId, setSavingId] = useState(null)
@@ -181,6 +185,20 @@ export default function EntryTable({
     )
   }
 
+  const extraTotal = extraPayMap
+    ? (() => {
+        const seen = new Set()
+        let s = 0
+        for (const e of entries) {
+          const n = String(e.counterparty || '').trim()
+          if (n && !seen.has(n)) {
+            seen.add(n)
+            s += Number(extraPayMap[n] || 0)
+          }
+        }
+        return s
+      })()
+    : 0
   const totals = entries.reduce(
     (acc, e) => {
       acc.supply += Number(e.supply_amount || 0)
@@ -305,6 +323,7 @@ export default function EntryTable({
               <th className="th text-right">공급가액</th>
               {hideVat ? null : <th className="th text-right">부가세</th>}
               <th className="th text-right">합계</th>
+              {extraPayMap ? <th className="th text-right">실지급</th> : null}
               <th className="th">증빙</th>
               <th className="th">작성자</th>
               <th className="th text-right">관리</th>
@@ -444,6 +463,11 @@ export default function EntryTable({
                       ? formatKRW(Number(work.supply_amount || 0) + Number(work.vat_amount || 0))
                       : formatKRW(entry.total_amount)}
                   </td>
+                  {extraPayMap ? (
+                    <td className="td num font-bold text-brand-700">
+                      {formatKRW(Number(entry.total_amount || 0) + Number(extraPayMap[String(entry.counterparty || '').trim()] || 0))}
+                    </td>
+                  ) : null}
                   <td className="td">
                     <AttachmentCell attachments={files} onOpen={onOpenAttachments} />
                   </td>
@@ -478,7 +502,8 @@ export default function EntryTable({
                             className="rounded-md px-1.5 py-1.5 text-xs font-semibold text-ink-500 transition hover:bg-brand-50 hover:text-brand-700"
                             title={slipEntryIds?.has?.(entry.id) ? '명세서 보기·수정' : '명세서 작성'}
                           >
-                            명세서{slipEntryIds?.has?.(entry.id) ? ' ✓' : ''}
+                            {slipLabel}
+                            {slipEntryIds?.has?.(entry.id) ? ' ✓' : ''}
                           </button>
                         ) : null}
                         {(!canEditEntry || canEditEntry(entry)) && onEdit ? (
@@ -547,6 +572,9 @@ export default function EntryTable({
               <td className="td num font-bold">{formatKRW(totals.supply)}</td>
               {hideVat ? null : <td className="td num font-bold">{formatKRW(totals.vat)}</td>}
               <td className="td num font-extrabold text-brand-700">{formatKRW(totals.total)}</td>
+              {extraPayMap ? (
+                <td className="td num font-extrabold text-brand-700">{formatKRW(totals.total + extraTotal)}</td>
+              ) : null}
               <td className="td" colSpan={3} />
             </tr>
           </tfoot>
@@ -613,6 +641,11 @@ export default function EntryTable({
                       {formatKRW(entry.total_amount)}
                     </p>
                     <p className="text-[11px] text-ink-400">공급 {formatKRW(entry.supply_amount)}</p>
+                    {extraPayMap && Number(extraPayMap[String(entry.counterparty || '').trim()] || 0) ? (
+                      <p className="text-[11px] font-bold text-brand-700">
+                        실지급 {formatKRW(Number(entry.total_amount || 0) + Number(extraPayMap[String(entry.counterparty || '').trim()] || 0))}
+                      </p>
+                    ) : null}
                   </div>
                 </div>
 
@@ -669,7 +702,8 @@ export default function EntryTable({
                           className="btn-ghost px-2.5 py-1.5 text-xs"
                           title={slipEntryIds?.has?.(entry.id) ? '명세서 보기·수정' : '명세서 작성'}
                         >
-                          명세서{slipEntryIds?.has?.(entry.id) ? ' ✓' : ''}
+                          {slipLabel}
+                          {slipEntryIds?.has?.(entry.id) ? ' ✓' : ''}
                         </button>
                       ) : null}
                       {(!canEditEntry || canEditEntry(entry)) && onEdit ? (
