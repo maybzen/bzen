@@ -28,6 +28,9 @@ export default function ScheduleModal({
   dateSupported = false,
   userId = null,
   onChanged,
+  home = null,
+  isAdmin = false,
+  overrides = {},
 }) {
   const toast = useToast()
   const today = todayISO()
@@ -58,8 +61,8 @@ export default function ScheduleModal({
   const grid = useMemo(() => monthGrid(year, month), [year, month])
   const monthItems = useMemo(
     () =>
-      buildSchedule({ loans, manuals, fromISO: grid[0], toISO: grid[grid.length - 1] }),
-    [loans, manuals, grid],
+      buildSchedule({ loans, manuals, fromISO: grid[0], toISO: grid[grid.length - 1], overrides }),
+    [loans, manuals, grid, overrides],
   )
   const byDate = useMemo(() => {
     const m = new Map()
@@ -76,10 +79,10 @@ export default function ScheduleModal({
     const end = new Date()
     end.setDate(end.getDate() + 30)
     const iso = `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, '0')}-${String(end.getDate()).padStart(2, '0')}`
-    return buildSchedule({ loans, manuals, fromISO: '2000-01-01', toISO: iso }).filter(
+    return buildSchedule({ loans, manuals, fromISO: '2000-01-01', toISO: iso, overrides }).filter(
       (it) => it.date && it.date >= base,
     )
-  }, [loans, manuals])
+  }, [loans, manuals, overrides])
 
   const selectedItems = useMemo(() => {
     const list = (byDate.get(selected) || []).slice()
@@ -337,8 +340,9 @@ export default function ScheduleModal({
             )}
           </div>
 
-          <form onSubmit={handleAdd} className="flex flex-col gap-2 rounded-xl border border-ink-200 bg-ink-50/60 p-3.5">
-            <p className="text-xs font-bold text-ink-900">직접 등록</p>
+          {home ? <HomeChecklist home={home} isAdmin={isAdmin} userId={userId} /> : null}
+
+          <form onSubmit={handleAdd} className="flex flex-col gap-2 rounded-xl border border-ink-200 bg-ink-50/60 p-3.5">            <p className="text-xs font-bold text-ink-900">직접 등록</p>
             <div className="flex flex-col gap-2 sm:flex-row">
               {dateSupported ? (
                 <input
@@ -402,6 +406,172 @@ export default function ScheduleModal({
         busy={busy}
       />
     </>
+  )
+}
+
+/* 확인 필요 목록 (대시보드에서 여기로 이동). 같은 DB를 공유합니다. */
+function HomeChecklist({ home, isAdmin, userId }) {
+  const [draft, setDraft] = useState('')
+  const [showDone, setShowDone] = useState(false)
+  const [editingId, setEditingId] = useState(null)
+  const [editText, setEditText] = useState('')
+  const [busy, setBusy] = useState(false)
+  const items = home.items || []
+  const openItems = items.filter((x) => !x.done)
+  const doneItems = items.filter((x) => x.done)
+
+  const run = async (fn) => {
+    setBusy(true)
+    try {
+      await fn()
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const submitAdd = (e) => {
+    e.preventDefault()
+    const v = draft.trim()
+    if (!v) return
+    run(async () => {
+      await home.add(v)
+      setDraft('')
+    })
+  }
+
+  const submitEdit = (e) => {
+    e.preventDefault()
+    const v = editText.trim()
+    if (!editingId || !v) return
+    const id = editingId
+    run(async () => {
+      await home.rename(id, v)
+      setEditingId(null)
+    })
+  }
+
+  return (
+    <div className="rounded-xl border border-amber-200 bg-amber-50/50 px-3.5 py-3">
+      <p className="mb-1.5 text-xs font-bold text-ink-900">
+        확인 필요 목록
+        <span className="ml-1.5 font-medium text-ink-500">{openItems.length}건</span>
+      </p>
+      {openItems.length ? (
+        <ul className="flex flex-col divide-y divide-ink-100">
+          {openItems.map((item) => (
+            <li key={item.id} className="flex items-start gap-1.5 py-1.5">
+              {editingId === item.id ? (
+                <form onSubmit={submitEdit} className="flex min-w-0 flex-1 items-center gap-1.5">
+                  <input
+                    autoFocus
+                    className="input min-w-0 flex-1 !py-1.5 text-xs"
+                    value={editText}
+                    onChange={(e) => setEditText(e.target.value)}
+                  />
+                  <button type="submit" className="shrink-0 text-xs font-bold text-brand-700 hover:underline" disabled={busy}>
+                    저장
+                  </button>
+                  <button type="button" onClick={() => setEditingId(null)} className="shrink-0 text-xs text-ink-400 hover:underline">
+                    취소
+                  </button>
+                </form>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => run(() => home.toggle(item.id))}
+                  className="flex min-w-0 flex-1 items-start gap-2 text-left"
+                >
+                  <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border border-ink-300 bg-white text-transparent">
+                    <Icon name="check" size={11} strokeWidth={2.6} />
+                  </span>
+                  <span className="text-xs text-ink-800">{item.text}</span>
+                </button>
+              )}
+              {isAdmin && editingId !== item.id ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingId(item.id)
+                      setEditText(item.text)
+                    }}
+                    className="shrink-0 rounded-md p-1 text-ink-300 transition hover:bg-brand-50 hover:text-brand-700"
+                    aria-label="수정"
+                  >
+                    <Icon name="pencil" size={13} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => run(() => home.remove(item.id))}
+                    className="shrink-0 rounded-md p-1 text-ink-300 transition hover:bg-rose-50 hover:text-loss"
+                    aria-label="삭제"
+                  >
+                    <Icon name="trash" size={13} />
+                  </button>
+                </>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="py-1 text-xs text-ink-400">다 확인했습니다.</p>
+      )}
+      {doneItems.length ? (
+        <>
+          <button
+            type="button"
+            onClick={() => setShowDone((v) => !v)}
+            className="mt-1 flex items-center gap-1 text-[11px] font-semibold text-ink-400 hover:text-ink-600"
+            aria-expanded={showDone}
+          >
+            <Icon name={showDone ? 'chevron-down' : 'chevron-right'} size={13} />
+            완료됨 {doneItems.length}건
+          </button>
+          {showDone ? (
+            <ul className="mt-1 flex flex-col divide-y divide-ink-100 border-t border-ink-100">
+              {doneItems.map((item) => (
+                <li key={item.id} className="flex items-start gap-1.5 py-1.5">
+                  <button
+                    type="button"
+                    onClick={() => run(() => home.toggle(item.id))}
+                    title="클릭하면 미완료로 되돌립니다"
+                    className="flex min-w-0 flex-1 items-start gap-2 text-left"
+                  >
+                    <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded bg-emerald-600 text-white">
+                      <Icon name="check" size={11} strokeWidth={2.6} />
+                    </span>
+                    <span className="text-xs text-ink-400 line-through">{item.text}</span>
+                  </button>
+                  {isAdmin ? (
+                    <button
+                      type="button"
+                      onClick={() => run(() => home.remove(item.id))}
+                      className="shrink-0 rounded-md p-1 text-ink-300 transition hover:bg-rose-50 hover:text-loss"
+                      aria-label="삭제"
+                    >
+                      <Icon name="trash" size={13} />
+                    </button>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </>
+      ) : null}
+      {isAdmin ? (
+        <form onSubmit={submitAdd} className="mt-1.5 flex items-center gap-1.5 border-t border-ink-100 pt-2">
+          <input
+            className="input min-w-0 flex-1 !py-1.5 text-xs"
+            placeholder="확인할 일 추가"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+          />
+          <button type="submit" className="btn-ghost shrink-0 !px-2.5 !py-1.5 text-xs" disabled={!draft.trim() || busy}>
+            추가
+          </button>
+        </form>
+      ) : null}
+    </div>
   )
 }
 

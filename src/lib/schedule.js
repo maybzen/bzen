@@ -50,8 +50,9 @@ export function loanDates(loan, year, month1) {
 /**
  * @returns [{ key, date, title, detail, kind: 'auto'|'manual', source, done, refId }]
  * kind=auto 는 계산된 항목(수정 불가), manual 은 checklist_items 행입니다.
+ * overrides.insurance 가 있으면 4대보험 항목 설명에 최신 고지액을 붙입니다.
  */
-export function buildSchedule({ loans = [], manuals = [], fromISO, toISO }) {
+export function buildSchedule({ loans = [], manuals = [], fromISO, toISO, overrides = {} }) {
   const out = []
   const seenMonths = new Set()
   const d0 = parseISO(fromISO)
@@ -67,7 +68,9 @@ export function buildSchedule({ loans = [], manuals = [], fromISO, toISO }) {
       for (const rule of TAX_RULES) {
         for (const date of ruleDates(rule, y, m)) {
           if (date >= fromISO && date <= toISO) {
-            out.push({ key: `tax-${rule.key}-${date}`, date, title: rule.title, detail: rule.desc, kind: 'auto', source: '세금·급여' })
+            const detail =
+              rule.key === 'insurance' && overrides.insurance ? overrides.insurance : rule.desc
+            out.push({ key: `tax-${rule.key}-${date}`, date, title: rule.title, detail, kind: 'auto', source: '세금·급여' })
           }
         }
       }

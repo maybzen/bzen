@@ -217,21 +217,12 @@ export default function Dashboard() {
   const [results, setResults] = useState(null)
   const home = useChecklist('home', 'bzen.home.alerts.items.v3', 'bzen.home.alerts.done.v3', HOME_ALERTS_DEFAULT, user?.id)
   const sync = useChecklist('sync', 'bzen.home.sync.items.v1', 'bzen.home.sync.done.v1', SYNC_CHECKLIST_DEFAULT, user?.id, true)
-  const [showDone, setShowDone] = useState(false)
-  const [newAlert, setNewAlert] = useState('')
   const [newSync, setNewSync] = useState('')
   const [syncOpen, setSyncOpen] = useState(true)
-  const [editing, setEditing] = useState(null) // { list: 'home' | 'sync', id, text }
+  const [editing, setEditing] = useState(null) // { list: 'sync', id, text }
 
-  const homeOpen = home.items.filter((x) => !x.done)
-  const homeDone = home.items.filter((x) => x.done)
   const syncOpenCount = sync.items.filter((x) => !x.done).length
 
-  const addHomeAlert = (e) => {
-    e.preventDefault()
-    home.add(newAlert)
-    setNewAlert('')
-  }
   const addSyncItem = (e) => {
     e.preventDefault()
     sync.add(newSync)
@@ -240,26 +231,8 @@ export default function Dashboard() {
   const saveEditing = (e) => {
     e.preventDefault()
     if (!editing) return
-    if (editing.list === 'home') home.rename(editing.id, editing.text)
-    else sync.rename(editing.id, editing.text)
+    sync.rename(editing.id, editing.text)
     setEditing(null)
-  }
-  const [alertsOpen, setAlertsOpen] = useState(() => {
-    try {
-      return localStorage.getItem('bzen.home.alerts.open.v1') !== '0'
-    } catch {
-      return true
-    }
-  })
-  const toggleAlertsOpen = () => {
-    setAlertsOpen((v) => {
-      try {
-        localStorage.setItem('bzen.home.alerts.open.v1', v ? '0' : '1')
-      } catch {
-        /* 저장 실패 무시 */
-      }
-      return !v
-    })
   }
 
   const canSee = (perm) => isAdmin || perms.includes(perm)
@@ -556,7 +529,7 @@ export default function Dashboard() {
 
       {isAdmin ? <DataAuditPanel /> : null}
 
-      {isAdmin ? <ScheduleCard userId={user?.id} /> : null}
+      {isAdmin ? <ScheduleCard userId={user?.id} home={home} isAdmin={isAdmin} /> : null}
 
       {loading ? (
         <LoadingBlock />
@@ -627,176 +600,6 @@ export default function Dashboard() {
               to={isAdmin || perms.includes('reports') ? '/reports' : undefined}
             />
           </div>
-
-          {homeOpen.length ? (
-            <section className="card overflow-hidden border-amber-200">
-              <header className="flex items-center justify-between gap-3 border-b border-ink-200 bg-amber-50/60 px-4 py-3">
-                <button
-                  type="button"
-                  onClick={toggleAlertsOpen}
-                  className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
-                  aria-expanded={alertsOpen}
-                >
-                  <h2 className="truncate text-sm font-bold text-ink-900">
-                    확인 필요 목록
-                    <span className="ml-1.5 font-medium text-ink-500">{homeOpen.length}건</span>
-                  </h2>
-                  <Icon name={alertsOpen ? 'chevron-down' : 'chevron-right'} size={15} className="shrink-0 text-ink-500" />
-                </button>
-                <span className="shrink-0 text-[11px] text-ink-500">하나씩 확인되면 체크하세요</span>
-              </header>
-              {alertsOpen ? (
-              <>
-              <ul className="divide-y divide-ink-100">
-                {homeOpen.map((item) => (
-                  <li key={item.id} className="flex items-start gap-1 px-4 py-2.5 transition hover:bg-ink-50/60">
-                    {editing?.list === 'home' && editing?.id === item.id ? (
-                      <form onSubmit={saveEditing} className="flex min-w-0 flex-1 items-center gap-1.5">
-                        <input
-                          autoFocus
-                          className="input min-w-0 flex-1 py-1 text-xs"
-                          value={editing.text}
-                          onChange={(e) => setEditing({ ...editing, text: e.target.value })}
-                        />
-                        <button type="submit" className="shrink-0 text-xs font-bold text-brand-700 hover:underline">
-                          저장
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setEditing(null)}
-                          className="shrink-0 text-xs text-ink-400 hover:underline"
-                        >
-                          취소
-                        </button>
-                      </form>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => home.toggle(item.id)}
-                        className="flex min-w-0 flex-1 items-start gap-2.5 text-left"
-                      >
-                        <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border border-ink-300 bg-white text-transparent">
-                          <Icon name="check" size={13} strokeWidth={2.6} />
-                        </span>
-                        <span className="text-sm text-ink-800">{item.text}</span>
-                      </button>
-                    )}
-                    {isAdmin && !(editing?.list === 'home' && editing?.id === item.id) ? (
-                      <button
-                        type="button"
-                        onClick={() => setEditing({ list: 'home', id: item.id, text: item.text })}
-                        className="shrink-0 rounded-md p-1 text-ink-300 transition hover:bg-brand-50 hover:text-brand-700"
-                        aria-label="수정"
-                      >
-                        <Icon name="pencil" size={14} />
-                      </button>
-                    ) : null}
-                    {isAdmin ? (
-                      <button
-                        type="button"
-                        onClick={() => home.remove(item.id)}
-                        className="shrink-0 rounded-md p-1 text-ink-300 transition hover:bg-rose-50 hover:text-loss"
-                        aria-label="삭제"
-                      >
-                        <Icon name="trash" size={14} />
-                      </button>
-                    ) : null}
-                  </li>
-                ))}
-              </ul>
-              {isAdmin ? (
-                <form onSubmit={addHomeAlert} className="flex items-center gap-2 border-t border-ink-100 px-4 py-2.5">
-                  <input
-                    className="input flex-1 py-1.5 text-xs"
-                    placeholder="확인할 일 추가"
-                    value={newAlert}
-                    onChange={(e) => setNewAlert(e.target.value)}
-                  />
-                  <button type="submit" className="btn-ghost shrink-0 !px-2.5 !py-1.5 text-xs" disabled={!newAlert.trim()}>
-                    추가
-                  </button>
-                </form>
-              ) : null}
-              </>
-              ) : null}
-            </section>
-          ) : null}
-          {homeDone.length ? (
-            <section className="card overflow-hidden">
-              <button
-                type="button"
-                onClick={() => setShowDone((v) => !v)}
-                className="flex w-full items-center gap-1.5 px-4 py-3 text-left"
-                aria-expanded={showDone}
-              >
-                <h2 className="truncate text-sm font-bold text-ink-500">
-                  완료됨
-                  <span className="ml-1.5 font-medium text-ink-400">{homeDone.length}건</span>
-                </h2>
-                <Icon name={showDone ? 'chevron-down' : 'chevron-right'} size={15} className="shrink-0 text-ink-400" />
-              </button>
-              {showDone ? (
-                <ul className="divide-y divide-ink-100 border-t border-ink-100">
-                  {homeDone.map((item) => (
-                    <li key={item.id} className="flex items-start gap-1 px-4 py-2.5 transition hover:bg-ink-50/60">
-                      {editing?.list === 'home' && editing?.id === item.id ? (
-                        <form onSubmit={saveEditing} className="flex min-w-0 flex-1 items-center gap-1.5">
-                          <input
-                            autoFocus
-                            className="input min-w-0 flex-1 py-1 text-xs"
-                            value={editing.text}
-                            onChange={(e) => setEditing({ ...editing, text: e.target.value })}
-                          />
-                          <button type="submit" className="shrink-0 text-xs font-bold text-brand-700 hover:underline">
-                            저장
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setEditing(null)}
-                            className="shrink-0 text-xs text-ink-400 hover:underline"
-                          >
-                            취소
-                          </button>
-                        </form>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => home.toggle(item.id)}
-                          className="flex min-w-0 flex-1 items-start gap-2.5 text-left"
-                          title="클릭하면 미완료로 되돌립니다"
-                        >
-                          <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-emerald-600 text-white">
-                            <Icon name="check" size={13} strokeWidth={2.6} />
-                          </span>
-                          <span className="text-sm text-ink-400 line-through">{item.text}</span>
-                        </button>
-                      )}
-                      {isAdmin && !(editing?.list === 'home' && editing?.id === item.id) ? (
-                        <button
-                          type="button"
-                          onClick={() => setEditing({ list: 'home', id: item.id, text: item.text })}
-                          className="shrink-0 rounded-md p-1 text-ink-300 transition hover:bg-brand-50 hover:text-brand-700"
-                          aria-label="수정"
-                        >
-                          <Icon name="pencil" size={14} />
-                        </button>
-                      ) : null}
-                      {isAdmin ? (
-                        <button
-                          type="button"
-                          onClick={() => home.remove(item.id)}
-                          className="shrink-0 rounded-md p-1 text-ink-300 transition hover:bg-rose-50 hover:text-loss"
-                          aria-label="삭제"
-                        >
-                          <Icon name="trash" size={14} />
-                        </button>
-                      ) : null}
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
-            </section>
-          ) : null}
 
           {isAdmin ? (
             <section className="card overflow-hidden border-sky-200">
@@ -1314,12 +1117,13 @@ function DataAuditPanel() {
 /* 이번 달 챙길 일 — 자동(대출·세금) + 직접 등록. 관리자만. 누르면 일정 화면 */
 /* ------------------------------------------------------------------ */
 
-function ScheduleCard({ userId }) {
+function ScheduleCard({ userId, home, isAdmin }) {
   const [open, setOpen] = useState(false)
   const [loans, setLoans] = useState([])
   const [manuals, setManuals] = useState([])
   const [dateOk, setDateOk] = useState(false)
   const [loading, setLoading] = useState(true)
+  const ledger = useLedgerIndex()
 
   const loadAll = useCallback(async () => {
     setLoading(true)
@@ -1346,17 +1150,31 @@ function ScheduleCard({ userId }) {
     if (open) loadAll()
   }, [open, loadAll])
 
+  // 최신 4대보험 고지액을 일정 설명에 붙입니다 (없으면 기본 문구)
+  const overrides = useMemo(() => {
+    const rows = (ledger.entries || []).filter((e) =>
+      String(e.counterparty || '').includes('국민건강보험공단'),
+    )
+    if (!rows.length) return {}
+    rows.sort((a, b) => (a.entry_date < b.entry_date ? 1 : -1))
+    const top = rows[0]
+    const m = String(top.description || '').match(/(\d+)\s*월/)
+    const label = m ? `${m[1]}월분 ` : ''
+    return { insurance: `${label}${formatKRW(top.total_amount)}원 고지 · 10일 납부` }
+  }, [ledger.entries])
+
   const items = useMemo(() => {
     const base = new Date()
     const from = `${base.getFullYear()}-${String(base.getMonth() + 1).padStart(2, '0')}-${String(base.getDate()).padStart(2, '0')}`
     const end = new Date(base)
     end.setDate(end.getDate() + 35)
     const to = `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, '0')}-${String(end.getDate()).padStart(2, '0')}`
-    return buildSchedule({ loans, manuals, fromISO: from, toISO: to })
-  }, [loans, manuals])
+    return buildSchedule({ loans, manuals, fromISO: from, toISO: to, overrides })
+  }, [loans, manuals, overrides])
 
   const overdue = items.filter((it) => it.date && dday(it.date) < 0)
   const top = items.filter((it) => !it.date || dday(it.date) >= 0).slice(0, 4)
+  const homeOpenCount = (home?.items || []).filter((x) => !x.done).length
 
   return (
     <>
@@ -1379,11 +1197,13 @@ function ScheduleCard({ userId }) {
             {loading
               ? '불러오는 중…'
               : top.length
-                ? top
+                ? `${top
                     .slice(0, 2)
                     .map((it) => `${ddayLabel(it.date)} ${it.title}`)
-                    .join(' · ')
-                : '잡힌 일정이 없습니다. 눌러서 등록하세요.'}
+                    .join(' · ')}${homeOpenCount ? ` · 확인필요 ${homeOpenCount}건` : ''}`
+                : homeOpenCount
+                  ? `확인 필요 ${homeOpenCount}건 — 눌러서 확인하세요.`
+                  : '잡힌 일정이 없습니다. 눌러서 등록하세요.'}
           </span>
         </span>
         <Icon name="chevron-right" size={16} className="shrink-0 text-brand-300" />
@@ -1397,6 +1217,9 @@ function ScheduleCard({ userId }) {
         dateSupported={dateOk}
         userId={userId}
         onChanged={loadAll}
+        home={home}
+        isAdmin={isAdmin}
+        overrides={overrides}
       />
     </>
   )
