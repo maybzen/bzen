@@ -377,9 +377,21 @@ export function deleteEntry(id) {
 /* 첨부파일                                                            */
 /* ------------------------------------------------------------------ */
 
-export function listAttachments(entryIds) {
+export async function listAttachments(entryIds) {
   if (!entryIds || !entryIds.length) return Promise.resolve([])
-  return unwrap(supabase.from('attachments').select('*').in('entry_id', entryIds))
+  // ID가 많으면 URL이 길어져 400이 나므로 50개씩 나눠서 조회합니다 (대시보드 200건 대응).
+  // 빈 ID가 섞이면 PostgREST가 400을 내므로 먼저 걸러냅니다.
+  const ids = [...new Set(entryIds.filter(Boolean))]
+  if (!ids.length) return Promise.resolve([])
+  const out = []
+  for (let i = 0; i < ids.length; i += 50) {
+    // eslint-disable-next-line no-await-in-loop
+    const rows = await unwrap(
+      supabase.from('attachments').select('*').in('entry_id', ids.slice(i, i + 50)),
+    )
+    out.push(...(rows || []))
+  }
+  return out
 }
 
 export function listAllAttachments() {

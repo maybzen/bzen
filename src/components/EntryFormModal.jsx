@@ -454,7 +454,7 @@ export default function EntryFormModal({
 
         <div className="rounded-xl border border-ink-200 bg-ink-50/60 p-4">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <Field label="공급가액" required>
+            <Field label="공급가액">
               <AmountInput
                 className="input num text-left"
                 value={form.supply_amount}
@@ -482,7 +482,7 @@ export default function EntryFormModal({
               </div>
             </Field>
 
-            <Field label="합계" hint="합계를 치면 공급가액·부가세로 자동 분리됩니다">
+            <Field label="합계" required hint="합계를 치면 공급가액·부가세로 자동 분리됩니다">
               <AmountInput
                 className="input num text-left"
                 placeholder={String(total || '')}
