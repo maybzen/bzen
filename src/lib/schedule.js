@@ -32,9 +32,10 @@ export function doneKeysFrom(rows) {
 export const TAX_RULES = [
   { key: 'salary', title: '급여 지급', day: 10, months: 'every', desc: '정기 급여 이체일' },
   { key: 'withholding', title: '원천세·지방세 납부', day: 10, months: 'every', desc: '전월 귀속분 납부기한' },
-  { key: 'insurance', title: '4대보험료 납부', day: 10, months: 'every', desc: '고지분 납부' },
+  { key: 'insurance', title: '4대보험료 납부', day: 'last', months: 'every', desc: '말일 자동이체' },
   { key: 'vat', title: '부가가치세 신고·납부', day: 25, months: [1, 4, 7, 10], desc: '예정(4·10월) / 확정(1·7월)' },
   { key: 'corp', title: '법인세 신고·납부', day: 31, months: [3], desc: '직전연도분 (3/31)' },
+  { key: 'local', title: '지방소득세 신고·납부', day: 30, months: [4], desc: '법인세 확정분 (4/30)' },
 ]
 
 function daysInMonth(year, month1) {
@@ -42,6 +43,7 @@ function daysInMonth(year, month1) {
 }
 
 function clampDay(year, month1, day) {
+  if (day === 'last') return daysInMonth(year, month1)
   return Math.min(day, daysInMonth(year, month1))
 }
 
@@ -68,8 +70,9 @@ export function loanDates(loan, year, month1) {
  * kind=auto 는 계산된 항목(수정 불가, 완료 체크만 가능), manual 은 checklist_items 행입니다.
  * overrides.insurance 가 있으면 4대보험 항목 설명에 최신 고지액을 붙입니다.
  * doneKeys 에 든 자동 키는 완료로 표시됩니다.
+ * profiles 가 있으면 생일·입사기념일을, projects 가 있으면 행사 시작·종료일을 넣습니다.
  */
-export function buildSchedule({ loans = [], manuals = [], fromISO, toISO, overrides = {}, doneKeys = null }) {
+export function buildSchedule({ loans = [], manuals = [], fromISO, toISO, overrides = {}, doneKeys = null, profiles = [], projects = [] }) {
   const out = []
   const seenMonths = new Set()
   const d0 = parseISO(fromISO)
@@ -123,6 +126,48 @@ export function buildSchedule({ loans = [], manuals = [], fromISO, toISO, overri
       done: !!row.done,
       refId: row.id,
     })
+  }
+
+  // 구성원 생일·입사기념일 (매년 반복, 재직자만)
+  const fromY = Number(String(fromISO).slice(0, 4))
+  const toY = Number(String(toISO).slice(0, 4))
+  for (const p of profiles || []) {
+    if (!p || p.active === false) continue
+    const name = String(p.full_name || '').trim()
+    if (!name) continue
+    const bd = String(p.birth_date || '').slice(5)
+    if (/^\d{2}-\d{2}$/.test(bd)) {
+      for (let y = fromY; y <= toY; y += 1) {
+        const date = `${y}-${bd}`
+        if (date >= fromISO && date <= toISO) {
+          out.push({ key: `bday-${p.id}-${date}`, date, title: `${name} 생일`, detail: '', kind: 'auto', source: '구성원' })
+        }
+      }
+    }
+    const hd = String(p.hire_date || '')
+    const hm = hd.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+    if (hm) {
+      const hireY = Number(hm[1])
+      for (let y = Math.max(hireY + 1, fromY); y <= toY; y += 1) {
+        const date = `${y}-${hm[2]}-${hm[3]}`
+        if (date >= fromISO && date <= toISO) {
+          out.push({ key: `hire-${p.id}-${date}`, date, title: `${name} 입사 ${y - hireY}주년`, detail: '', kind: 'auto', source: '구성원' })
+        }
+      }
+    }
+  }
+
+  // 프로젝트 행사 시작·종료일 (숨김 제외)
+  for (const p of projects || []) {
+    if (!p || p.is_hidden) continue
+    const name = String(p.name || '').trim()
+    if (!name) continue
+    for (const [mem, label] of [['start_date', '행사 시작'], ['end_date', '행사 종료']]) {
+      const date = String(p[mem] || '').slice(0, 10)
+      if (/^\d{4}-\d{2}-\d{2}$/.test(date) && date >= fromISO && date <= toISO) {
+        out.push({ key: `proj-${p.id}-${mem}-${date}`, date, title: `${name} ${label}`, detail: p.client ? `${p.client}` : '', kind: 'auto', source: '프로젝트' })
+      }
+    }
   }
 
   // 자동 항목 완료 표시

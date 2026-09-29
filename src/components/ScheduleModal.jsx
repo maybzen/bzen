@@ -36,6 +36,8 @@ export default function ScheduleModal({
   home = null,
   isAdmin = false,
   overrides = {},
+  profiles = [],
+  projects = [],
   syncBundle = null,
 }) {
   const toast = useToast()
@@ -44,6 +46,7 @@ export default function ScheduleModal({
   const [month, setMonth] = useState(() => Number(today.slice(5, 7)))
   const [selected, setSelected] = useState(today)
   const [text, setText] = useState('')
+  const [quickText, setQuickText] = useState('')
   const [date, setDate] = useState(today)
   const [editingId, setEditingId] = useState(null)
   const [editText, setEditText] = useState('')
@@ -57,6 +60,8 @@ export default function ScheduleModal({
     setError('')
     setEditingId(null)
     setConfirmId(null)
+    setText('')
+    setQuickText('')
     const t = todayISO()
     setSelected(t)
     setDate(t)
@@ -68,8 +73,8 @@ export default function ScheduleModal({
   const doneKeys = useMemo(() => doneKeysFrom(markers), [markers])
   const monthItems = useMemo(
     () =>
-      buildSchedule({ loans, manuals, fromISO: grid[0], toISO: grid[grid.length - 1], overrides, doneKeys }),
-    [loans, manuals, grid, overrides, doneKeys],
+      buildSchedule({ loans, manuals, fromISO: grid[0], toISO: grid[grid.length - 1], overrides, doneKeys, profiles, projects }),
+    [loans, manuals, grid, overrides, doneKeys, profiles, projects],
   )
   const byDate = useMemo(() => {
     const m = new Map()
@@ -86,10 +91,10 @@ export default function ScheduleModal({
     const end = new Date()
     end.setDate(end.getDate() + 30)
     const iso = `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, '0')}-${String(end.getDate()).padStart(2, '0')}`
-    return buildSchedule({ loans, manuals, fromISO: '2000-01-01', toISO: iso, overrides, doneKeys }).filter(
+    return buildSchedule({ loans, manuals, fromISO: '2000-01-01', toISO: iso, overrides, doneKeys, profiles, projects }).filter(
       (it) => it.date && it.date >= base && !it.done,
     )
-  }, [loans, manuals, overrides, doneKeys])
+  }, [loans, manuals, overrides, doneKeys, profiles, projects])
 
   const selectedItems = useMemo(() => {
     const list = (byDate.get(selected) || []).slice()
@@ -114,6 +119,26 @@ export default function ScheduleModal({
       await addChecklistItem(SCHEDULE_LIST, v, userId, extra)
       setText('')
       toast.success('일정이 등록되었습니다.')
+      await reload()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  /* 날짜 패널에서 바로 추가 (선택된 날짜로 들어갑니다) */
+  const handleQuickAdd = async (e) => {
+    e.preventDefault()
+    const v = quickText.trim()
+    if (!v || !selected) return
+    setBusy(true)
+    setError('')
+    try {
+      const extra = dateSupported ? { due_date: selected } : {}
+      await addChecklistItem(SCHEDULE_LIST, v, userId, extra)
+      setQuickText('')
+      toast.success(`${formatDateHuman(selected)}에 등록되었습니다.`)
       await reload()
     } catch (err) {
       setError(err.message)
@@ -325,6 +350,17 @@ export default function ScheduleModal({
             ) : (
               <p className="py-1 text-xs text-ink-400">잡힌 일정이 없습니다.</p>
             )}
+            <form onSubmit={handleQuickAdd} className="mt-2 flex items-center gap-1.5 border-t border-ink-100 pt-2">
+              <input
+                className="input min-w-0 flex-1 !py-1.5 text-xs"
+                placeholder={`${formatDateHuman(selected)}에 일정 추가`}
+                value={quickText}
+                onChange={(e) => setQuickText(e.target.value)}
+              />
+              <button type="submit" className="btn-ghost shrink-0 !px-2.5 !py-1.5 text-xs" disabled={!quickText.trim() || busy}>
+                추가
+              </button>
+            </form>
           </div>
 
           {dateless.length ? (

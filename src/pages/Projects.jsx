@@ -19,26 +19,31 @@ import { createEntry, createProject, deleteProject, isMissingTableError, linkPro
 function PnlGrid({ pnl, achieved, contractAmount, showContract, bare = false }) {
   if (bare) {
     return (
-      <dl className="mt-4 grid grid-cols-3 gap-2 rounded-lg bg-ink-50/80 p-3 text-center">
-        <div>
-          <dt className="text-[11px] font-semibold text-ink-500">매출원가</dt>
-          <dd className="mt-0.5 font-num text-sm font-bold tabular-nums text-ink-900">
-            {formatKRW(pnl.cogs)}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-[11px] font-semibold text-ink-500">경비</dt>
-          <dd className="mt-0.5 font-num text-sm font-bold tabular-nums text-ink-900">
-            {formatKRW(pnl.expense)}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-[11px] font-semibold text-ink-500">비용 합계</dt>
-          <dd className="mt-0.5 font-num text-sm font-extrabold tabular-nums text-ink-900">
-            {formatKRW(pnl.cogs + pnl.expense)}
-          </dd>
-        </div>
-      </dl>
+      <>
+        <dl className="mt-4 grid grid-cols-3 gap-2 rounded-lg bg-ink-50/80 p-3 text-center">
+          <div>
+            <dt className="text-[11px] font-semibold text-ink-500">매출원가</dt>
+            <dd className="mt-0.5 font-num text-sm font-bold tabular-nums text-ink-900">
+              {formatKRW(pnl.cogs)}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-[11px] font-semibold text-ink-500">경비</dt>
+            <dd className="mt-0.5 font-num text-sm font-bold tabular-nums text-ink-900">
+              {formatKRW(pnl.expense)}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-[11px] font-semibold text-ink-500">비용 합계</dt>
+            <dd className="mt-0.5 font-num text-sm font-extrabold tabular-nums text-ink-900">
+              {formatKRW(pnl.cogs + pnl.expense)}
+            </dd>
+          </div>
+        </dl>
+        <p className="mt-1.5 text-[11px] leading-relaxed text-ink-400">
+          매출원가 = 이 일에 외부로 나간 돈(외주·매입) · 경비 = 운영비(교통·식대·수수료 등)
+        </p>
+      </>
     )
   }
   const neg = (v) => v < 0
@@ -94,6 +99,12 @@ function PnlGrid({ pnl, achieved, contractAmount, showContract, bare = false }) 
           </dd>
         </div>
       </dl>
+
+      <p className="mt-1.5 text-[11px] leading-relaxed text-ink-400">
+        매출원가 = 이 일에 외부로 나간 돈(외주·매입) · 경비 = 운영비(인건비·교통·식대 등)
+        <br />
+        매출총이익 = 순매출액 − 매출원가 · 영업이익 = 매출총이익 − 경비 (남은 순수익)
+      </p>
 
       {showContract && achieved !== null ? (
         <p className="mt-2 text-xs text-ink-500">

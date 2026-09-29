@@ -532,6 +532,8 @@ export default function Dashboard() {
           userId={user?.id}
           home={home}
           isAdmin={isAdmin}
+          profiles={profiles}
+          projects={projects}
           syncBundle={{ sync, editing, setEditing, saveEditing, newSync, setNewSync, addSyncItem }}
         />
       ) : null}
@@ -1020,7 +1022,7 @@ function DataAuditPanel() {
 /* 이번 달 챙길 일 — 자동(대출·세금) + 직접 등록. 관리자만. 누르면 일정 화면 */
 /* ------------------------------------------------------------------ */
 
-function ScheduleCard({ userId, home, isAdmin, syncBundle }) {
+function ScheduleCard({ userId, home, isAdmin, profiles, projects, syncBundle }) {
   const [open, setOpen] = useState(false)
   const [loans, setLoans] = useState([])
   const [manuals, setManuals] = useState([])
@@ -1066,7 +1068,7 @@ function ScheduleCard({ userId, home, isAdmin, syncBundle }) {
     const top = rows[0]
     const m = String(top.description || '').match(/(\d+)\s*월/)
     const label = m ? `${m[1]}월분 ` : ''
-    return { insurance: `${label}${formatKRW(top.total_amount)}원 고지 · 10일 납부` }
+    return { insurance: `${label}${formatKRW(top.total_amount)}원 고지 · 말일 자동이체` }
   }, [ledger.entries])
 
   const items = useMemo(() => {
@@ -1075,8 +1077,8 @@ function ScheduleCard({ userId, home, isAdmin, syncBundle }) {
     const end = new Date(base)
     end.setDate(end.getDate() + 35)
     const to = `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, '0')}-${String(end.getDate()).padStart(2, '0')}`
-    return buildSchedule({ loans, manuals, fromISO: from, toISO: to, overrides, doneKeys: doneKeysFrom(markers) })
-  }, [loans, manuals, overrides, markers])
+    return buildSchedule({ loans, manuals, fromISO: from, toISO: to, overrides, doneKeys: doneKeysFrom(markers), profiles, projects })
+  }, [loans, manuals, overrides, markers, profiles, projects])
 
   const overdue = items.filter((it) => it.date && dday(it.date) < 0 && !it.done)
   const top = items.filter((it) => (!it.date || dday(it.date) >= 0) && !it.done).slice(0, 4)
@@ -1127,6 +1129,8 @@ function ScheduleCard({ userId, home, isAdmin, syncBundle }) {
         home={home}
         isAdmin={isAdmin}
         overrides={overrides}
+        profiles={profiles}
+        projects={projects}
         syncBundle={syncBundle}
       />
     </>

@@ -45,8 +45,29 @@ t('완료 제외', !items2.some((i) => i.key === 'manual-m2'))
 t('날짜 없음 포함(끝 정렬)', items2.some((i) => i.key === 'manual-m3'))
 t('범위 밖 제외', !items2.some((i) => i.key === 'manual-m4'))
 
-// D-day
-t('D-day 당일', ddayLabel('2026-09-30', '2026-09-30') === 'D-day')
+// 4대보험 말일 + 지방세
+t('4대보험 10월 말일', ruleDates(TAX_RULES.find((r) => r.key === 'insurance'), 2026, 10).includes('2026-10-31'))
+t('4대보험 2월 말일', ruleDates(TAX_RULES.find((r) => r.key === 'insurance'), 2026, 2).includes('2026-02-28'))
+t('지방세 4/30', ruleDates(TAX_RULES.find((r) => r.key === 'local'), 2026, 4).includes('2026-04-30'))
+t('지방세 다른달 없음', ruleDates(TAX_RULES.find((r) => r.key === 'local'), 2026, 5).length === 0)
+
+// 구성원 생일·입사 + 프로젝트 행사
+const profiles = [
+  { id: 'p1', full_name: '테스트', active: true, birth_date: '1990-10-05', hire_date: '2020-10-15' },
+  { id: 'p2', full_name: '퇴사자', active: false, birth_date: '1990-10-06', hire_date: '2020-01-01' },
+  { id: 'p3', full_name: '날짜없음', active: true, birth_date: null, hire_date: null },
+]
+const projects = [
+  { id: 'j1', name: '가을축제', client: '시청', is_hidden: false, start_date: '2026-10-03', end_date: '2026-10-05' },
+  { id: 'j2', name: '숨김', client: '', is_hidden: true, start_date: '2026-10-04', end_date: '2026-10-04' },
+]
+const items4 = buildSchedule({ loans: [], manuals: [], profiles, projects, fromISO: '2026-09-29', toISO: '2026-10-31' })
+t('생일 포함', items4.some((i) => i.key === 'bday-p1-2026-10-05' && i.title === '테스트 생일'))
+t('퇴사자 제외', !items4.some((i) => i.key.startsWith('bday-p2')))
+t('입사기념 포함', items4.some((i) => i.title === '테스트 입사 6주년'))
+t('행사 시작·종료', items4.some((i) => i.title === '가을축제 행사 시작') && items4.some((i) => i.title === '가을축제 행사 종료'))
+t('숨김 제외', !items4.some((i) => i.key.startsWith('proj-j2')))
+t('출처 표기', items4.find((i) => i.key === 'bday-p1-2026-10-05').source === '구성원')
 t('D-3', ddayLabel('2026-10-03', '2026-09-30') === 'D-3')
 t('지남', ddayLabel('2026-09-28', '2026-09-30') === 'D+2 지남')
 t('날짜 없음', ddayLabel(null) === '날짜 없음')
