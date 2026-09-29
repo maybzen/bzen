@@ -24,7 +24,7 @@ import {
 import { refreshLedgerIndex, useLedgerIndex } from '../lib/ledgerIndex'
 import { ISSUE_META, summarizeAudit } from '../lib/validate'
 import ScheduleModal from '../components/ScheduleModal'
-import { SCHEDULE_LIST, buildSchedule, dday, ddayLabel, dueDateSupported } from '../lib/schedule'
+import { SCHEDULE_DONE_LIST, SCHEDULE_LIST, buildSchedule, dday, ddayLabel, dueDateSupported, doneKeysFrom } from '../lib/schedule'
 import { isStaffVisible, staffIdsFromProfiles } from '../lib/permissions'
 import {
   changeRate,
@@ -525,11 +525,16 @@ export default function Dashboard() {
         </section>
       ) : null}
 
-      <TaxAlertBanner />
-
       {isAdmin ? <DataAuditPanel /> : null}
 
-      {isAdmin ? <ScheduleCard userId={user?.id} home={home} isAdmin={isAdmin} /> : null}
+      {isAdmin ? (
+        <ScheduleCard
+          userId={user?.id}
+          home={home}
+          isAdmin={isAdmin}
+          syncBundle={{ sync, editing, setEditing, saveEditing, newSync, setNewSync, addSyncItem }}
+        />
+      ) : null}
 
       {loading ? (
         <LoadingBlock />
@@ -600,108 +605,6 @@ export default function Dashboard() {
               to={isAdmin || perms.includes('reports') ? '/reports' : undefined}
             />
           </div>
-
-          {isAdmin ? (
-            <section className="card overflow-hidden border-sky-200">
-              <header className="flex items-center justify-between gap-3 border-b border-ink-200 bg-sky-50/60 px-4 py-3">
-                <button
-                  type="button"
-                  onClick={() => setSyncOpen((v) => !v)}
-                  className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
-                  aria-expanded={syncOpen}
-                >
-                  <h2 className="truncate text-sm font-bold text-ink-900">
-                    업데이트 체크리스트
-                    <span className="ml-1.5 font-medium text-ink-500">{syncOpenCount}건 남음</span>
-                  </h2>
-                  <Icon name={syncOpen ? 'chevron-down' : 'chevron-right'} size={15} className="shrink-0 text-ink-500" />
-                </button>
-                <span className="shrink-0 text-[11px] text-ink-500">회사에서 작업할 때 확인</span>
-              </header>
-              {syncOpen ? (
-                <>
-                  <ul className="divide-y divide-ink-100">
-                    {sync.items.map((item) => {
-                      const done = item.done
-                      return (
-                        <li key={item.id} className="flex items-start gap-1 px-4 py-2.5 transition hover:bg-ink-50/60">
-                          {editing?.list === 'sync' && editing?.id === item.id ? (
-                            <form onSubmit={saveEditing} className="flex min-w-0 flex-1 items-center gap-1.5">
-                              <input
-                                autoFocus
-                                className="input min-w-0 flex-1 py-1 text-xs"
-                                value={editing.text}
-                                onChange={(e) => setEditing({ ...editing, text: e.target.value })}
-                              />
-                              <button type="submit" className="shrink-0 text-xs font-bold text-brand-700 hover:underline">
-                                저장
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setEditing(null)}
-                                className="shrink-0 text-xs text-ink-400 hover:underline"
-                              >
-                                취소
-                              </button>
-                            </form>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => sync.toggle(item.id)}
-                              className="flex min-w-0 flex-1 items-start gap-2.5 text-left"
-                            >
-                              <span
-                                className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition ${
-                                  done
-                                    ? 'border-sky-600 bg-sky-600 text-white'
-                                    : 'border-ink-300 bg-white text-transparent'
-                                }`}
-                              >
-                                <Icon name="check" size={13} strokeWidth={2.6} />
-                              </span>
-                              <span className={`text-sm ${done ? 'text-ink-400 line-through' : 'text-ink-800'}`}>
-                                {item.text}
-                              </span>
-                            </button>
-                          )}
-                          {!(editing?.list === 'sync' && editing?.id === item.id) ? (
-                            <button
-                              type="button"
-                              onClick={() => setEditing({ list: 'sync', id: item.id, text: item.text })}
-                              className="shrink-0 rounded-md p-1 text-ink-300 transition hover:bg-brand-50 hover:text-brand-700"
-                              aria-label="수정"
-                            >
-                              <Icon name="pencil" size={14} />
-                            </button>
-                          ) : null}
-                          <button
-                            type="button"
-                            onClick={() => sync.remove(item.id)}
-                            className="shrink-0 rounded-md p-1 text-ink-300 transition hover:bg-rose-50 hover:text-loss"
-                            aria-label="삭제"
-                          >
-                            <Icon name="trash" size={14} />
-                          </button>
-                        </li>
-                      )
-                    })}
-                  </ul>
-                  <form onSubmit={addSyncItem} className="flex items-center gap-2 border-t border-ink-100 px-4 py-2.5">
-                    <input
-                      className="input flex-1 py-1.5 text-xs"
-                      placeholder="체크 항목 추가"
-                      value={newSync}
-                      onChange={(e) => setNewSync(e.target.value)}
-                    />
-                    <button type="submit" className="btn-ghost shrink-0 !px-2.5 !py-1.5 text-xs" disabled={!newSync.trim()}>
-                      추가
-                    </button>
-                  </form>
-                </>
-              ) : null}
-            </section>
-          ) : null}
-
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
             <section className="card xl:col-span-2">
               <header className="flex items-center justify-between gap-3 border-b border-ink-200 px-4 py-3.5">
@@ -1117,10 +1020,11 @@ function DataAuditPanel() {
 /* 이번 달 챙길 일 — 자동(대출·세금) + 직접 등록. 관리자만. 누르면 일정 화면 */
 /* ------------------------------------------------------------------ */
 
-function ScheduleCard({ userId, home, isAdmin }) {
+function ScheduleCard({ userId, home, isAdmin, syncBundle }) {
   const [open, setOpen] = useState(false)
   const [loans, setLoans] = useState([])
   const [manuals, setManuals] = useState([])
+  const [markers, setMarkers] = useState([])
   const [dateOk, setDateOk] = useState(false)
   const [loading, setLoading] = useState(true)
   const ledger = useLedgerIndex()
@@ -1128,13 +1032,15 @@ function ScheduleCard({ userId, home, isAdmin }) {
   const loadAll = useCallback(async () => {
     setLoading(true)
     try {
-      const [loanRows, schedRows, supported] = await Promise.all([
+      const [loanRows, schedRows, markerRows, supported] = await Promise.all([
         listFundRows('fund_loans').catch(() => []),
         listChecklistItems(SCHEDULE_LIST).catch(() => []),
+        listChecklistItems(SCHEDULE_DONE_LIST).catch(() => []),
         dueDateSupported().catch(() => false),
       ])
       setLoans(loanRows || [])
       setManuals(schedRows || [])
+      setMarkers(markerRows || [])
       setDateOk(!!supported)
     } finally {
       setLoading(false)
@@ -1169,11 +1075,11 @@ function ScheduleCard({ userId, home, isAdmin }) {
     const end = new Date(base)
     end.setDate(end.getDate() + 35)
     const to = `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, '0')}-${String(end.getDate()).padStart(2, '0')}`
-    return buildSchedule({ loans, manuals, fromISO: from, toISO: to, overrides })
-  }, [loans, manuals, overrides])
+    return buildSchedule({ loans, manuals, fromISO: from, toISO: to, overrides, doneKeys: doneKeysFrom(markers) })
+  }, [loans, manuals, overrides, markers])
 
-  const overdue = items.filter((it) => it.date && dday(it.date) < 0)
-  const top = items.filter((it) => !it.date || dday(it.date) >= 0).slice(0, 4)
+  const overdue = items.filter((it) => it.date && dday(it.date) < 0 && !it.done)
+  const top = items.filter((it) => (!it.date || dday(it.date) >= 0) && !it.done).slice(0, 4)
   const homeOpenCount = (home?.items || []).filter((x) => !x.done).length
 
   return (
@@ -1214,12 +1120,14 @@ function ScheduleCard({ userId, home, isAdmin }) {
         onClose={() => setOpen(false)}
         loans={loans}
         manuals={manuals}
+        markers={markers}
         dateSupported={dateOk}
         userId={userId}
         onChanged={loadAll}
         home={home}
         isAdmin={isAdmin}
         overrides={overrides}
+        syncBundle={syncBundle}
       />
     </>
   )

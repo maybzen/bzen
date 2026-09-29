@@ -1,4 +1,4 @@
-import { buildSchedule, dday, ddayLabel, monthGrid, ruleDates, TAX_RULES } from '../src/lib/schedule'
+import { buildSchedule, dday, ddayLabel, monthGrid, ruleDates, TAX_RULES, doneKeysFrom, doneMarkerText } from '../src/lib/schedule'
 
 let pass = 0
 let fail = 0
@@ -57,6 +57,17 @@ const g = monthGrid(2026, 10)
 t('그리드 42칸', g.length === 42)
 t('그리드 시작 일요일', g[0] === '2026-09-27')
 t('그리드 10/1 포함', g.includes('2026-10-01') && g.includes('2026-10-31'))
+
+// 완료 마커
+const markers = [{ text: 'auto:tax-withholding-2026-10-10' }, { text: '일반 메모' }, { text: 'auto:loan-l2-2026-09-29' }]
+const dk = doneKeysFrom(markers)
+t('마커 추출', dk.has('tax-withholding-2026-10-10') && dk.has('loan-l2-2026-09-29') && dk.size === 2)
+t('마커 텍스트 형식', doneMarkerText('tax-vat-2026-10-25') === 'auto:tax-vat-2026-10-25')
+const items3 = buildSchedule({ loans, manuals: [], fromISO: '2026-09-29', toISO: '2026-10-31', doneKeys: dk })
+t('완료 표시 반영', items3.find((i) => i.key === 'tax-withholding-2026-10-10')?.done === true)
+t('미완료 유지', items3.find((i) => i.key === 'tax-vat-2026-10-25')?.done !== true)
+const undone = items3.filter((i) => !i.done)
+t('완료 제외 필터 가능', undone.every((i) => !i.done) && undone.length === items3.length - 2)
 
 console.log(`결과: ${pass} 통과 / ${fail} 실패 (총 ${pass + fail})`)
 if (fails.length) process.exit(1)

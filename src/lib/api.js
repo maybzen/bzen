@@ -316,7 +316,16 @@ export async function listEntries({
     start += PAGE
   }
 
-  return rows.slice(0, maxRows)
+  // 페이지네이션 도중 다른 기기에서 저장하면 경계 행이 두 번 들어올 수 있다. id 기준으로 정리.
+  const seen = new Set()
+  const unique = []
+  for (const r of rows) {
+    if (!r || !r.id || seen.has(r.id)) continue
+    seen.add(r.id)
+    unique.push(r)
+  }
+
+  return unique.slice(0, maxRows)
 }
 
 /** generated column(total_amount)은 저장 대상에서 제외 */

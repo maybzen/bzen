@@ -8,6 +8,22 @@ import { supabase } from './supabase'
 import { parseISO, toISODate, todayISO } from './format'
 
 export const SCHEDULE_LIST = 'schedule'
+/** 자동 항목 완료 표시 저장용 (text = `auto:<item key>`) */
+export const SCHEDULE_DONE_LIST = 'schedule_done'
+
+export function doneMarkerText(key) {
+  return `auto:${key}`
+}
+
+/** 완료 마커 행들에서 자동 키 집합을 뽑습니다 */
+export function doneKeysFrom(rows) {
+  const s = new Set()
+  for (const r of rows || []) {
+    const t = String(r?.text || '')
+    if (t.startsWith('auto:')) s.add(t.slice(5))
+  }
+  return s
+}
 
 /* ------------------------------------------------------------------ */
 /* 고정 캘린더 (매년 반복)                                               */
@@ -49,10 +65,11 @@ export function loanDates(loan, year, month1) {
 
 /**
  * @returns [{ key, date, title, detail, kind: 'auto'|'manual', source, done, refId }]
- * kind=auto 는 계산된 항목(수정 불가), manual 은 checklist_items 행입니다.
+ * kind=auto 는 계산된 항목(수정 불가, 완료 체크만 가능), manual 은 checklist_items 행입니다.
  * overrides.insurance 가 있으면 4대보험 항목 설명에 최신 고지액을 붙입니다.
+ * doneKeys 에 든 자동 키는 완료로 표시됩니다.
  */
-export function buildSchedule({ loans = [], manuals = [], fromISO, toISO, overrides = {} }) {
+export function buildSchedule({ loans = [], manuals = [], fromISO, toISO, overrides = {}, doneKeys = null }) {
   const out = []
   const seenMonths = new Set()
   const d0 = parseISO(fromISO)
@@ -106,6 +123,13 @@ export function buildSchedule({ loans = [], manuals = [], fromISO, toISO, overri
       done: !!row.done,
       refId: row.id,
     })
+  }
+
+  // 자동 항목 완료 표시
+  if (doneKeys && doneKeys.size) {
+    for (const it of out) {
+      if (it.kind === 'auto' && doneKeys.has(it.key)) it.done = true
+    }
   }
 
   out.sort((a, b) => (a.date || '9999').localeCompare(b.date || '9999') || a.title.localeCompare(b.title, 'ko'))

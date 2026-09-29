@@ -1,13 +1,17 @@
 import { useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import Icon from './Icon'
 import { ConfirmDialog, EmptyState, Field, InlineAlert, Modal, Spinner } from './ui'
 import { useToast } from './Toast'
 import { addChecklistItem, deleteChecklistItem, updateChecklistItem } from '../lib/api'
 import {
+  SCHEDULE_DONE_LIST,
   SCHEDULE_LIST,
   buildSchedule,
   dday,
   ddayLabel,
+  doneKeysFrom,
+  doneMarkerText,
   monthGrid,
   monthTitle,
 } from '../lib/schedule'
@@ -25,12 +29,14 @@ export default function ScheduleModal({
   onClose,
   loans = [],
   manuals = [],
+  markers = [],
   dateSupported = false,
   userId = null,
   onChanged,
   home = null,
   isAdmin = false,
   overrides = {},
+  syncBundle = null,
 }) {
   const toast = useToast()
   const today = todayISO()
@@ -59,10 +65,11 @@ export default function ScheduleModal({
   }, [open ])
 
   const grid = useMemo(() => monthGrid(year, month), [year, month])
+  const doneKeys = useMemo(() => doneKeysFrom(markers), [markers])
   const monthItems = useMemo(
     () =>
-      buildSchedule({ loans, manuals, fromISO: grid[0], toISO: grid[grid.length - 1], overrides }),
-    [loans, manuals, grid, overrides],
+      buildSchedule({ loans, manuals, fromISO: grid[0], toISO: grid[grid.length - 1], overrides, doneKeys }),
+    [loans, manuals, grid, overrides, doneKeys],
   )
   const byDate = useMemo(() => {
     const m = new Map()
@@ -79,10 +86,10 @@ export default function ScheduleModal({
     const end = new Date()
     end.setDate(end.getDate() + 30)
     const iso = `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, '0')}-${String(end.getDate()).padStart(2, '0')}`
-    return buildSchedule({ loans, manuals, fromISO: '2000-01-01', toISO: iso, overrides }).filter(
-      (it) => it.date && it.date >= base,
+    return buildSchedule({ loans, manuals, fromISO: '2000-01-01', toISO: iso, overrides, doneKeys }).filter(
+      (it) => it.date && it.date >= base && !it.done,
     )
-  }, [loans, manuals, overrides])
+  }, [loans, manuals, overrides, doneKeys])
 
   const selectedItems = useMemo(() => {
     const list = (byDate.get(selected) || []).slice()
@@ -122,6 +129,30 @@ export default function ScheduleModal({
     } catch (err) {
       toast.error(err.message)
     }
+  }
+
+  /* 자동 항목 완료 체크 (지나간 일정이 "안 한 것처럼" 보이지 않게) */
+  const toggleAuto = async (item) => {
+    setBusy(true)
+    try {
+      if (item.done) {
+        const marker = (markers || []).find((r) => String(r.text) === doneMarkerText(item.key))
+        if (marker) await deleteChecklistItem(marker.id)
+      } else {
+        await addChecklistItem(SCHEDULE_DONE_LIST, doneMarkerText(item.key), userId)
+      }
+      await reload()
+    } catch (err) {
+      toast.error(err.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const pickDate = (d) => {
+    setSelected(d)
+    // 달력에서 누른 날짜로 바로 등록할 수 있게 등록 폼 날짜도 같이 둡니다
+    setDate(d)
   }
 
   const startEdit = (row) => {
@@ -220,7 +251,7 @@ export default function ScheduleModal({
                 <button
                   key={d}
                   type="button"
-                  onClick={() => setSelected(d)}
+                  onClick={() => pickDate(d)}
                   className={`flex min-h-[44px] flex-col items-center gap-0.5 rounded-lg border px-1 py-1 text-[11px] transition ${
                     isSel
                       ? 'border-brand-500 bg-brand-50 font-bold text-brand-800'
@@ -261,13 +292,30 @@ export default function ScheduleModal({
               <ul className="flex flex-col divide-y divide-ink-100">
                 {selectedItems.map((it) => (
                   <li key={it.key} className="flex items-start gap-2 py-1.5 text-xs">
+                    {it.kind === 'auto' ? (
+                      <button
+                        type="button"
+                        onClick={() => toggleAuto(it)}
+                        aria-label={it.done ? '미완료로' : '완료로'}
+                        title={it.done ? '클릭하면 미완료로 되돌립니다' : '클릭하면 완료로 표시됩니다'}
+                        className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
+                          it.done ? 'border-brand-500 bg-brand-500 text-white' : 'border-ink-300 bg-white'
+                        }`}
+                      >
+                        {it.done ? <Icon name="check" size={11} strokeWidth={2.6} /> : null}
+                      </button>
+                    ) : null}
                     <span
-                      className={`mt-0.5 shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold tabular-nums ${chipTone(dday(it.date))}`}
+                      className={`mt-0.5 shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold tabular-nums ${
+                        it.done ? 'bg-emerald-100 text-emerald-700' : chipTone(dday(it.date))
+                      }`}
                     >
-                      {ddayLabel(it.date)}
+                      {it.done ? '완료' : ddayLabel(it.date)}
                     </span>
                     <span className="min-w-0 flex-1">
-                      <span className="font-semibold text-ink-900">{it.title}</span>
+                      <span className={`font-semibold ${it.done ? 'text-ink-400 line-through' : 'text-ink-900'}`}>
+                        {it.title}
+                      </span>
                       {it.detail ? <span className="block text-[11px] text-ink-500">{it.detail}</span> : null}
                       <span className="block text-[10px] text-ink-400">{it.source}</span>
                     </span>
@@ -306,14 +354,19 @@ export default function ScheduleModal({
           ) : null}
 
           <div className="rounded-xl border border-ink-200 bg-white px-3.5 py-3">
-            <p className="mb-2 text-xs font-bold text-ink-900">다가오는 일정 (30일)</p>
+            <div className="mb-2 flex items-center justify-between">
+              <p className="text-xs font-bold text-ink-900">다가오는 일정 (30일)</p>
+              <Link to="/tax" onClick={onClose} className="text-[11px] font-semibold text-brand-700 hover:underline">
+                세금 신고 준비물은 세금관리 →
+              </Link>
+            </div>
             {upcoming.length ? (
               <ul className="flex max-h-56 flex-col divide-y divide-ink-100 overflow-y-auto">
                 {upcoming.slice(0, 12).map((it) => (
                   <li key={it.key}>
                     <button
                       type="button"
-                      onClick={() => it.date && setSelected(it.date)}
+                      onClick={() => it.date && pickDate(it.date)}
                       className="flex w-full items-start gap-2 py-1.5 text-left text-xs transition hover:bg-ink-50"
                     >
                       <span
@@ -341,6 +394,8 @@ export default function ScheduleModal({
           </div>
 
           {home ? <HomeChecklist home={home} isAdmin={isAdmin} userId={userId} /> : null}
+
+          {syncBundle ? <SyncChecklist bundle={syncBundle} /> : null}
 
           <form onSubmit={handleAdd} className="flex flex-col gap-2 rounded-xl border border-ink-200 bg-ink-50/60 p-3.5">            <p className="text-xs font-bold text-ink-900">직접 등록</p>
             <div className="flex flex-col gap-2 sm:flex-row">
@@ -570,6 +625,97 @@ function HomeChecklist({ home, isAdmin, userId }) {
             추가
           </button>
         </form>
+      ) : null}
+    </div>
+  )
+}
+
+/* 업데이트 체크리스트 (대시보드에서 여기로 이동) */
+function SyncChecklist({ bundle }) {
+  const [open, setOpen] = useState(false)
+  const { sync, editing, setEditing, saveEditing, newSync, setNewSync, addSyncItem } = bundle
+  const items = sync.items || []
+  const left = items.filter((x) => !x.done).length
+  return (
+    <div className="rounded-xl border border-sky-200 bg-sky-50/50 px-3.5 py-3">
+      <button type="button" onClick={() => setOpen((v) => !v)} className="flex w-full items-center gap-1.5 text-left" aria-expanded={open}>
+        <p className="min-w-0 flex-1 text-xs font-bold text-ink-900">
+          업데이트 체크리스트
+          <span className="ml-1.5 font-medium text-ink-500">{left}건 남음</span>
+        </p>
+        <Icon name={open ? 'chevron-down' : 'chevron-right'} size={14} className="shrink-0 text-ink-400" />
+      </button>
+      {open ? (
+        <>
+          <ul className="mt-1.5 flex flex-col divide-y divide-ink-100 border-t border-ink-100">
+            {items.map((item) => (
+              <li key={item.id} className="flex items-start gap-1.5 py-1.5">
+                {editing?.list === 'sync' && editing?.id === item.id ? (
+                  <form onSubmit={saveEditing} className="flex min-w-0 flex-1 items-center gap-1.5">
+                    <input
+                      autoFocus
+                      className="input min-w-0 flex-1 !py-1.5 text-xs"
+                      value={editing.text}
+                      onChange={(e) => setEditing({ ...editing, text: e.target.value })}
+                    />
+                    <button type="submit" className="shrink-0 text-xs font-bold text-brand-700 hover:underline">
+                      저장
+                    </button>
+                    <button type="button" onClick={() => setEditing(null)} className="shrink-0 text-xs text-ink-400 hover:underline">
+                      취소
+                    </button>
+                  </form>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => sync.toggle(item.id)}
+                    className="flex min-w-0 flex-1 items-start gap-2 text-left"
+                  >
+                    <span
+                      className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
+                        item.done ? 'border-brand-500 bg-brand-500 text-white' : 'border-ink-300 bg-white text-transparent'
+                      }`}
+                    >
+                      <Icon name="check" size={11} strokeWidth={2.6} />
+                    </span>
+                    <span className={`text-xs ${item.done ? 'text-ink-400 line-through' : 'text-ink-800'}`}>
+                      {item.text}
+                    </span>
+                  </button>
+                )}
+                {!(editing?.list === 'sync' && editing?.id === item.id) ? (
+                  <button
+                    type="button"
+                    onClick={() => setEditing({ list: 'sync', id: item.id, text: item.text })}
+                    className="shrink-0 rounded-md p-1 text-ink-300 transition hover:bg-brand-50 hover:text-brand-700"
+                    aria-label="수정"
+                  >
+                    <Icon name="pencil" size={13} />
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => sync.remove(item.id)}
+                  className="shrink-0 rounded-md p-1 text-ink-300 transition hover:bg-rose-50 hover:text-loss"
+                  aria-label="삭제"
+                >
+                  <Icon name="trash" size={13} />
+                </button>
+              </li>
+            ))}
+          </ul>
+          <form onSubmit={addSyncItem} className="mt-1.5 flex items-center gap-1.5 border-t border-ink-100 pt-2">
+            <input
+              className="input min-w-0 flex-1 !py-1.5 text-xs"
+              placeholder="업데이트할 일 추가"
+              value={newSync}
+              onChange={(e) => setNewSync(e.target.value)}
+            />
+            <button type="submit" className="btn-ghost shrink-0 !px-2.5 !py-1.5 text-xs" disabled={!newSync.trim()}>
+              추가
+            </button>
+          </form>
+        </>
       ) : null}
     </div>
   )
