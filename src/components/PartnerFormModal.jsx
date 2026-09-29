@@ -274,13 +274,14 @@ export default function PartnerFormModal({ open, onClose, onSaved, initial, read
         memo: form.memo.trim(),
       }
       if (partnerId) {
-        await updatePartner(partnerId, payload)
+        const saved = await updatePartner(partnerId, payload)
         toast.success('거래처가 수정되었습니다.')
+        onSaved?.(saved)
       } else {
-        await createPartner({ ...payload, created_by: userId })
+        const saved = await createPartner({ ...payload, created_by: userId })
         toast.success('거래처가 등록되었습니다.')
+        onSaved?.(saved)
       }
-      onSaved?.()
       onClose?.()
     } catch (err) {
       setError(err.message)

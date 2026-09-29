@@ -10,7 +10,7 @@ import { useAuth } from '../auth/AuthContext'
 import { PROJECT_STATUS } from '../lib/constants'
 import { contractSplit, formatDateHuman, formatKRW, formatPercent, normalizeVendorName } from '../lib/format'
 import { buildPnl, groupByProject, summarize } from '../lib/summary'
-import { createEntry, createProject, deleteProject, ensurePartnerByName, isMissingTableError, linkProjectPartner, listEntries, listPartners, listProfiles, listProjectPartners, listProjects } from '../lib/api'
+import { createEntry, createProject, deleteProject, ensurePartnerByName, isMissingTableError, linkProjectPartner, listEntries, listPartners, listProfiles, listProjectPartners, listProjects, updateProject } from '../lib/api'
 
 /**
  * 카드에 쓰는 손익 표기. 세무·회계 표현을 그대로 씁니다.
@@ -258,7 +258,7 @@ export default function Projects() {
 
   /* 대행계약 (대표만): 계약만 하고 행사는 업체가 진행, 수수료 수취 */
   const [viewTab, setViewTab] = useState('projects')
-  const [dealOpen, setDealOpen] = useState(false)
+  const [dealInitial, setDealInitial] = useState(null)
   const agencyRows = useMemo(() => {
     const partnerById = new Map((partners || []).map((p) => [p.id, p]))
     const projectById = new Map((projects || []).filter((p) => !p.is_hidden).map((p) => [p.id, p]))
@@ -266,7 +266,7 @@ export default function Projects() {
     for (const e of entries || []) {
       if (e.entry_type !== 'purchase' || !e.project_id) continue
       const key = `${e.project_id}||${normalizeVendorName(e.counterparty)}`
-      paidByProjectName.set(key, (paidByProjectName.get(key) || 0) + Number(e.supply_amount || 0))
+      paidByProjectName.set(key, (paidByProjectName.get(key) || 0) + Number(e.total_amount || 0))
     }
     const byAgency = new Map()
     for (const l of links || []) {
@@ -275,9 +275,10 @@ export default function Projects() {
       const project = projectById.get(l.project_id)
       if (!p || !project) continue
       if (!byAgency.has(p.id)) byAgency.set(p.id, { partner: p, deals: [], contract: 0, paid: 0 })
-      const csplit = contractSplit(project)
+      /* 대행은 부가세포함가 기준 (구글시트와 동일) */
+      const contract = Number(project.contract_amount || 0)
       const paid = paidByProjectName.get(`${project.id}||${normalizeVendorName(p.name)}`) || 0
-      const deal = { project, contract: csplit.supply, paid, fee: csplit.supply - paid }
+      const deal = { project, agencyId: p.id, agencyName: p.name, contract, paid, fee: contract - paid }
       const row = byAgency.get(p.id)
       row.deals.push(deal)
       row.contract += deal.contract
@@ -432,8 +433,8 @@ export default function Projects() {
         agencyRows.length ? (
           <div className="flex flex-col gap-4">
             <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-              <StatCard label="대행계약" value={String(agencyRows.length)} unit="곳" tone="neutral" icon="building" />
-              <StatCard label="대행 계약" value={agencyTotals.contract} tone="sale" icon="trending-up" hint="공급가액 기준" />
+              <StatCard label="대행계약" value={String(agencyRows.reduce((a, r) => a + r.deals.length, 0))} unit="건" tone="neutral" icon="building" />
+              <StatCard label="대행 계약" value={agencyTotals.contract} tone="sale" icon="trending-up" hint="부가세포함 기준" />
               <StatCard label="업체 지급" value={agencyTotals.paid} tone="opex" icon="cart" hint="해당 업체명 매입 합계" />
               <StatCard label="수수료" value={agencyTotals.fee} tone={agencyTotals.fee >= 0 ? 'profit' : 'loss'} icon="coins" hint="계약 − 지급" />
             </div>
@@ -442,63 +443,76 @@ export default function Projects() {
               총계약금이 들어오면 수수료만 매출로 잡고, 나머지는 대행업체에 전달합니다.
             </p>
             <div>
-              <button type="button" className="btn-primary" onClick={() => setDealOpen(true)}>
+              <button type="button" className="btn-primary" onClick={() => setDealInitial({})}>
                 <Icon name="plus" size={16} />
                 대행계약 등록
               </button>
             </div>
-            {agencyRows.map((a) => (
-              <section key={a.partner.id} className="card overflow-hidden">
-                <header className="flex flex-wrap items-center justify-between gap-2 border-b border-ink-200 px-4 py-3.5">
-                  <Link
-                    to={`/partners?search=${encodeURIComponent(a.partner.name)}`}
-                    className="text-sm font-bold text-ink-900 hover:text-brand-700 hover:underline"
-                  >
-                    {a.partner.name}
-                  </Link>
-                  <p className="text-xs text-ink-500">
-                    계약 <strong className="font-num tabular-nums text-ink-900">{formatKRW(a.contract)}원</strong>
-                    {' · '}수수료{' '}
-                    <strong className={`font-num tabular-nums ${a.fee >= 0 ? 'text-emerald-700' : 'text-loss'}`}>
-                      {formatKRW(a.fee)}원
-                    </strong>
-                  </p>
-                </header>
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-[560px] border-collapse text-xs">
-                    <thead className="bg-ink-50/70">
-                      <tr>
-                        <th className="th">행사이름</th>
-                        <th className="th">발주처</th>
-                        <th className="th text-right">계약(공급가)</th>
-                        <th className="th text-right">업체 지급</th>
-                        <th className="th text-right">수수료</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-ink-100">
-                      {a.deals.map((d) => (
-                        <tr key={d.project.id} className="transition hover:bg-ink-50/60">
-                          <td className="td font-medium">
-                            <Link to={`/projects/${d.project.id}`} className="text-ink-800 hover:text-brand-700 hover:underline">
-                              {d.project.name}
-                            </Link>{' '}
-                            <span className="chip bg-emerald-50 text-emerald-700">수의계약</span>
-                          </td>
-                          <td className="td text-ink-500">{d.project.client || '—'}</td>
-                          <td className="td num">{formatKRW(d.contract)}</td>
-                          <td className="td num text-ink-500">
-                            {d.paid ? formatKRW(d.paid) : <span className="text-ink-300" title="장부 거래처명이 다르면 0으로 뜹니다">0 · 명칭확인</span>}
-                          </td>
-                          <td className={`td num font-bold ${d.fee >= 0 ? 'text-emerald-700' : 'text-loss'}`}>
-                            {formatKRW(d.fee)}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </section>
-            ))}
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 2xl:grid-cols-3">
+              {agencyRows.flatMap((a) =>
+                a.deals.map((d) => (
+                  <article key={d.project.id} className="card flex flex-col p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className="chip bg-amber-100 text-amber-800">대행계약</span>
+                        </div>
+                        <Link
+                          to={`/projects/${d.project.id}`}
+                          className="mt-2 block truncate text-base font-bold text-ink-900 hover:text-brand-700"
+                        >
+                          {d.project.name}
+                        </Link>
+                        <p className="mt-0.5 truncate text-xs text-ink-500">
+                          {d.project.client || '발주처 미지정'}
+                          {d.project.referrer ? ` · 연결자 ${d.project.referrer}` : ''}
+                        </p>
+                        <p className="mt-0.5 truncate text-xs text-ink-500">
+                          수행 {d.agencyName}
+                          {d.project.start_date
+                            ? ` · ${formatDateHuman(d.project.start_date)}${d.project.end_date ? ` ~ ${formatDateHuman(d.project.end_date)}` : ''}`
+                            : ''}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setDealInitial({ project: d.project, partnerId: d.agencyId })}
+                        className="shrink-0 rounded-md px-1.5 py-1.5 text-xs font-semibold text-ink-500 transition hover:bg-brand-50 hover:text-brand-700"
+                        title="대행계약 수정"
+                      >
+                        수정
+                      </button>
+                    </div>
+                    <div className="mt-3 grid grid-cols-3 gap-2 border-t border-ink-100 pt-3 text-right">
+                      <div>
+                        <p className="text-[11px] text-ink-400">계약</p>
+                        <p className="font-num text-sm font-extrabold tabular-nums text-ink-900">{formatKRW(d.contract)}</p>
+                      </div>
+                      <div>
+                        <p className="text-[11px] text-ink-400">업체 지급</p>
+                        <p className="font-num text-sm font-extrabold tabular-nums text-ink-500">
+                          {d.paid ? formatKRW(d.paid) : '0'}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-[11px] text-ink-400">수수료</p>
+                        <p className={`font-num text-sm font-extrabold tabular-nums ${d.fee >= 0 ? 'text-emerald-700' : 'text-loss'}`}>
+                          {formatKRW(d.fee)}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="mt-3 flex items-center justify-end">
+                      <Link
+                        to={`/projects/${d.project.id}`}
+                        className="text-xs font-semibold text-brand-700 hover:underline"
+                      >
+                        상세 →
+                      </Link>
+                    </div>
+                  </article>
+                )),
+              )}
+            </div>
           </div>
         ) : (
           <div className="card">
@@ -603,17 +617,6 @@ export default function Projects() {
                   </div>
 
                   <div className="flex shrink-0 items-center gap-1">
-                    <button
-                      type="button"
-                      className="rounded-md p-1.5 text-ink-500 transition hover:bg-brand-50 hover:text-brand-700"
-                      onClick={() => {
-                        setEditing(project)
-                        setFormOpen(true)
-                      }}
-                      aria-label="수정"
-                    >
-                      <Icon name="pencil" size={15} />
-                    </button>
                     {isAdmin ? (
                       <button
                         type="button"
@@ -714,13 +717,14 @@ export default function Projects() {
         userId={user?.id}
       />
 
-      {isAdmin && dealOpen ? (
+      {isAdmin && dealInitial ? (
         <AgencyDealModal
           partners={partners}
           userId={user?.id}
-          onClose={() => setDealOpen(false)}
+          initial={dealInitial.project ? dealInitial : null}
+          onClose={() => setDealInitial(null)}
           onSaved={() => {
-            setDealOpen(false)
+            setDealInitial(null)
             setReloadKey((k) => k + 1)
           }}
         />
@@ -765,7 +769,7 @@ function AgencyDealModal({ partners, userId, initial = null, onClose, onSaved })
     start: initial?.project?.start_date || '',
     end: initial?.project?.end_date || '',
     referrer: initial?.project?.referrer || '',
-    memo: '',
+    memo: initial?.project?.memo || '',
   })
   const [feeTouched, setFeeTouched] = useState(Boolean(initial))
   const [saving, setSaving] = useState(false)
@@ -796,6 +800,23 @@ function AgencyDealModal({ partners, userId, initial = null, onClose, onSaved })
     setSaving(true)
     setError('')
     try {
+      if (initial?.project?.id) {
+        await updateProject(initial.project.id, {
+          name: form.name.trim(),
+          client: form.client.trim(),
+          start_date: form.start || null,
+          end_date: form.end || null,
+          contract_amount: feeNum,
+          referrer: form.referrer.trim(),
+          memo: form.memo.trim(),
+        })
+        if (form.client.trim()) {
+          ensurePartnerByName(form.client.trim(), userId).catch(() => {})
+        }
+        toast.success('대행계약을 수정했습니다. 수수료 매출 행은 금액이 바뀌었으면 따로 고쳐주세요.')
+        onSaved?.()
+        return
+      }
       const project = await createProject({
         name: form.name.trim(),
         client: form.client.trim(),
@@ -804,6 +825,7 @@ function AgencyDealModal({ partners, userId, initial = null, onClose, onSaved })
         start_date: form.start || null,
         end_date: form.end || null,
         contract_amount: feeNum,
+        referrer: form.referrer.trim(),
         memo: [
           `대행계약: 총계약 ${formatKRW(totalNum)}원 중 수수료 ${form.rate || 0}%만 매출.`,
           `수행 ${partner.name} (나머지 ${formatKRW(totalNum - feeNum)}원 전달).`,
@@ -916,6 +938,14 @@ function AgencyDealModal({ partners, userId, initial = null, onClose, onSaved })
         <Field label="종료일">
           <input type="date" className="input" value={form.end} onChange={set('end')} />
         </Field>
+        <Field label="연결자" hint="이 건을 연결해준 분 (예: 협회 담당자)">
+          <input
+            className="input"
+            value={form.referrer}
+            onChange={set('referrer')}
+            placeholder="예: 정가희 국장(부산컨벤션산업협회)"
+          />
+        </Field>
         <Field label="메모" className="sm:col-span-2">
           <textarea className="input min-h-[64px] resize-y" value={form.memo} onChange={set('memo')} />
         </Field>
@@ -954,14 +984,6 @@ function ProposalCard({ project, row, status, isAdmin, managerName, onEdit, onDe
         </div>
 
         <div className="flex shrink-0 items-center gap-1">
-          <button
-            type="button"
-            className="rounded-md p-1.5 text-ink-500 transition hover:bg-brand-50 hover:text-brand-700"
-            onClick={onEdit}
-            aria-label="수정"
-          >
-            <Icon name="pencil" size={15} />
-          </button>
           {isAdmin ? (
             <button
               type="button"

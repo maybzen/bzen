@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import EntryFormModal from '../components/EntryFormModal'
 import EntryTable from '../components/EntryTable'
+import PartnerFormModal from '../components/PartnerFormModal'
 import Icon from '../components/Icon'
 import ProjectFormModal from '../components/ProjectFormModal'
 import { ProfitBar } from '../components/Charts'
@@ -440,9 +441,18 @@ export default function ProjectDetail() {
             candidates={candidateVendors}
             linkBusy={linkBusy}
             isAdmin={isAdmin}
+            userId={user?.id}
+            partners={partners}
+            profiles={profiles}
+            ledgerEntries={entries}
             onLink={handleLink}
             onUnlink={handleUnlink}
             onSetRole={handleSetRole}
+            onPartnerSaved={(p) => {
+              refreshLinks()
+              if (p?.id) handleLink(p.id)
+              else setReloadKey((k) => k + 1)
+            }}
           />
         ) : (
           <EntryTable
@@ -521,7 +531,13 @@ export default function ProjectDetail() {
  * 프로젝트마다 따로 연결하므로 중복 걱정 없습니다.
  * 장부에만 있고 미연결인 곳은 후보로 보여주고, 밥집처럼 엮지 않을 곳은 그냥 두면 됩니다.
  */
-function VendorPanel({ links, linked, candidates, linkBusy, isAdmin, onLink, onUnlink, onSetRole }) {
+function VendorPanel({ links, linked, candidates, linkBusy, isAdmin, userId, partners, profiles, ledgerEntries, onLink, onUnlink, onSetRole, onPartnerSaved }) {
+  const [q, setQ] = useState('')
+  const [newOpen, setNewOpen] = useState(false)
+  const ql = q.trim().toLowerCase()
+  const matchQ = (name) => !ql || String(name || '').toLowerCase().includes(ql)
+  const linkedShown = (linked || []).filter((v) => matchQ(v.name))
+  const candidatesShown = (candidates || []).filter((v) => matchQ(v.name))
   if (links === null) {
     return (
       <div className="p-4">
@@ -545,9 +561,47 @@ function VendorPanel({ links, linked, candidates, linkBusy, isAdmin, onLink, onU
   }
   return (
     <div>
-      {linked.length ? (
+      <div className="flex items-center gap-2 border-b border-ink-100 px-4 py-2.5">
+        <div className="relative flex-1">
+          <Icon
+            name="search"
+            size={14}
+            className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-400"
+          />
+          <input
+            className="input py-1.5 pl-8 text-xs"
+            placeholder="연결할 거래처 검색"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+          />
+        </div>
+        <button
+          type="button"
+          onClick={() => setNewOpen(true)}
+          className="shrink-0 rounded-md bg-brand-50 px-2 py-1.5 text-xs font-bold text-brand-700 transition hover:bg-brand-100"
+        >
+          + 새 거래처 등록
+        </button>
+      </div>
+      {newOpen ? (
+        <PartnerFormModal
+          open
+          onClose={() => setNewOpen(false)}
+          onSaved={(p) => {
+            setNewOpen(false)
+            onPartnerSaved?.(p)
+          }}
+          initial={null}
+          userId={userId}
+          ledger={{ entries: ledgerEntries || [], collections: [] }}
+          isAdmin={isAdmin}
+          profiles={profiles}
+          existingNames={(partners || []).map((x) => ({ id: x.id, name: x.name }))}
+        />
+      ) : null}
+      {linkedShown.length ? (
         <ul className="divide-y divide-ink-100">
-          {linked.map((v) => (
+          {linkedShown.map((v) => (
             <li key={v.partner.id} className="flex items-center gap-3 px-4 py-3">
               <div className="min-w-0 flex-1">
                 <p className="flex flex-wrap items-center gap-1.5 truncate text-sm font-bold text-ink-900">
@@ -598,13 +652,13 @@ function VendorPanel({ links, linked, candidates, linkBusy, isAdmin, onLink, onU
           ))}
         </ul>
       ) : null}
-      {candidates.length ? (
-        <div className={linked.length ? 'border-t border-ink-100' : ''}>
+      {candidatesShown.length ? (
+        <div className={linkedShown.length ? 'border-t border-ink-100' : ''}>
           <p className="bg-ink-50/60 px-4 py-2 text-[11px] font-bold text-ink-500">
             연결 후보 (장부에만 있는 곳 · 밥집처럼 엮지 않을 곳은 두세요)
           </p>
           <ul className="divide-y divide-ink-100">
-            {candidates.map((v) => (
+            {candidatesShown.map((v) => (
               <li key={v.name} className="flex items-center gap-3 px-4 py-2.5">
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-semibold text-ink-700">{v.name}</p>

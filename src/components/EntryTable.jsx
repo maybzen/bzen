@@ -538,10 +538,10 @@ export default function EntryTable({
                           <button
                             type="button"
                             onClick={() => onEdit?.(entry)}
-                            className="rounded-md p-1.5 text-ink-500 transition hover:bg-brand-50 hover:text-brand-700"
-                            aria-label="수정"
+                            className="rounded-md px-1.5 py-1.5 text-xs font-semibold text-ink-500 transition hover:bg-brand-50 hover:text-brand-700"
+                            title="상세 보기·수정"
                           >
-                            <Icon name="pencil" size={15} />
+                            상세
                           </button>
                         ) : null}
                         {onDelete && (!canDeleteEntry || canDeleteEntry(entry)) ? (
