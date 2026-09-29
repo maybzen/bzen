@@ -459,7 +459,8 @@ export default function Projects() {
                   <table className="w-full min-w-[560px] border-collapse text-xs">
                     <thead className="bg-ink-50/70">
                       <tr>
-                        <th className="th">프로젝트</th>
+                        <th className="th">행사이름</th>
+                        <th className="th">발주처</th>
                         <th className="th text-right">계약(공급가)</th>
                         <th className="th text-right">업체 지급</th>
                         <th className="th text-right">수수료</th>
@@ -474,6 +475,7 @@ export default function Projects() {
                             </Link>{' '}
                             <span className="chip bg-emerald-50 text-emerald-700">수의계약</span>
                           </td>
+                          <td className="td text-ink-500">{d.project.client || '—'}</td>
                           <td className="td num">{formatKRW(d.contract)}</td>
                           <td className="td num text-ink-500">
                             {d.paid ? formatKRW(d.paid) : <span className="text-ink-300" title="장부 거래처명이 다르면 0으로 뜹니다">0 · 명칭확인</span>}
