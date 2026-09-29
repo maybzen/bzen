@@ -255,7 +255,7 @@ export default function Projects() {
   const totals = useMemo(() => summarize(entries), [entries])
   const maxSale = Math.max(1, ...rows.map((r) => Math.max(r.sale, Math.abs(r.profit))))
 
-  /* 대행업체 (대표만): 계약만 하고 행사는 업체가 진행, 수수료 수취 */
+  /* 대행계약 (대표만): 계약만 하고 행사는 업체가 진행, 수수료 수취 */
   const [viewTab, setViewTab] = useState('projects')
   const agencyRows = useMemo(() => {
     const partnerById = new Map((partners || []).map((p) => [p.id, p]))
@@ -364,7 +364,7 @@ export default function Projects() {
                 onChange={setViewTab}
                 options={[
                   { key: 'projects', label: '프로젝트' },
-                  { key: 'agency', label: `대행업체${agencyRows.length ? ` ${agencyRows.length}` : ''}` },
+                  { key: 'agency', label: `대행계약${agencyRows.length ? ` ${agencyRows.length}` : ''}` },
                 ]}
               />
             ) : null}
@@ -430,7 +430,7 @@ export default function Projects() {
         agencyRows.length ? (
           <div className="flex flex-col gap-4">
             <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-              <StatCard label="대행업체" value={String(agencyRows.length)} unit="곳" tone="neutral" icon="building" />
+              <StatCard label="대행계약" value={String(agencyRows.length)} unit="곳" tone="neutral" icon="building" />
               <StatCard label="대행 계약" value={agencyTotals.contract} tone="sale" icon="trending-up" hint="공급가액 기준" />
               <StatCard label="업체 지급" value={agencyTotals.paid} tone="opex" icon="cart" hint="해당 업체명 매입 합계" />
               <StatCard label="수수료" value={agencyTotals.fee} tone={agencyTotals.fee >= 0 ? 'profit' : 'loss'} icon="coins" hint="계약 − 지급" />
@@ -493,8 +493,8 @@ export default function Projects() {
           <div className="card">
             <EmptyState
               icon="building"
-              title="대행업체가 없습니다"
-              description="프로젝트 상세 → 협력업체에서 업체를 대행으로 지정하세요."
+              title="대행계약이 없습니다"
+              description="프로젝트 상세 → 협력업체에서 업체를 대행계약으로 지정하세요."
             />
           </div>
         )

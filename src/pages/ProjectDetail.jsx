@@ -153,12 +153,12 @@ export default function ProjectDetail() {
     }
   }
 
-  /* 협력 ↔ 대행 전환 (대표만) */
+  /* 협력 ↔ 대행계약 전환 (대표만) */
   const handleSetRole = async (partnerId, role) => {
     setLinkBusy(true)
     try {
       await setProjectPartnerRole(id, partnerId, role)
-      toast.success(role === '대행' ? '대행업체로 지정했습니다.' : '협력업체로 되돌렸습니다.')
+      toast.success(role === '대행' ? '대행계약으로 지정했습니다.' : '협력업체로 되돌렸습니다.')
       await refreshLinks()
     } catch (err) {
       toast.error(err.message)
@@ -553,7 +553,7 @@ function VendorPanel({ links, linked, candidates, linkBusy, isAdmin, onLink, onU
                 <p className="flex flex-wrap items-center gap-1.5 truncate text-sm font-bold text-ink-900">
                   <span className="truncate">{v.name}</span>
                   {v.linkRole === '대행' ? (
-                    <span className="chip shrink-0 bg-amber-100 text-amber-800">대행</span>
+                    <span className="chip shrink-0 bg-amber-100 text-amber-800">대행계약</span>
                   ) : null}
                 </p>
                 <p className="mt-0.5 truncate text-xs text-ink-500">
@@ -589,9 +589,9 @@ function VendorPanel({ links, linked, candidates, linkBusy, isAdmin, onLink, onU
                   onClick={() => onSetRole(v.partner.id, v.linkRole === '대행' ? '협력' : '대행')}
                   disabled={linkBusy}
                   className="shrink-0 text-xs font-semibold text-ink-400 hover:text-brand-700 hover:underline disabled:opacity-50"
-                  title="협력 ↔ 대행 전환 (대표만)"
+                  title="협력 ↔ 대행계약 전환 (대표만)"
                 >
-                  {v.linkRole === '대행' ? '협력으로' : '대행으로'}
+                  {v.linkRole === '대행' ? '협력으로' : '대행계약으로'}
                 </button>
               ) : null}
             </li>
