@@ -1,4 +1,5 @@
 import { supabase, FUNCTIONS_URL, SUPABASE_ANON_KEY } from './supabase'
+import { invalidateLedgerIndex } from './ledgerIndex'
 
 const PAGE = 1000
 
@@ -330,7 +331,10 @@ export function sanitizeEntry(payload) {
 export function createEntry(payload, userId) {
   // RLS가 created_by = 로그인 계정을 강제하므로 항상 로그인 계정으로 기록합니다.
   const row = sanitizeEntry({ ...payload, created_by: userId })
-  return unwrap(supabase.from('entries').insert(row).select().single())
+  return unwrap(supabase.from('entries').insert(row).select().single()).then((saved) => {
+    invalidateLedgerIndex()
+    return saved
+  })
 }
 
 export function createEntries(rows) {
@@ -347,15 +351,26 @@ export function createEntries(rows) {
     for (const key of keys) out[key] = row[key] === undefined ? null : row[key]
     return out
   })
-  return unwrap(supabase.from('entries').insert(normalized).select())
+  return unwrap(supabase.from('entries').insert(normalized).select()).then((saved) => {
+    invalidateLedgerIndex()
+    return saved
+  })
 }
 
 export function updateEntry(id, patch) {
-  return unwrap(supabase.from('entries').update(sanitizeEntry(patch)).eq('id', id).select().single())
+  return unwrap(supabase.from('entries').update(sanitizeEntry(patch)).eq('id', id).select().single()).then(
+    (saved) => {
+      invalidateLedgerIndex()
+      return saved
+    },
+  )
 }
 
 export function deleteEntry(id) {
-  return unwrap(supabase.from('entries').delete().eq('id', id))
+  return unwrap(supabase.from('entries').delete().eq('id', id)).then((r) => {
+    invalidateLedgerIndex()
+    return r
+  })
 }
 
 /* ------------------------------------------------------------------ */

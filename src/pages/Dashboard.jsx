@@ -5,7 +5,7 @@ import Icon from '../components/Icon'
 import PeriodPicker, { usePeriod } from '../components/PeriodPicker'
 import EntryTable from '../components/EntryTable'
 import { useToast } from '../components/Toast'
-import { EmptyState, LoadingBlock, PageHeader, StatCard } from '../components/ui'
+import { EmptyState, LoadingBlock, PageHeader, Spinner, StatCard } from '../components/ui'
 import { useAuth } from '../auth/AuthContext'
 import { useStaffPermissions } from '../lib/permissions'
 import {
@@ -20,6 +20,8 @@ import {
   listProjects,
   updateChecklistItem,
 } from '../lib/api'
+import { refreshLedgerIndex, useLedgerIndex } from '../lib/ledgerIndex'
+import { ISSUE_META, summarizeAudit } from '../lib/validate'
 import { isStaffVisible, staffIdsFromProfiles } from '../lib/permissions'
 import {
   changeRate,
@@ -548,6 +550,8 @@ export default function Dashboard() {
       ) : null}
 
       <TaxAlertBanner />
+
+      {isAdmin ? <DataAuditPanel /> : null}
 
       {loading ? (
         <LoadingBlock />
@@ -1118,6 +1122,197 @@ function MiniStat({ label, value, unit = '원', desc, tone = 'ink', to }) {
       {body}
     </Link>
   )
+}
+
+/* ------------------------------------------------------------------ */
+/* 데이터 점검 — 장부 전체를 훑어 어긋난 내역을 모아 보여줍니다          */
+/* ------------------------------------------------------------------ */
+
+const AUDIT_LIMIT = 25
+
+function DataAuditPanel() {
+  const [open, setOpen] = useState(false)
+  const [filter, setFilter] = useState('all')
+  const { issues, loading, ready, entries } = useLedgerIndex()
+  const navigate = useNavigate()
+  const [reloading, setReloading] = useState(false)
+
+  const reload = async () => {
+    setReloading(true)
+    try {
+      await refreshLedgerIndex()
+    } finally {
+      setReloading(false)
+    }
+  }
+
+  const summary = useMemo(() => summarizeAudit(issues), [issues])
+  const shown = useMemo(() => {
+    const list = filter === 'all' ? issues : issues.filter((i) => i.code === filter)
+    // 깨진 텍스트 → 중복 → 표기 → 부가세 → 입력누락 순으로 보여주고, 같은 종류는 금액 큰 순
+    const rank = { broken: 0, duplicate: 1, variant: 2, vat: 3, field: 4 }
+    return [...list].sort((a, b) => (rank[a.code] - rank[b.code]) || (b.amount - a.amount))
+  }, [issues, filter])
+
+  if (loading && !ready) {
+    return (
+      <div className="flex items-center gap-2 rounded-xl border border-ink-200 bg-white px-4 py-3 text-xs text-ink-500">
+        <Spinner size={14} />
+        장부를 검사하는 중입니다…
+      </div>
+    )
+  }
+
+  if (!issues.length) {
+    return (
+      <div className="flex items-center gap-2.5 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs text-emerald-800">
+        <Icon name="check" size={15} className="shrink-0" />
+        <span className="min-w-0 flex-1">
+          <strong className="font-bold">데이터 점검 통과</strong> · {entries.length.toLocaleString()}건 중 중복·표기·부가세·입력 누락이 없습니다.
+        </span>
+      </div>
+    )
+  }
+
+  const tone =
+    summary.byCode.broken > 0
+      ? { ring: 'border-rose-200 bg-rose-50', text: 'text-rose-800', chip: 'bg-rose-100 text-rose-700', line: 'border-rose-100' }
+      : summary.byCode.duplicate > 0 || summary.byCode.variant > 0
+        ? { ring: 'border-amber-200 bg-amber-50', text: 'text-amber-800', chip: 'bg-amber-100 text-amber-700', line: 'border-amber-100' }
+        : { ring: 'border-sky-200 bg-sky-50', text: 'text-sky-800', chip: 'bg-sky-100 text-sky-700', line: 'border-sky-100' }
+
+  return (
+    <section className={`rounded-xl border ${tone.ring}`}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center gap-3 px-4 py-3 text-left"
+      >
+        <Icon name="alert" size={16} className={`shrink-0 ${tone.text}`} />
+        <span className="min-w-0 flex-1">
+          <span className={`block text-sm font-bold ${tone.text}`}>
+            데이터 점검 · {summary.total}건
+          </span>
+          <span className={`mt-0.5 block text-[11px] opacity-80 ${tone.text}`}>
+            {entries.length.toLocaleString()}건을 검사했습니다. 내용을 눌러 항목을 확인하세요.
+          </span>
+        </span>
+        <span className="hidden shrink-0 items-center gap-1.5 sm:flex">
+          {summary.ranked.map((r) => (
+            <span key={r.code} className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${tone.chip}`}>
+              {r.label} {r.count}
+            </span>
+          ))}
+        </span>
+        <span className={`shrink-0 transition-transform ${tone.text} ${open ? 'rotate-180' : ''}`}>
+          <Icon name="chevron-down" size={16} />
+        </span>
+      </button>
+
+      {reloading ? (
+        <div className={`border-t px-4 py-2 text-center text-[11px] text-ink-500 ${tone.line}`}>
+          다시 검사하는 중…
+        </div>
+      ) : null}
+
+      {open ? (
+        <div className={`border-t bg-white/70 px-4 py-3 ${tone.line}`}>
+          <div className="mb-2.5 flex flex-wrap gap-1.5">
+            <button
+              type="button"
+              onClick={() => setFilter('all')}
+              className={`rounded-full px-2.5 py-1 text-[11px] font-semibold transition ${
+                filter === 'all' ? 'bg-ink-800 text-white' : 'bg-ink-100 text-ink-600 hover:bg-ink-200'
+              }`}
+            >
+              전체 {summary.total}
+            </button>
+            {summary.ranked.map((r) => (
+              <button
+                key={r.code}
+                type="button"
+                onClick={() => setFilter(r.code)}
+                className={`rounded-full px-2.5 py-1 text-[11px] font-semibold transition ${
+                  filter === r.code ? 'bg-ink-800 text-white' : 'bg-ink-100 text-ink-600 hover:bg-ink-200'
+                }`}
+              >
+                {r.label} {r.count}
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={reload}
+              disabled={reloading}
+              className="ml-auto rounded-full bg-ink-100 px-2.5 py-1 text-[11px] font-semibold text-ink-600 transition hover:bg-ink-200 disabled:opacity-50"
+            >
+              {reloading ? '검사 중…' : '다시 검사'}
+            </button>
+          </div>
+
+          {shown.length ? (
+            <ul className="flex flex-col divide-y divide-ink-100">
+              {shown.slice(0, AUDIT_LIMIT).map((i) => {
+                const meta = ISSUE_META[i.code] || {}
+                const target = i.entryId ? auditTargetFor(entries, i.entryId) : null
+                const body = (
+                  <>
+                    <span className={`mt-0.5 shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold ${tone.chip}`}>
+                      {meta.label || i.code}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="flex flex-wrap items-baseline gap-x-2">
+                        <span className="text-xs font-bold text-ink-900">{i.title}</span>
+                        {i.party ? <span className="text-xs text-ink-700">{i.party}</span> : null}
+                        {i.date ? <span className="text-[11px] tabular-nums text-ink-500">{formatDateHuman(i.date)}</span> : null}
+                        {i.amount ? (
+                          <span className="text-[11px] tabular-nums text-ink-500">{formatKRW(i.amount)}원</span>
+                        ) : null}
+                      </span>
+                      {i.detail ? <span className="mt-0.5 block text-[11px] leading-relaxed text-ink-500">{i.detail}</span> : null}
+                    </span>
+                    {target ? <Icon name="chevron-right" size={14} className="mt-0.5 shrink-0 text-ink-300" /> : null}
+                  </>
+                )
+                return (
+                  <li key={i.id}>
+                    {target ? (
+                      <button
+                        type="button"
+                        onClick={() => navigate(`/${target}?period=all&search=${encodeURIComponent(i.party || '')}`)}
+                        className="flex w-full items-start gap-2.5 py-2 text-left transition hover:bg-ink-50"
+                      >
+                        {body}
+                      </button>
+                    ) : (
+                      <div className="flex items-start gap-2.5 py-2">{body}</div>
+                    )}
+                  </li>
+                )
+              })}
+            </ul>
+          ) : (
+            <p className="py-3 text-xs text-ink-500">이 항목은 없습니다.</p>
+          )}
+
+          {shown.length > AUDIT_LIMIT ? (
+            <p className="mt-2 text-[11px] text-ink-400">
+              그 밖에 {shown.length - AUDIT_LIMIT}건이 있습니다. 항목을 눌러 해당 장부에서 확인하세요.
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+    </section>
+  )
+}
+
+/** 지적된 건이 속한 장부 메뉴 (홈 화면 메뉴 경로) */
+function auditTargetFor(entries, entryId) {
+  const e = entries.find((x) => x.id === entryId)
+  if (!e) return null
+  if (e.source === 'expense_report') return 'expense-reports'
+  if (e.entry_type === 'sale') return 'sales'
+  if (e.entry_type === 'purchase') return 'purchases'
+  return 'expenses'
 }
 
 function StaffHome({ period, loading, stats, current, projects, profiles, attachmentsByEntry }) {

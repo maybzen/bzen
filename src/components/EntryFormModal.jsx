@@ -7,6 +7,9 @@ import { useToast } from './Toast'
 import { CATEGORIES, ENTRY_META, INTERNAL_PROJECT_NAME, PAYMENT_METHODS, categoryHint, suggestCategory } from '../lib/constants'
 import { formatFileSize, formatKRW, todayISO } from '../lib/format'
 import { createEntry, deleteAttachment, listFundRows, updateEntry, uploadAttachment } from '../lib/api'
+import { ensureLedgerIndex, useLedgerIndex } from '../lib/ledgerIndex'
+import { isStaffVisible, staffIdsFromProfiles } from '../lib/permissions'
+import { ISSUE_META, checkEntryDraft } from '../lib/validate'
 
 const MAX_FILE = 20 * 1024 * 1024
 
@@ -79,8 +82,12 @@ export default function EntryFormModal({
   const [removed, setRemoved] = useState([])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  /* 경고를 확인하고 "그래도 저장"을 누른 뒤에야 실제 저장이 진행됩니다 */
+  const [forceSave, setForceSave] = useState(false)
   /* 자금관리에 등록된 법인카드 목록 (결제수단=카드 선택 시) */
   const [fundCards, setFundCards] = useState([])
+  /* 중복·표기 대조용 장부 전체 (관리자만 조회 가능) */
+  const ledger = useLedgerIndex({ enabled: open })
 
   /** 신규 등록 시 프로젝트 미선택이면 사내 공통(비젠공통·관리)으로 자동 지정 (effect보다 먼저 선언) */
   const internalProjectId = useMemo(
@@ -94,6 +101,7 @@ export default function EntryFormModal({
       .then((rows) => setFundCards((rows || []).filter((c) => c.is_active !== false)))
       .catch(() => setFundCards([]))
     setError('')
+    setForceSave(false)
     setFiles([])
     setRemoved([])
     setTotalDraft('')
@@ -134,7 +142,49 @@ export default function EntryFormModal({
     return base
   }, [entryType, form.category])
 
-  const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }))
+  const set = (key) => (e) => {
+    // 값이 바뀌면 경고 확인 상태는 다시 비운다 (그래도 저장 → 재확인)
+    setForceSave(false)
+    setForm((f) => ({ ...f, [key]: e.target.value }))
+  }
+
+  /** 금액처럼 한 번에 여러 칸을 바꾸는 경우에도 경고 확인 상태를 초기화 */
+  const setFields = (updater) => {
+    setForceSave(false)
+    setForm(updater)
+  }
+
+  /* 저장 전에 장부와 대조해 문제를 알려줍니다. 저장은 막지 않습니다. */
+  /* 직원은 본인 화면에 보이는 범위 안에서만 대조합니다 (관리자 내역 노출 방지) */
+  const staffIds = useMemo(() => staffIdsFromProfiles(profiles), [profiles])
+  const visibleEntries = useMemo(
+    () => (isAdmin ? ledger.entries : (ledger.entries || []).filter((e) => isStaffVisible(e, staffIds))),
+    [isAdmin, ledger.entries, staffIds],
+  )
+
+  const draftValues = useMemo(
+    () => ({
+      entry_type: entryType,
+      entry_date: form.entry_date,
+      counterparty: form.counterparty,
+      category: form.category,
+      description: form.description,
+      doc_no: form.doc_no,
+      supply_amount: supply,
+      vat_amount: vat,
+      memo: form.memo,
+      project_id: form.project_id,
+    }),
+    [entryType, form, supply, vat],
+  )
+
+  const warnings = useMemo(() => {
+    if (supply <= 0 && vat <= 0) return []
+    return checkEntryDraft(draftValues, { entries: visibleEntries, excludeId: initial?.id || '' })
+  }, [draftValues, supply, vat, visibleEntries, initial?.id])
+
+  /* 저장 전 경고를 확인해야 하는 단계인가 */
+  const needConfirm = warnings.length > 0 && !forceSave
 
   const onPickFiles = (e) => {
     const picked = Array.from(e.target.files || [])
@@ -162,6 +212,33 @@ export default function EntryFormModal({
     if (!form.entry_date) return setError('일자를 선택해 주세요.')
     if (supply <= 0 && vat <= 0) return setError('금액을 입력해 주세요.')
     if (isReport && !form.requester_id && !userId) return setError('지출자를 선택해 주세요.')
+    // 장부 대조 데이터가 아직 없으면 잠깐 기다렸다가 검사합니다 (중복 경고를 놓치지 않기 위해).
+    // 8초 안에 안 오면 입력값 자체의 문제(깨진 텍스트·부가세·비목)만으로 판단하고 진행합니다.
+    let liveWarnings = warnings
+    if (!ledger.ready) {
+      try {
+        const fresh = await Promise.race([
+          ensureLedgerIndex(),
+          new Promise((_, reject) => {
+            setTimeout(() => reject(new Error('ledger timeout')), 8000)
+          }),
+        ])
+        const rows = isAdmin
+          ? fresh?.entries || []
+          : (fresh?.entries || []).filter((e) => isStaffVisible(e, staffIds))
+        if (rows.length) {
+          liveWarnings = checkEntryDraft(draftValues, { entries: rows, excludeId: initial?.id || '' })
+        }
+      } catch {
+        /* 대조 없이 진행 */
+      }
+    }
+    // 경고가 있으면 먼저 보여주고, 확인 전에는 저장하지 않습니다.
+    if (liveWarnings.length > 0 && !forceSave) {
+      setForceSave(true)
+      toast.info(`확인할 항목 ${liveWarnings.length}건이 있습니다. 다시 누르면 저장됩니다.`)
+      return
+    }
 
     setSaving(true)
     try {
@@ -212,6 +289,7 @@ export default function EntryFormModal({
       }
 
       toast.success(initial?.id ? '수정되었습니다.' : `${isReport ? '지출결의' : meta.label}이(가) 등록되었습니다.`)
+      setForceSave(false)
       onSaved?.(record, uploaded)
       onClose?.()
     } catch (err) {
@@ -244,14 +322,54 @@ export default function EntryFormModal({
             취소
           </button>
           <button type="submit" form="entry-form" className="btn-primary" disabled={saving}>
-            {saving ? <Spinner size={15} /> : <Icon name="check" size={15} />}
-            {saving ? '저장 중…' : '저장'}
+            {saving ? <Spinner size={15} /> : <Icon name={needConfirm ? 'alert' : 'check'} size={15} />}
+            {saving ? '저장 중…' : needConfirm ? '경고 확인' : '저장'}
           </button>
         </>
       }
     >
       <form id="entry-form" onSubmit={handleSubmit} className="flex flex-col gap-4">
         {error ? <InlineAlert tone="error">{error}</InlineAlert> : null}
+
+        {warnings.length ? (
+          <div
+            className={`rounded-lg border px-3.5 py-3 text-xs leading-relaxed ${
+              needConfirm
+                ? 'border-amber-200 bg-amber-50 text-amber-900'
+                : 'border-emerald-200 bg-emerald-50 text-emerald-900'
+            }`}
+          >
+            <div className="mb-2 flex items-start gap-2">
+              <Icon name={needConfirm ? 'alert' : 'check'} size={15} className="mt-0.5 shrink-0" />
+              <div className="min-w-0 flex-1">
+                <p className="font-bold">
+                  {needConfirm
+                    ? `저장 전에 확인해 주세요 (${warnings.length}건)`
+                    : `확인 완료 · 그래도 저장합니다 (${warnings.length}건)`}
+                </p>
+                {!needConfirm ? (
+                  <p className="mt-0.5 opacity-80">문제가 있으면 저장 후 장부에서 고칠 수 있습니다.</p>
+                ) : null}
+              </div>
+            </div>
+            <ul className="flex flex-col gap-1.5">
+              {warnings.map((w, i) => {
+                const meta = ISSUE_META[w.code] || {}
+                return (
+                  <li key={`${w.code}-${i}`} className="flex items-start gap-2 rounded-md bg-white/70 px-2.5 py-1.5">
+                    <span className="mt-0.5 shrink-0 rounded bg-white/90 px-1.5 py-0.5 text-[10px] font-bold text-ink-600">
+                      {meta.label || w.code}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="font-semibold">{w.title}</span>
+                      {w.detail ? <span className="block opacity-80">{w.detail}</span> : null}
+                    </span>
+                  </li>
+                )
+              })}
+            </ul>
+          </div>
+        ) : null}
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Field label="일자" required>
@@ -315,7 +433,7 @@ export default function EntryFormModal({
               return (
                 <button
                   type="button"
-                  onClick={() => setForm((f) => ({ ...f, category: s.category }))}
+                  onClick={() => setFields((f) => ({ ...f, category: s.category }))}
                   className="mt-1.5 text-xs font-semibold text-brand-700 hover:underline"
                 >
                   추천: {s.category} 넣기
@@ -356,7 +474,7 @@ export default function EntryFormModal({
                 <button
                   type="button"
                   className="btn-ghost shrink-0 whitespace-nowrap px-2.5 py-2 text-xs"
-                  onClick={() => setForm((f) => ({ ...f, vat_amount: String(Math.round(toNumber(f.supply_amount) * 0.1)) }))}
+                  onClick={() => setFields((f) => ({ ...f, vat_amount: String(Math.round(toNumber(f.supply_amount) * 0.1)) }))}
                   title="공급가액의 10% 로 계산"
                 >
                   10%
@@ -376,7 +494,7 @@ export default function EntryFormModal({
                   const t = toNumber(raw)
                   if (!t) return
                   const supply = Math.round(t / 1.1)
-                  setForm((f) => ({ ...f, supply_amount: String(supply), vat_amount: String(t - supply) }))
+                  setFields((f) => ({ ...f, supply_amount: String(supply), vat_amount: String(t - supply) }))
                 }}
                 onBlur={() => setTotalDraft('')}
               />
@@ -463,7 +581,7 @@ export default function EntryFormModal({
             <Field label="카드 이용자" hint="여러 명이면 체크, 목록에 없으면 기타에 직접 입력">
               <CardUserSelect
                 value={form.card_user}
-                onChange={(v) => setForm((f) => ({ ...f, card_user: v }))}
+                onChange={(v) => setFields((f) => ({ ...f, card_user: v }))}
                 allowCustom
               />
             </Field>
