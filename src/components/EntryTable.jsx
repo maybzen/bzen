@@ -56,6 +56,8 @@ export default function EntryTable({
   /* 행별 수정·삭제 가능 여부 (직원 본인 행만 허용할 때 사용) */
   canEditEntry = null,
   canDeleteEntry = null,
+  /* 부가세 열 숨기기 (급여처럼 전부 0원일 때) */
+  hideVat = false,
 }) {
   const [rowEdits, setRowEdits] = useState({})
   const [savingId, setSavingId] = useState(null)
@@ -301,7 +303,7 @@ export default function EntryTable({
               <th className="th">항목</th>
               <th className="th">적요</th>
               <th className="th text-right">공급가액</th>
-              <th className="th text-right">부가세</th>
+              {hideVat ? null : <th className="th text-right">부가세</th>}
               <th className="th text-right">합계</th>
               <th className="th">증빙</th>
               <th className="th">작성자</th>
@@ -423,6 +425,7 @@ export default function EntryTable({
                       formatKRW(entry.supply_amount)
                     )}
                   </td>
+                  {hideVat ? null : (
                   <td className="td num">
                     {editable ? (
                       <input
@@ -435,6 +438,7 @@ export default function EntryTable({
                       formatKRW(entry.vat_amount)
                     )}
                   </td>
+                  )}
                   <td className="td num font-bold text-ink-900">
                     {editable
                       ? formatKRW(Number(work.supply_amount || 0) + Number(work.vat_amount || 0))
@@ -541,7 +545,7 @@ export default function EntryTable({
                 합계 ({entries.length}건)
               </td>
               <td className="td num font-bold">{formatKRW(totals.supply)}</td>
-              <td className="td num font-bold">{formatKRW(totals.vat)}</td>
+              {hideVat ? null : <td className="td num font-bold">{formatKRW(totals.vat)}</td>}
               <td className="td num font-extrabold text-brand-700">{formatKRW(totals.total)}</td>
               <td className="td" colSpan={3} />
             </tr>

@@ -27,7 +27,7 @@ import {
 /**
  * 거래처 대장 (구글시트 스타일).
  * 등록된 협력사만 보여줍니다. 장부 집계는 하지 않습니다.
- * - 마스터 등록·수정·서류 관리는 관리자만, 조회·미리보기는 권한이 있는 직원도 가능합니다.
+ * - 등록·수정·삭제·서류관리·합치기 모두 직원도 가능합니다.
  */
 function memoLines(memo, prefix) {
   return String(memo || '')
@@ -537,7 +537,7 @@ export default function Partners() {
           </div>
         </div>
 
-        {isAdmin && dupGroups.length ? (
+        {dupGroups.length ? (
           <div className="card border-amber-200 px-4 py-3">
             <p className="text-xs font-bold text-ink-800">
               중복 의심 {dupGroups.length}건 <span className="font-normal text-ink-500">· 표기만 다른 같은 업체입니다. 선택 후 합치세요.</span>
@@ -565,7 +565,7 @@ export default function Partners() {
           </div>
         ) : null}
 
-        {isAdmin && selectedPartners.length >= 2 ? (
+        {selectedPartners.length >= 2 ? (
           <div className="card flex flex-wrap items-center gap-2 border-brand-200 bg-brand-50/50 px-4 py-2.5 text-xs">
             <span className="font-semibold text-ink-800">{selectedPartners.length}곳 선택됨</span>
             <span className="max-w-full truncate text-ink-500">{selectedPartners.map((p) => p.name).join(' · ')}</span>
@@ -589,25 +589,23 @@ export default function Partners() {
             <table className="w-full min-w-[1080px] border-collapse text-xs">
               <thead className="bg-ink-50/70">
                 <tr>
-                  {isAdmin ? (
-                    <th className="th w-10 text-center">
-                      <input
-                        type="checkbox"
-                        className="h-4 w-4 accent-brand-600"
-                        checked={rows.length > 0 && visibleSelectedIds.length === rows.length}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            const next = {}
-                            for (const p of rows) next[p.id] = true
-                            setSelected(next)
-                          } else {
-                            setSelected({})
-                          }
-                        }}
-                        aria-label="전체 선택"
-                      />
-                    </th>
-                  ) : null}
+                  <th className="th w-10 text-center">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 accent-brand-600"
+                      checked={rows.length > 0 && visibleSelectedIds.length === rows.length}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          const next = {}
+                          for (const p of rows) next[p.id] = true
+                          setSelected(next)
+                        } else {
+                          setSelected({})
+                        }
+                      }}
+                      aria-label="전체 선택"
+                    />
+                  </th>
                   <th className="th">구분</th>
                   <th className="th">거래처명</th>
                   <th className="th">담당자</th>
@@ -634,7 +632,7 @@ export default function Partners() {
                     !effGroup || effGroup === '기타'
                       ? suggestPartnerGroup(p.name, p.memo)
                       : null
-                  /* 직원도 수정 가능 (삭제·서류관리는 관리자). 상세 보기는 수정 화면으로 통합 */
+                  /* 상세 보기는 수정 화면으로 통합 */
                   const openDetail = () => {
                     setEditing(p)
                     setFormOpen(true)
@@ -643,19 +641,17 @@ export default function Partners() {
                   const collected = collectionStats.get(normalizeVendorName(p.name))
                   return (
                     <tr key={p.id} className={`transition hover:bg-ink-50/60 ${closed ? 'opacity-60' : ''}`}>
-                      {isAdmin ? (
-                        <td className="td text-center">
-                          <input
-                            type="checkbox"
-                            className="h-4 w-4 accent-brand-600"
-                            checked={Boolean(selected[p.id])}
-                            onChange={(e) =>
-                              setSelected((m) => ({ ...m, [p.id]: e.target.checked || undefined }))
-                            }
-                            aria-label="선택"
-                          />
-                        </td>
-                      ) : null}
+                      <td className="td text-center">
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 accent-brand-600"
+                          checked={Boolean(selected[p.id])}
+                          onChange={(e) =>
+                            setSelected((m) => ({ ...m, [p.id]: e.target.checked || undefined }))
+                          }
+                          aria-label="선택"
+                        />
+                      </td>
                       <td className={`td whitespace-nowrap ${pendingGroups[p.id] ? 'bg-amber-50/60' : ''}`}>
                         {customGroupId === p.id ? (
                             <span className="flex items-center gap-1">
@@ -786,15 +782,13 @@ export default function Partners() {
                         >
                           수정
                         </button>
-                        {isAdmin ? (
-                          <button
-                            type="button"
-                            onClick={() => setRemoving(p)}
-                            className="text-xs font-semibold text-loss hover:underline"
-                          >
-                            삭제
-                          </button>
-                        ) : null}
+                        <button
+                          type="button"
+                          onClick={() => setRemoving(p)}
+                          className="text-xs font-semibold text-loss hover:underline"
+                        >
+                          삭제
+                        </button>
                       </td>
                     </tr>
                   )

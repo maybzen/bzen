@@ -272,6 +272,26 @@ export default function Payroll() {
     [insuranceRows, taxRows, matchName],
   )
 
+  /* 지출결의 포함 실지급: 결의자 기준 귀속 (미표기는 별도 표기) */
+  const reportByPerson = useMemo(() => {
+    const map = new Map()
+    for (const r of reportRows || []) {
+      const prof = (profiles || []).find((p) => p.id === r.requester_id)
+      const key = prof ? String(prof.full_name || '').trim() : ''
+      map.set(key, (map.get(key) || 0) + Number(r.total_amount || 0))
+    }
+    return map
+  }, [reportRows, profiles])
+  const payoutOf = (rows) => {
+    const names = [...new Set(rows.map((e) => String(e.counterparty || '').trim()).filter(Boolean))]
+    const sal = sumTotal(rows)
+    const rep = names.reduce((a, n) => a + (reportByPerson.get(n) || 0), 0)
+    return { sal, rep, total: sal + rep }
+  }
+  const staffPayout = useMemo(() => payoutOf(staffShown), [staffShown, reportByPerson]) // eslint-disable-line react-hooks/exhaustive-deps
+  const tempPayout = useMemo(() => payoutOf(tempShown), [tempShown, reportByPerson]) // eslint-disable-line react-hooks/exhaustive-deps
+  const unattributedReport = useMemo(() => reportByPerson.get('') || 0, [reportByPerson])
+
   const salaryTotal = useMemo(() => sumTotal(salaryRows), [salaryRows])
   const reportTotal = useMemo(() => sumTotal(reportRows), [reportRows])
   const payoutTotal = useMemo(() => salaryTotal + reportTotal, [salaryTotal, reportTotal])
@@ -441,6 +461,9 @@ export default function Payroll() {
               </h2>
               <p className="mt-0.5 text-xs text-ink-500">
                 합계 {formatKRW(sumTotal(staffShown))}원
+                {staffPayout.rep ? (
+                  <> · 지출결의 포함 실지급 <strong className="text-ink-800">{formatKRW(staffPayout.total)}원</strong></>
+                ) : null}
               </p>
             </header>
             {staffShown.length ? (
@@ -456,6 +479,7 @@ export default function Payroll() {
                 canChangeAuthor={isAdmin}
                 onSlip={slipsMissing ? undefined : setSlipEntry}
                 slipEntryIds={slipIds}
+                hideVat
               />
             ) : (
               <EmptyState icon="coins" title={`${y}년 ${m}월 급여 내역이 없습니다`} description="급여대장 올리기로 기록하세요." />
@@ -469,6 +493,10 @@ export default function Payroll() {
               </h2>
               <p className="mt-0.5 text-xs text-ink-500">
                 계정이 없는 분(손선욱·행사 단기인력 등)은 여기서 따로 관리됩니다. 합계 {formatKRW(sumTotal(tempShown))}원
+                {tempPayout.rep ? (
+                  <> · 지출결의 포함 실지급 <strong className="text-ink-800">{formatKRW(tempPayout.total)}원</strong></>
+                ) : null}
+                {unattributedReport ? <> · 이용자 미표기 {formatKRW(unattributedReport)}원 별도</> : null}
               </p>
             </header>
             {tempShown.length ? (
@@ -484,6 +512,7 @@ export default function Payroll() {
                 canChangeAuthor={isAdmin}
                 onSlip={slipsMissing ? undefined : setSlipEntry}
                 slipEntryIds={slipIds}
+                hideVat
               />
             ) : (
               <EmptyState icon="users" title="단기·외부 인력 급여가 없습니다" />
@@ -507,6 +536,7 @@ export default function Payroll() {
                 onDelete={isAdmin ? setRemoving : undefined}
                 onOpenAttachments={setViewerFiles}
                 canChangeAuthor={isAdmin}
+                hideVat
               />
             ) : (
               <EmptyState icon="file" title="내역이 없습니다" />

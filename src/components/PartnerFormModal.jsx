@@ -644,8 +644,7 @@ export default function PartnerFormModal({ open, onClose, onSaved, initial, read
               <section key={type}>
                 <div className="mb-1.5 flex items-center justify-between">
                   <h4 className="text-xs font-bold text-ink-700">{PARTNER_DOC_TYPES[type]}</h4>
-                  {isAdmin ? (
-                    <label className="btn-ghost cursor-pointer px-2.5 py-1.5 text-xs">
+                  <label className="btn-ghost cursor-pointer px-2.5 py-1.5 text-xs">
                       {uploading === type ? <Spinner size={13} /> : <Icon name="upload" size={14} />}
                       올리기
                       <input
@@ -660,22 +659,19 @@ export default function PartnerFormModal({ open, onClose, onSaved, initial, read
                         }}
                       />
                     </label>
-                  ) : null}
                 </div>
                 {docsByType(type).length ? (
                   <div className="flex flex-col gap-2">
                     {docsByType(type).map((doc) => (
                       <div key={doc.id} className="flex flex-col gap-2">
                         <DocPreview doc={doc} />
-                        {isAdmin ? (
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteDoc(doc)}
-                            className="self-end text-xs font-semibold text-loss hover:underline"
-                          >
-                            서류 삭제
-                          </button>
-                        ) : null}
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteDoc(doc)}
+                          className="self-end text-xs font-semibold text-loss hover:underline"
+                        >
+                          서류 삭제
+                        </button>
                       </div>
                     ))}
                   </div>
@@ -684,14 +680,12 @@ export default function PartnerFormModal({ open, onClose, onSaved, initial, read
                     등록된 {PARTNER_DOC_TYPES[type]}이(가) 없습니다.
                   </p>
                 )}
-                {isAdmin ? (
-                  <DriveLinkForm
-                    docType={type}
-                    partnerId={partnerId}
-                    userId={userId}
-                    onLinked={(doc) => setDocs((d) => [...d, doc])}
-                  />
-                ) : null}
+                <DriveLinkForm
+                  docType={type}
+                  partnerId={partnerId}
+                  userId={userId}
+                  onLinked={(doc) => setDocs((d) => [...d, doc])}
+                />
               </section>
             ))}
           </div>
