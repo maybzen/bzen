@@ -255,6 +255,41 @@ export default function Projects() {
   const totals = useMemo(() => summarize(entries), [entries])
   const maxSale = Math.max(1, ...rows.map((r) => Math.max(r.sale, Math.abs(r.profit))))
 
+  /* 대행업체 (대표만): 계약만 하고 행사는 업체가 진행, 수수료 수취 */
+  const [viewTab, setViewTab] = useState('projects')
+  const agencyRows = useMemo(() => {
+    const partnerById = new Map((partners || []).map((p) => [p.id, p]))
+    const projectById = new Map((projects || []).filter((p) => !p.is_hidden).map((p) => [p.id, p]))
+    const paidByProjectName = new Map()
+    for (const e of entries || []) {
+      if (e.entry_type !== 'purchase' || !e.project_id) continue
+      const key = `${e.project_id}||${String(e.counterparty || '').trim()}`
+      paidByProjectName.set(key, (paidByProjectName.get(key) || 0) + Number(e.supply_amount || 0))
+    }
+    const byAgency = new Map()
+    for (const l of links || []) {
+      if ((l.role || '협력') !== '대행') continue
+      const p = partnerById.get(l.partner_id)
+      const project = projectById.get(l.project_id)
+      if (!p || !project) continue
+      if (!byAgency.has(p.id)) byAgency.set(p.id, { partner: p, deals: [], contract: 0, paid: 0 })
+      const csplit = contractSplit(project)
+      const paid = paidByProjectName.get(`${project.id}||${p.name}`) || 0
+      const deal = { project, contract: csplit.supply, paid, fee: csplit.supply - paid }
+      const row = byAgency.get(p.id)
+      row.deals.push(deal)
+      row.contract += deal.contract
+      row.paid += deal.paid
+    }
+    return [...byAgency.values()]
+      .map((r) => ({ ...r, fee: r.contract - r.paid, deals: r.deals.sort((a, b) => b.contract - a.contract) }))
+      .sort((a, b) => b.fee - a.fee)
+  }, [links, partners, projects, entries])
+  const agencyTotals = useMemo(
+    () => agencyRows.reduce((a, r) => ({ contract: a.contract + r.contract, paid: a.paid + r.paid, fee: a.fee + r.fee }), { contract: 0, paid: 0, fee: 0 }),
+    [agencyRows],
+  )
+
   const handleDelete = async () => {
     if (!removing) return
     setBusy(true)
@@ -322,6 +357,17 @@ export default function Projects() {
       <div className="card overflow-hidden">
         <div className="flex flex-col gap-3 border-b border-ink-200 px-4 py-3.5">
           <div className="flex flex-wrap items-center gap-2">
+            {isAdmin ? (
+              <SegmentedControl
+                size="sm"
+                value={viewTab}
+                onChange={setViewTab}
+                options={[
+                  { key: 'projects', label: '프로젝트' },
+                  { key: 'agency', label: `대행업체${agencyRows.length ? ` ${agencyRows.length}` : ''}` },
+                ]}
+              />
+            ) : null}
             <SegmentedControl
               size="sm"
               value={statusFilter}
@@ -380,7 +426,81 @@ export default function Projects() {
         </div>
       </div>
 
-      {loading ? (
+      {isAdmin && viewTab === 'agency' ? (
+        agencyRows.length ? (
+          <div className="flex flex-col gap-4">
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+              <StatCard label="대행업체" value={String(agencyRows.length)} unit="곳" tone="neutral" icon="building" />
+              <StatCard label="대행 계약" value={agencyTotals.contract} tone="sale" icon="trending-up" hint="공급가액 기준" />
+              <StatCard label="업체 지급" value={agencyTotals.paid} tone="opex" icon="cart" hint="해당 업체명 매입 합계" />
+              <StatCard label="수수료" value={agencyTotals.fee} tone={agencyTotals.fee >= 0 ? 'profit' : 'loss'} icon="coins" hint="계약 − 지급" />
+            </div>
+            <p className="text-xs leading-relaxed text-ink-500">
+              계약만 하고 행사는 업체가 진행하는 건입니다. 여성기업·소기업 수의계약 한도는 5,500만원입니다.
+            </p>
+            {agencyRows.map((a) => (
+              <section key={a.partner.id} className="card overflow-hidden">
+                <header className="flex flex-wrap items-center justify-between gap-2 border-b border-ink-200 px-4 py-3.5">
+                  <Link
+                    to={`/partners?search=${encodeURIComponent(a.partner.name)}`}
+                    className="text-sm font-bold text-ink-900 hover:text-brand-700 hover:underline"
+                  >
+                    {a.partner.name}
+                  </Link>
+                  <p className="text-xs text-ink-500">
+                    계약 <strong className="font-num tabular-nums text-ink-900">{formatKRW(a.contract)}원</strong>
+                    {' · '}수수료{' '}
+                    <strong className={`font-num tabular-nums ${a.fee >= 0 ? 'text-emerald-700' : 'text-loss'}`}>
+                      {formatKRW(a.fee)}원
+                    </strong>
+                  </p>
+                </header>
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[560px] border-collapse text-xs">
+                    <thead className="bg-ink-50/70">
+                      <tr>
+                        <th className="th">프로젝트</th>
+                        <th className="th text-right">계약(공급가)</th>
+                        <th className="th text-right">업체 지급</th>
+                        <th className="th text-right">수수료</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-ink-100">
+                      {a.deals.map((d) => (
+                        <tr key={d.project.id} className="transition hover:bg-ink-50/60">
+                          <td className="td font-medium">
+                            <Link to={`/projects/${d.project.id}`} className="text-ink-800 hover:text-brand-700 hover:underline">
+                              {d.project.name}
+                            </Link>{' '}
+                            {d.contract > 0 && d.contract <= 55000000 ? (
+                              <span className="chip bg-emerald-50 text-emerald-700">수의계약</span>
+                            ) : null}
+                          </td>
+                          <td className="td num">{formatKRW(d.contract)}</td>
+                          <td className="td num text-ink-500">
+                            {d.paid ? formatKRW(d.paid) : <span className="text-ink-300" title="장부 거래처명이 다르면 0으로 뜹니다">0 · 명칭확인</span>}
+                          </td>
+                          <td className={`td num font-bold ${d.fee >= 0 ? 'text-emerald-700' : 'text-loss'}`}>
+                            {formatKRW(d.fee)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            ))}
+          </div>
+        ) : (
+          <div className="card">
+            <EmptyState
+              icon="building"
+              title="대행업체가 없습니다"
+              description="프로젝트 상세 → 협력업체에서 업체를 대행으로 지정하세요."
+            />
+          </div>
+        )
+      ) : loading ? (
         <LoadingBlock />
       ) : !visibleProjects.length ? (
         <div className="card">

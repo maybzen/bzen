@@ -13,7 +13,7 @@ import { isStaffVisible, staffIdsFromProfiles } from '../lib/permissions'
 import { ENTRY_META, PROJECT_STATUS } from '../lib/constants'
 import { contractSplit, formatDateHuman, formatKRW, formatPercent, monthLabel, normalizeVendorName } from '../lib/format'
 import { groupByMonth, summarize } from '../lib/summary'
-import { deleteEntry, isMissingTableError, linkProjectPartner, listAttachments, listEntries, listPartners, listProfiles, listProjectPartners, listProjects, unlinkProjectPartner } from '../lib/api'
+import { deleteEntry, isMissingTableError, linkProjectPartner, listAttachments, listEntries, listPartners, listProfiles, listProjectPartners, listProjects, setProjectPartnerRole, unlinkProjectPartner } from '../lib/api'
 
 const TABS = [
   { key: 'all', label: '전체' },
@@ -153,6 +153,20 @@ export default function ProjectDetail() {
     }
   }
 
+  /* 협력 ↔ 대행 전환 (대표만) */
+  const handleSetRole = async (partnerId, role) => {
+    setLinkBusy(true)
+    try {
+      await setProjectPartnerRole(id, partnerId, role)
+      toast.success(role === '대행' ? '대행업체로 지정했습니다.' : '협력업체로 되돌렸습니다.')
+      await refreshLinks()
+    } catch (err) {
+      toast.error(err.message)
+    } finally {
+      setLinkBusy(false)
+    }
+  }
+
   const vendors = useMemo(() => {
     const byNorm = new Map()
     for (const e of entries || []) {
@@ -185,7 +199,7 @@ export default function ProjectDetail() {
         const p = (partners || []).find((x) => x.id === l.partner_id)
         if (!p) return null
         const stat = vByPartner.get(p.id) || { name: p.name, count: 0, total: 0 }
-        return { ...stat, name: p.name, partner: p, linked: true }
+        return { ...stat, name: p.name, partner: p, linked: true, linkRole: l.role || '협력' }
       })
       .filter(Boolean)
       .sort((a, b) => b.total - a.total)
@@ -428,6 +442,7 @@ export default function ProjectDetail() {
             isAdmin={isAdmin}
             onLink={handleLink}
             onUnlink={handleUnlink}
+            onSetRole={handleSetRole}
           />
         ) : (
           <EntryTable
@@ -506,7 +521,7 @@ export default function ProjectDetail() {
  * 프로젝트마다 따로 연결하므로 중복 걱정 없습니다.
  * 장부에만 있고 미연결인 곳은 후보로 보여주고, 밥집처럼 엮지 않을 곳은 그냥 두면 됩니다.
  */
-function VendorPanel({ links, linked, candidates, linkBusy, isAdmin, onLink, onUnlink }) {
+function VendorPanel({ links, linked, candidates, linkBusy, isAdmin, onLink, onUnlink, onSetRole }) {
   if (links === null) {
     return (
       <div className="p-4">
@@ -535,7 +550,12 @@ function VendorPanel({ links, linked, candidates, linkBusy, isAdmin, onLink, onU
           {linked.map((v) => (
             <li key={v.partner.id} className="flex items-center gap-3 px-4 py-3">
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-bold text-ink-900">{v.name}</p>
+                <p className="flex flex-wrap items-center gap-1.5 truncate text-sm font-bold text-ink-900">
+                  <span className="truncate">{v.name}</span>
+                  {v.linkRole === '대행' ? (
+                    <span className="chip shrink-0 bg-amber-100 text-amber-800">대행</span>
+                  ) : null}
+                </p>
                 <p className="mt-0.5 truncate text-xs text-ink-500">
                   {v.partner?.contact_person
                     ? `담당 ${v.partner.contact_person}${v.partner.job_title ? ` ${v.partner.job_title}` : ''}`
@@ -563,6 +583,17 @@ function VendorPanel({ links, linked, candidates, linkBusy, isAdmin, onLink, onU
               >
                 해제
               </button>
+              {isAdmin && typeof onSetRole === 'function' ? (
+                <button
+                  type="button"
+                  onClick={() => onSetRole(v.partner.id, v.linkRole === '대행' ? '협력' : '대행')}
+                  disabled={linkBusy}
+                  className="shrink-0 text-xs font-semibold text-ink-400 hover:text-brand-700 hover:underline disabled:opacity-50"
+                  title="협력 ↔ 대행 전환 (대표만)"
+                >
+                  {v.linkRole === '대행' ? '협력으로' : '대행으로'}
+                </button>
+              ) : null}
             </li>
           ))}
         </ul>

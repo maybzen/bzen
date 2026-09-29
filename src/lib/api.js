@@ -146,11 +146,23 @@ export function listProjectPartners() {
   return unwrap(supabase.from('project_partners').select('*'))
 }
 
-export function linkProjectPartner(projectId, partnerId, userId) {
+export function linkProjectPartner(projectId, partnerId, userId, role = '협력') {
   return unwrap(
     supabase
       .from('project_partners')
-      .upsert({ project_id: projectId, partner_id: partnerId, created_by: userId }, { onConflict: 'project_id,partner_id' })
+      .upsert({ project_id: projectId, partner_id: partnerId, created_by: userId, role }, { onConflict: 'project_id,partner_id' })
+      .select()
+      .single(),
+  )
+}
+
+export function setProjectPartnerRole(projectId, partnerId, role) {
+  return unwrap(
+    supabase
+      .from('project_partners')
+      .update({ role })
+      .eq('project_id', projectId)
+      .eq('partner_id', partnerId)
       .select()
       .single(),
   )
