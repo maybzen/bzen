@@ -4,7 +4,7 @@ import Icon from '../components/Icon'
 import ProjectFormModal from '../components/ProjectFormModal'
 import { ProfitBar } from '../components/Charts'
 import { useToast } from '../components/Toast'
-import { ConfirmDialog, EmptyState, Field, InlineAlert, LoadingBlock, Modal, PageHeader, SegmentedControl, StatCard } from '../components/ui'
+import { AmountInput, ConfirmDialog, EmptyState, Field, InlineAlert, LoadingBlock, Modal, PageHeader, SegmentedControl, StatCard } from '../components/ui'
 import { useAuth } from '../auth/AuthContext'
 import { PROJECT_STATUS } from '../lib/constants'
 import { contractSplit, formatDateHuman, formatKRW, formatPercent, normalizeVendorName } from '../lib/format'
@@ -862,9 +862,8 @@ function AgencyDealModal({ partners, userId, onClose, onSaved }) {
           </select>
         </Field>
         <Field label="총계약액 (원, VAT포함)" hint="대행업체에 전달되는 금액 포함 전체">
-          <input
+          <AmountInput
             className="input text-right font-num tabular-nums"
-            inputMode="numeric"
             value={form.total}
             onChange={set('total')}
             placeholder="예: 49000000"
@@ -880,9 +879,8 @@ function AgencyDealModal({ partners, userId, onClose, onSaved }) {
           />
         </Field>
         <Field label="수수료 (원, VAT포함)" hint="장부 계약금액·매출이 됩니다" className="sm:col-span-2">
-          <input
+          <AmountInput
             className="input text-right font-num tabular-nums"
-            inputMode="numeric"
             value={form.fee}
             onChange={(e) => {
               setFeeTouched(true)

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import Icon from '../components/Icon'
 import { useToast } from '../components/Toast'
-import { ConfirmDialog, EmptyState, InlineAlert, LoadingBlock, PageHeader, StatCard } from '../components/ui'
+import { AmountInput, ConfirmDialog, EmptyState, InlineAlert, LoadingBlock, PageHeader, StatCard } from '../components/ui'
 import { useAuth } from '../auth/AuthContext'
 import {
   createCollection,
@@ -584,9 +584,8 @@ export default function Collections() {
               </label>
               <label className="label">
                 입금액
-                <input
+                <AmountInput
                   className="input mt-1.5 text-left font-num tabular-nums"
-                  inputMode="numeric"
                   placeholder="0"
                   value={form.amount}
                   onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))}

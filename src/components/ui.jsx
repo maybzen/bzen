@@ -193,6 +193,38 @@ export function Field({ label, hint, required, error, children, className = '' }
   )
 }
 
+/* ---------------------------- AmountInput ---------------------------- */
+
+/**
+ * 금액 입력창. 치는 대로 1,234,567 콤마가 찍히고,
+ * onChange에는 숫자만 남긴 합성 이벤트({ target: { value } })가 넘어갑니다.
+ * 기존 숫자 input 자리에 그대로 꽂으면 됩니다.
+ */
+export function AmountInput({ value, onChange, allowNegative = true, ...rest }) {
+  const raw = value === '' || value === null || value === undefined ? '' : String(value)
+  const digits = raw.replace(/[^0-9.\-]/g, '')
+  let shown = ''
+  if (digits !== '' && digits !== '-' && digits !== '.' && digits !== '-.') {
+    const n = Number(digits)
+    if (!Number.isNaN(n)) shown = n.toLocaleString('ko-KR')
+  } else if (digits === '-') {
+    shown = '-'
+  }
+  return (
+    <input
+      {...rest}
+      inputMode="numeric"
+      value={shown}
+      placeholder={rest.placeholder ?? '0'}
+      onChange={(e) => {
+        let d = String(e.target.value).replace(/[^0-9.\-]/g, '')
+        if (!allowNegative) d = d.replace(/-/g, '')
+        onChange?.({ target: { value: d } })
+      }}
+    />
+  )
+}
+
 /* ------------------------------- StatCard ------------------------------ */
 
 const TONES = {

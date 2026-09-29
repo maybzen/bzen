@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Field, InlineAlert, Modal, Spinner } from './ui'
+import { AmountInput, Field, InlineAlert, Modal, Spinner } from './ui'
 import { useToast } from './Toast'
 import { PROJECT_STATUS, PROJECT_STATUS_KEYS, sortManagers } from '../lib/constants'
 import { contractSplit } from '../lib/format'
@@ -169,9 +169,8 @@ export default function ProjectFormModal({ open, onClose, onSaved, initial, prof
           </p>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <Field label="공급가액" required={false}>
-              <input
+              <AmountInput
                 className="input num text-left"
-                inputMode="numeric"
                 value={form.contract_supply}
                 onChange={set('contract_supply')}
                 placeholder="0"
@@ -179,9 +178,8 @@ export default function ProjectFormModal({ open, onClose, onSaved, initial, prof
             </Field>
             <Field label="부가세">
               <div className="flex gap-1.5">
-                <input
+                <AmountInput
                   className="input num text-left"
-                  inputMode="numeric"
                   value={form.contract_vat}
                   onChange={set('contract_vat')}
                   placeholder="0"
@@ -199,9 +197,8 @@ export default function ProjectFormModal({ open, onClose, onSaved, initial, prof
               </div>
             </Field>
             <Field label="합계" hint="합계를 치면 공급가액·부가세로 자동 분리됩니다">
-              <input
+              <AmountInput
                 className="input num text-left"
-                inputMode="numeric"
                 value={form.contract_total}
                 placeholder={String(toNum(form.contract_supply) + toNum(form.contract_vat) || '')}
                 onChange={(e) => {

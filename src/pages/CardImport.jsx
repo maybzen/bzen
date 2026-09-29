@@ -5,7 +5,7 @@ import CardUserSelect from '../components/CardUserSelect'
 import PeriodPicker, { usePeriod } from '../components/PeriodPicker'
 import { AttachmentCell, AttachmentModal } from '../components/Attachments'
 import { useToast } from '../components/Toast'
-import { ConfirmDialog, EmptyState, Field, InlineAlert, LoadingBlock, PageHeader, StatCard } from '../components/ui'
+import { ConfirmDialog, EmptyState, Field, InlineAlert, LoadingBlock, PageHeader, StatCard, AmountInput } from '../components/ui'
 import { useAuth } from '../auth/AuthContext'
 import { CATEGORIES, ENTRY_META, cardUserName, categoryHint, suggestCategory } from '../lib/constants'
 import { downloadTextFile, parseAmount, parseCSV, toCSV } from '../lib/csv'
@@ -1122,8 +1122,7 @@ export default function CardImport({ embed = false } = {}) {
                       </select>
                     </td>
                     <td className="td num">
-                      <input
-                        type="number"
+                      <AmountInput
                         className="input w-28 py-1 text-right text-xs"
                         value={r.supply}
                         onChange={(e) => {
@@ -1133,8 +1132,7 @@ export default function CardImport({ embed = false } = {}) {
                       />
                     </td>
                     <td className="td num">
-                      <input
-                        type="number"
+                      <AmountInput
                         className="input w-24 py-1 text-right text-xs"
                         value={r.vat}
                         disabled={r.taxFree}
@@ -1548,16 +1546,14 @@ export default function CardImport({ embed = false } = {}) {
                           {regName(entry.created_by)}
                         </td>
                         <td className="td num">
-                          <input
-                            type="number"
+                          <AmountInput
                             className="input w-24 py-1 text-right text-xs"
                             value={work.supply_amount ?? 0}
                             onChange={(e) => setCell(entry.id, { supply_amount: Number(e.target.value) || 0 })}
                           />
                         </td>
                         <td className="td num">
-                          <input
-                            type="number"
+                          <AmountInput
                             className="input w-24 py-1 text-right text-xs"
                             value={work.vat_amount ?? 0}
                             onChange={(e) => setCell(entry.id, { vat_amount: Number(e.target.value) || 0 })}

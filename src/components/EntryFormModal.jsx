@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import Icon from './Icon'
 import CardUserSelect from './CardUserSelect'
-import { Field, InlineAlert, Modal, Spinner } from './ui'
+import { AmountInput, Field, InlineAlert, Modal, Spinner } from './ui'
 import { useToast } from './Toast'
 import { CATEGORIES, ENTRY_META, INTERNAL_PROJECT_NAME, PAYMENT_METHODS, categoryHint, suggestCategory } from '../lib/constants'
 import { formatFileSize, formatKRW, todayISO } from '../lib/format'
@@ -344,9 +344,8 @@ export default function EntryFormModal({
         <div className="rounded-xl border border-ink-200 bg-ink-50/60 p-4">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <Field label="공급가액" required>
-              <input
+              <AmountInput
                 className="input num text-left"
-                inputMode="numeric"
                 value={form.supply_amount}
                 onChange={set('supply_amount')}
                 placeholder="0"
@@ -355,9 +354,8 @@ export default function EntryFormModal({
 
             <Field label="부가세">
               <div className="flex gap-1.5">
-                <input
+                <AmountInput
                   className="input num text-left"
-                  inputMode="numeric"
                   value={form.vat_amount}
                   onChange={set('vat_amount')}
                   placeholder="0"
@@ -374,9 +372,8 @@ export default function EntryFormModal({
             </Field>
 
             <Field label="합계" hint="합계를 치면 공급가액·부가세로 자동 분리됩니다">
-              <input
+              <AmountInput
                 className="input num text-left"
-                inputMode="numeric"
                 placeholder={String(total || '')}
                 value={totalDraft}
                 onFocus={() => setTotalDraft(String(total || ''))}

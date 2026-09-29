@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import Icon from './Icon'
+import { AmountInput } from './ui'
 import { AttachmentCell } from './Attachments'
 import { ENTRY_META } from '../lib/constants'
 import { formatDateHuman, formatKRW } from '../lib/format'
@@ -434,8 +435,7 @@ export default function EntryTable({
                   </td>
                   <td className="td num">
                     {editable ? (
-                      <input
-                        type="number"
+                      <AmountInput
                         className="input w-24 py-1 text-right text-xs"
                         value={work.supply_amount ?? 0}
                         onChange={(e) => setCell(entry.id, { supply_amount: Number(e.target.value) || 0 })}
@@ -447,8 +447,7 @@ export default function EntryTable({
                   {hideVat ? null : (
                   <td className="td num">
                     {editable ? (
-                      <input
-                        type="number"
+                      <AmountInput
                         className="input w-24 py-1 text-right text-xs"
                         value={work.vat_amount ?? 0}
                         onChange={(e) => setCell(entry.id, { vat_amount: Number(e.target.value) || 0 })}

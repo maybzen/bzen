@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import CardImport from './CardImport'
 import Icon from '../components/Icon'
 import { useToast } from '../components/Toast'
-import { ConfirmDialog, EmptyState, Field, LoadingBlock, Modal, PageHeader, SegmentedControl, StatCard } from '../components/ui'
+import { AmountInput, ConfirmDialog, EmptyState, Field, LoadingBlock, Modal, PageHeader, SegmentedControl, StatCard } from '../components/ui'
 import { useAuth } from '../auth/AuthContext'
 import { formatKRW, todayISO } from '../lib/format'
 import { deleteFundRow, listBankTransactions, listEntries, listFundRows, saveFundRow, upsertSnapshot } from '../lib/api'
@@ -582,13 +582,22 @@ function FundModal({ kind, initial, onClose, onSaved, userId }) {
         ) : null}
         {meta.fields.map((f) => (
           <Field key={f.key} label={f.label}>
-            <input
-              className="input"
-              inputMode={f.number ? 'numeric' : undefined}
-              value={form[f.key]}
-              onChange={(e) => setForm((v) => ({ ...v, [f.key]: e.target.value }))}
-              placeholder={f.placeholder || ''}
-            />
+            {f.number && f.key !== 'pay_day' ? (
+              <AmountInput
+                className="input"
+                value={form[f.key]}
+                onChange={(e) => setForm((v) => ({ ...v, [f.key]: e.target.value }))}
+                placeholder={f.placeholder || ''}
+              />
+            ) : (
+              <input
+                className="input"
+                inputMode={f.number ? 'numeric' : undefined}
+                value={form[f.key]}
+                onChange={(e) => setForm((v) => ({ ...v, [f.key]: e.target.value }))}
+                placeholder={f.placeholder || ''}
+              />
+            )}
           </Field>
         ))}
         {kind === 'card' ? (
@@ -671,8 +680,7 @@ function SnapshotModal({ accounts, latest, onClose, onSaved, userId }) {
               <span className="min-w-0 flex-1 truncate font-semibold text-ink-700">
                 {c.bank} {c.acct_no} <span className="font-normal text-ink-400">{c.product}</span>
               </span>
-              <input
-                type="number"
+              <AmountInput
                 className="input w-36 py-1 text-right text-xs"
                 value={amounts[c.id] ?? ''}
                 onChange={(e) => setAmounts((v) => ({ ...v, [c.id]: e.target.value }))}

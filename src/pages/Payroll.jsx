@@ -4,7 +4,7 @@ import EntryTable from '../components/EntryTable'
 import Icon from '../components/Icon'
 import { AttachmentModal } from '../components/Attachments'
 import { useToast } from '../components/Toast'
-import { ConfirmDialog, EmptyState, InlineAlert, LoadingBlock, Modal, PageHeader, StatCard } from '../components/ui'
+import { AmountInput, ConfirmDialog, EmptyState, InlineAlert, LoadingBlock, Modal, PageHeader, StatCard } from '../components/ui'
 import { useAuth } from '../auth/AuthContext'
 import { formatKRW, monthEnd, todayISO } from '../lib/format'
 import { INTERNAL_PROJECT_NAME, sortManagers } from '../lib/constants'
@@ -877,8 +877,7 @@ function SlipModal({ open, onClose, onSaved, entry, ym, initial, reportRows, pro
               {PAY_FIELDS.map((f) => (
                 <label key={f.key} className="flex items-center justify-between gap-2 text-xs">
                   <span className="shrink-0 font-semibold text-ink-600">{f.label}</span>
-                  <input
-                    type="number"
+                  <AmountInput
                     className="input w-32 py-1 text-right text-xs"
                     value={form[f.key] ?? 0}
                     onChange={setNum(f.key)}
@@ -893,8 +892,7 @@ function SlipModal({ open, onClose, onSaved, entry, ym, initial, reportRows, pro
               {DED_FIELDS.map((f) => (
                 <label key={f.key} className="flex items-center justify-between gap-2 text-xs">
                   <span className="shrink-0 font-semibold text-ink-600">{f.label}</span>
-                  <input
-                    type="number"
+                  <AmountInput
                     className="input w-32 py-1 text-right text-xs"
                     value={form[f.key] ?? 0}
                     onChange={setNum(f.key)}
