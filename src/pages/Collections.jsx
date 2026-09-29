@@ -8,7 +8,6 @@ import { useAuth } from '../auth/AuthContext'
 import {
   createCollection,
   deleteCollection,
-  ensurePartnerByName,
   listCollections,
   listEntries,
   listPartners,
@@ -260,9 +259,6 @@ export default function Collections() {
       } else {
         await createCollection(payload, user?.id)
         toast.success('입금을 등록했습니다.')
-      }
-      if (payload.counterparty) {
-        ensurePartnerByName(payload.counterparty, user?.id).catch(() => {})
       }
       setFormOpen(false)
       setEditing(null)
@@ -575,6 +571,7 @@ export default function Collections() {
                     value={form.counterparty}
                     onChange={(e) => setForm((f) => ({ ...f, counterparty: e.target.value }))}
                     placeholder="예: (주)이즈피엠피"
+                    userId={user?.id}
                   />
                 </div>
               </label>

@@ -4,7 +4,7 @@ import { useToast } from './Toast'
 import { PROJECT_STATUS, PROJECT_STATUS_KEYS, sortManagers } from '../lib/constants'
 import PartnerPicker from './PartnerPicker'
 import { contractSplit } from '../lib/format'
-import { createProject, ensurePartnerByName, projectContractSplitAvailable, updateProject } from '../lib/api'
+import { createProject, projectContractSplitAvailable, updateProject } from '../lib/api'
 
 const EMPTY = {
   name: '',
@@ -87,10 +87,6 @@ export default function ProjectFormModal({ open, onClose, onSaved, initial, prof
         await createProject({ ...payload, created_by: userId })
         toast.success('프로젝트가 등록되었습니다.')
       }
-      /* 발주처가 대장에 없으면 자동 등록 (표기만 다른 곳은 기존 것으로 연결) */
-      if (payload.client) {
-        ensurePartnerByName(payload.client, userId).catch(() => {})
-      }
       onSaved?.()
       onClose?.()
     } catch (err) {
@@ -131,7 +127,7 @@ export default function ProjectFormModal({ open, onClose, onSaved, initial, prof
         </Field>
 
         <Field label="발주처 / 고객사">
-          <PartnerPicker value={form.client} onChange={set('client')} placeholder="예: ○○ 주식회사" />
+          <PartnerPicker value={form.client} onChange={set('client')} placeholder="예: ○○ 주식회사" userId={userId} />
         </Field>
 
         <Field label="장소">

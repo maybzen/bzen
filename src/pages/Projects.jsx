@@ -10,7 +10,7 @@ import { useAuth } from '../auth/AuthContext'
 import { PROJECT_STATUS } from '../lib/constants'
 import { contractSplit, formatDateHuman, formatKRW, formatPercent, normalizeVendorName } from '../lib/format'
 import { buildPnl, groupByProject, summarize } from '../lib/summary'
-import { createEntry, createProject, deleteProject, ensurePartnerByName, isMissingTableError, linkProjectPartner, listEntries, listPartners, listProfiles, listProjectPartners, listProjects, unlinkProjectPartner, updateProject } from '../lib/api'
+import { createEntry, createProject, deleteProject, isMissingTableError, linkProjectPartner, listEntries, listPartners, listProfiles, listProjectPartners, listProjects, unlinkProjectPartner, updateProject } from '../lib/api'
 
 /**
  * 카드에 쓰는 손익 표기. 세무·회계 표현을 그대로 씁니다.
@@ -802,8 +802,10 @@ function AgencyDealModal({ partners, userId, initial = null, onClose, onSaved })
     setSaving(true)
     setError('')
     try {
-      const partner = await ensurePartnerByName(form.agencyName.trim(), userId).catch(() => null)
-      if (!partner) return setError('대행업체를 확인해 주세요.')
+      const allPartners = await listPartners().catch(() => partners)
+      const target = normalizeVendorName(form.agencyName.trim())
+      const partner = (allPartners || []).find((p) => normalizeVendorName(p.name) === target)
+      if (!partner) return setError('대행업체를 먼저 등록해 주세요 (입력창에서 + 새로 등록).')
       if (initial?.project?.id) {
         await updateProject(initial.project.id, {
           name: form.name.trim(),
@@ -818,9 +820,6 @@ function AgencyDealModal({ partners, userId, initial = null, onClose, onSaved })
           await unlinkProjectPartner(initial.project.id, initial.partnerId).catch(() => {})
         }
         await linkProjectPartner(initial.project.id, partner.id, userId, '대행')
-        if (form.client.trim()) {
-          ensurePartnerByName(form.client.trim(), userId).catch(() => {})
-        }
         toast.success('대행계약을 수정했습니다. 수수료 매출 행은 금액이 바뀌었으면 따로 고쳐주세요.')
         onSaved?.()
         return
@@ -843,8 +842,12 @@ function AgencyDealModal({ partners, userId, initial = null, onClose, onSaved })
           .join('\n'),
       })
       await linkProjectPartner(project.id, partner.id, userId, '대행')
+      let clientMissing = false
       if (form.client.trim()) {
-        ensurePartnerByName(form.client.trim(), userId).catch(() => {})
+        const all2 = await listPartners().catch(() => partners)
+        clientMissing = !(all2 || []).some(
+          (p) => normalizeVendorName(p.name) === normalizeVendorName(form.client.trim()),
+        )
       }
       if (feeNum > 0) {
         const supply = Math.round(feeNum / 1.1)
@@ -864,7 +867,11 @@ function AgencyDealModal({ partners, userId, initial = null, onClose, onSaved })
           userId,
         )
       }
-      toast.success('대행계약을 등록했습니다.')
+      toast.success(
+        clientMissing
+          ? '대행계약을 등록했습니다. 발주처는 목록에서 + 새로 등록으로 추가해 주세요.'
+          : '대행계약을 등록했습니다.',
+      )
       onSaved?.()
     } catch (err) {
       setError(err.message)
@@ -900,10 +907,10 @@ function AgencyDealModal({ partners, userId, initial = null, onClose, onSaved })
           <input className="input" value={form.name} onChange={set('name')} placeholder="예: BMICE 인증제 관광 개발 컨설팅 및 운영" />
         </Field>
         <Field label="발주처 (원청)" required>
-          <PartnerPicker value={form.client} onChange={set('client')} placeholder="예: 부산관광고등학교" />
+          <PartnerPicker value={form.client} onChange={set('client')} placeholder="예: 부산관광고등학교" userId={userId} />
         </Field>
-        <Field label="대행업체 (실제 수행사)" required hint="치면 검색되고, 없으면 저장할 때 새로 등록됩니다">
-          <PartnerPicker value={form.agencyName} onChange={set('agencyName')} placeholder="예: (사)부산컨벤션산업협회" />
+        <Field label="대행업체 (실제 수행사)" required hint="치면 검색되고, 없으면 + 새로 등록으로 추가하세요">
+          <PartnerPicker value={form.agencyName} onChange={set('agencyName')} placeholder="예: (사)부산컨벤션산업협회" userId={userId} />
         </Field>
         <Field label="총계약액 (원, VAT포함)" hint="대행업체에 전달되는 금액 포함 전체">
           <AmountInput

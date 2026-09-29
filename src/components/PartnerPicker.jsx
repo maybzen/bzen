@@ -1,19 +1,30 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { listPartners } from '../lib/api'
+import { createPartner, listPartners } from '../lib/api'
 import { normalizeVendorName } from '../lib/format'
+import { Field, Modal } from './ui'
 
 /**
  * 거래처 검색 선택창.
- * 치면 대장에서 찾아주고, 없으면 "저장 시 새로 등록"으로 표시합니다.
- * 실제 등록은 저장할 때 ensurePartnerByName으로 처리하세요.
+ * 치면 대장에서 찾아주고, 없으면 "+ 새로 등록"으로 간단 등록창이 뜹니다.
  */
-export default function PartnerPicker({ value, onChange, placeholder, autoFocus = false }) {
+export default function PartnerPicker({ value, onChange, placeholder, autoFocus = false, userId }) {
   const [partners, setPartners] = useState([])
   const [open, setOpen] = useState(false)
   const closeTimer = useRef(null)
+  const [regOpen, setRegOpen] = useState(false)
+  const [regName, setRegName] = useState('')
+  const [regContact, setRegContact] = useState('')
+  const [regPhone, setRegPhone] = useState('')
+  const [regMemo, setRegMemo] = useState('')
+  const [regSaving, setRegSaving] = useState(false)
+  const [regError, setRegError] = useState('')
+
+  const reloadPartners = () => {
+    listPartners().then((rows) => setPartners(rows || [])).catch(() => {})
+  }
 
   useEffect(() => {
-    listPartners().then((rows) => setPartners(rows || [])).catch(() => {})
+    reloadPartners()
   }, [])
 
   const q = normalizeVendorName(value)
@@ -73,11 +84,93 @@ export default function PartnerPicker({ value, onChange, placeholder, autoFocus 
             </li>
           ))}
           {!exact && String(value || '').trim() ? (
-            <li className="border-t border-ink-100 px-3 py-1.5 text-xs text-ink-500">
-              + ‘{String(value).trim()}’ <span className="text-brand-700">(저장 시 새로 등록)</span>
+            <li className="border-t border-ink-100 px-3 py-1.5">
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  setRegName(String(value).trim())
+                  setRegContact('')
+                  setRegPhone('')
+                  setRegMemo('')
+                  setRegError('')
+                  setRegOpen(true)
+                  setOpen(false)
+                }}
+                className="w-full text-left text-xs text-brand-700 hover:underline"
+              >
+                + ‘{String(value).trim()}’ 새로 등록
+              </button>
             </li>
           ) : null}
         </ul>
+      ) : null}
+      {regOpen ? (
+        <Modal
+          open
+          onClose={regSaving ? undefined : () => setRegOpen(false)}
+          title="거래처 간단 등록"
+          footer={
+            <>
+              <button type="button" className="btn-ghost" onClick={() => setRegOpen(false)} disabled={regSaving}>
+                취소
+              </button>
+              <button type="submit" form="partner-quick-form" className="btn-primary" disabled={regSaving}>
+                {regSaving ? '저장 중…' : '등록'}
+              </button>
+            </>
+          }
+        >
+          <form
+            id="partner-quick-form"
+            onSubmit={async (e) => {
+              e.preventDefault()
+              const name = regName.trim()
+              if (!name) return setRegError('거래처명을 입력해 주세요.')
+              setRegSaving(true)
+              setRegError('')
+              try {
+                await createPartner(
+                  {
+                    name,
+                    contact_person: regContact.trim(),
+                    phone_main: regPhone.trim(),
+                    memo: regMemo.trim(),
+                    group_name: '기타',
+                    status: '정상',
+                  },
+                  userId,
+                )
+                reloadPartners()
+                pick(name)
+                setRegOpen(false)
+              } catch (err) {
+                setRegError(err.message)
+              } finally {
+                setRegSaving(false)
+              }
+            }}
+            className="grid grid-cols-1 gap-4 sm:grid-cols-2"
+          >
+            {regError ? (
+              <div className="sm:col-span-2">
+                <p className="text-sm font-medium text-loss">{regError}</p>
+              </div>
+            ) : null}
+            <Field label="거래처명" required className="sm:col-span-2">
+              <input className="input" value={regName} onChange={(e) => setRegName(e.target.value)} />
+            </Field>
+            <Field label="담당자">
+              <input className="input" value={regContact} onChange={(e) => setRegContact(e.target.value)} />
+            </Field>
+            <Field label="연락처">
+              <input className="input" value={regPhone} onChange={(e) => setRegPhone(e.target.value)} placeholder="예: 010-0000-0000" />
+            </Field>
+            <Field label="메모" className="sm:col-span-2">
+              <input className="input" value={regMemo} onChange={(e) => setRegMemo(e.target.value)} />
+            </Field>
+          </form>
+        </Modal>
       ) : null}
     </div>
   )
