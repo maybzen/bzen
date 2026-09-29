@@ -6,7 +6,8 @@ import { useToast } from '../components/Toast'
 import { ConfirmDialog, EmptyState, Field, LoadingBlock, Modal, PageHeader, SegmentedControl, StatCard } from '../components/ui'
 import { useAuth } from '../auth/AuthContext'
 import { formatKRW, todayISO } from '../lib/format'
-import { deleteFundRow, listFundRows, saveFundRow, upsertSnapshot } from '../lib/api'
+import { deleteFundRow, listBankTransactions, listEntries, listFundRows, saveFundRow, upsertSnapshot } from '../lib/api'
+import { vatEstimateByFiling } from '../lib/tax'
 
 /**
  * 자금관리 (관리자 전용).
@@ -56,14 +57,28 @@ export default function Funds() {
   const [removing, setRemoving] = useState(null)
   const [busy, setBusy] = useState(false)
   const [snapOpen, setSnapOpen] = useState(false)
-  /* 자금현황 | 법인카드 내역 탭 (?tab=cards 지원) */
+  /* 자금현황 | 홈택스 | 법인카드 내역 탭 (?tab=cards|hometax 지원) */
   const [searchParams, setSearchParams] = useSearchParams()
-  const tab = searchParams.get('tab') === 'cards' ? 'cards' : 'overview'
+  const tab = ['cards', 'hometax'].includes(searchParams.get('tab')) ? searchParams.get('tab') : 'overview'
   const setTab = (t) => {
-    if (t === 'cards') setSearchParams({ tab: 'cards' }, { replace: true })
-    else {
+    if (t === 'overview') {
       searchParams.delete('tab')
       setSearchParams(searchParams, { replace: true })
+    } else {
+      setSearchParams({ tab: t }, { replace: true })
+    }
+  }
+
+  /* 계좌 거래내역 모달 */
+  const [acctTx, setAcctTx] = useState(null)
+  const openAccountTx = async (acct) => {
+    setAcctTx({ acct, rows: null })
+    try {
+      const rows = await listBankTransactions(acct.acct_no, { limit: 500 })
+      setAcctTx({ acct, rows: rows || [] })
+    } catch (error) {
+      toast.error(error.message)
+      setAcctTx(null)
     }
   }
 
@@ -143,6 +158,7 @@ export default function Funds() {
           onChange={setTab}
           options={[
             { key: 'overview', label: '자금현황' },
+            { key: 'hometax', label: '홈택스' },
             { key: 'cards', label: '법인카드 내역' },
           ]}
         />
@@ -156,6 +172,8 @@ export default function Funds() {
 
       {tab === 'cards' ? (
         <CardImport embed />
+      ) : tab === 'hometax' ? (
+        <HometaxPanel />
       ) : loading ? (
         <LoadingBlock />
       ) : (
@@ -217,8 +235,26 @@ export default function Funds() {
                   <tbody className="divide-y divide-ink-100">
                     {accounts.map((a) => (
                       <tr key={a.id} className="transition hover:bg-ink-50/60">
-                        <td className="td whitespace-nowrap font-semibold">{a.bank}</td>
-                        <td className="td whitespace-nowrap font-num tabular-nums">{a.acct_no}</td>
+                        <td className="td whitespace-nowrap font-semibold">
+                          <button
+                            type="button"
+                            onClick={() => openAccountTx(a)}
+                            className="text-left hover:text-brand-700 hover:underline"
+                            title="거래내역 보기"
+                          >
+                            {a.bank}
+                          </button>
+                        </td>
+                        <td className="td whitespace-nowrap font-num tabular-nums">
+                          <button
+                            type="button"
+                            onClick={() => openAccountTx(a)}
+                            className="hover:text-brand-700 hover:underline"
+                            title="거래내역 보기"
+                          >
+                            {a.acct_no}
+                          </button>
+                        </td>
                         <td className="td">{a.product}</td>
                         <td className="td num font-bold">{formatKRW(balanceOf(a.id))}</td>
                         <td className="td max-w-[260px] truncate text-ink-500" title={a.note}>{a.note || '—'}</td>
@@ -434,6 +470,10 @@ export default function Funds() {
         />
       ) : null}
 
+      {acctTx ? (
+        <AccountTxModal acct={acctTx.acct} rows={acctTx.rows} onClose={() => setAcctTx(null)} />
+      ) : null}
+
       <ConfirmDialog
         open={Boolean(removing)}
         busy={busy}
@@ -644,5 +684,183 @@ function SnapshotModal({ accounts, latest, onClose, onSaved, userId }) {
         <p className="text-right text-sm font-bold text-ink-900">합계 {formatKRW(total)}원</p>
       </form>
     </Modal>
+  )
+}
+
+/* 계좌 거래내역 (통장 원본 그대로) */
+function AccountTxModal({ acct, rows, onClose }) {
+  const dep = (rows || []).reduce((a, r) => a + Number(r.deposit || 0), 0)
+  const wd = (rows || []).reduce((a, r) => a + Number(r.withdrawal || 0), 0)
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title={`${acct?.bank || ''} ${acct?.acct_no || ''}`}
+      subtitle={`${acct?.product || ''} · 통장 거래내역 (최신 500건)`}
+      size="lg"
+      footer={
+        <button type="button" className="btn-ghost" onClick={onClose}>
+          닫기
+        </button>
+      }
+    >
+      {!rows ? (
+        <LoadingBlock />
+      ) : rows.length ? (
+        <>
+          <p className="mb-2 text-xs text-ink-500">
+            입금 <strong className="font-num tabular-nums text-emerald-700">{formatKRW(dep)}원</strong>
+            {' · '}출금 <strong className="font-num tabular-nums text-ink-900">{formatKRW(wd)}원</strong>
+          </p>
+          <div className="max-h-[60vh] overflow-auto">
+            <table className="w-full min-w-[560px] border-collapse text-xs">
+              <thead className="sticky top-0 bg-ink-50">
+                <tr>
+                  <th className="th">일시</th>
+                  <th className="th">구분</th>
+                  <th className="th">내용</th>
+                  <th className="th text-right">입금</th>
+                  <th className="th text-right">출금</th>
+                  <th className="th text-right">잔고</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-ink-100">
+                {rows.map((r) => (
+                  <tr key={r.id}>
+                    <td className="td whitespace-nowrap text-ink-500">{String(r.transacted_at || '').slice(0, 16)}</td>
+                    <td className="td whitespace-nowrap">{r.trans_type || '—'}</td>
+                    <td className="td max-w-[220px] truncate" title={`${r.counterparty || ''}${r.memo ? ` · ${r.memo}` : ''}`}>
+                      {r.counterparty || '—'}
+                    </td>
+                    <td className="td num text-emerald-700">{Number(r.deposit || 0) ? formatKRW(r.deposit) : '—'}</td>
+                    <td className="td num">{Number(r.withdrawal || 0) ? formatKRW(r.withdrawal) : '—'}</td>
+                    <td className="td num font-semibold">{formatKRW(r.balance)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="mt-2 text-xs text-ink-400">장부(회계 정리)와 다를 수 있습니다. 통장 그대로의 기록입니다.</p>
+        </>
+      ) : (
+        <EmptyState icon="coins" title="거래내역이 없습니다" description="이 계좌의 통장 파일을 올리면 표시됩니다." />
+      )}
+    </Modal>
+  )
+}
+
+/* 홈택스: 부가세 신고 단위별 장부 예상액 + 납부 대조 (2026년) */
+const FILED_VAT = {
+  q1: { label: '신고확정 5,739,484원 (4/20 신고)', paid: 5739480, paidOn: '2026-04-23' },
+  h1: { label: '신고확정 10,490,815원 (7/20 신고)', paid: 10490810, paidOn: '2026-07-22' },
+}
+
+function HometaxPanel() {
+  const toast = useToast()
+  const [rows, setRows] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let alive = true
+    setLoading(true)
+    listEntries({ from: '2026-01-01', to: '2026-12-31', maxRows: 20000 })
+      .then((r) => {
+        if (alive) setRows(r || [])
+      })
+      .catch((e) => toast.error(e.message))
+      .finally(() => {
+        if (alive) setLoading(false)
+      })
+    return () => {
+      alive = false
+    }
+  }, [toast])
+
+  const est = useMemo(() => vatEstimateByFiling(rows, 2026), [rows])
+  const paid = useMemo(
+    () =>
+      (rows || []).filter(
+        (e) => e.category === '세금과공과' && /부가세.*납부/.test(`${e.description || ''} ${e.memo || ''}`),
+      ),
+    [rows],
+  )
+  const paidFor = (key) => {
+    const re = key === 'q1' ? /예정/ : key === 'h1' ? /확정/ : null
+    if (!re) return []
+    return paid.filter((e) => re.test(`${e.description || ''} ${e.memo || ''}`))
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="card overflow-hidden">
+        <header className="border-b border-ink-200 px-4 py-3.5">
+          <h2 className="text-sm font-bold text-ink-900">부가세 신고 대조 (2026년)</h2>
+          <p className="mt-0.5 text-xs text-ink-500">장부 집계 vs 신고·납부. 예정은 중간예납이라 확정 때 정산됩니다.</p>
+        </header>
+        {loading ? (
+          <LoadingBlock />
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[680px] border-collapse text-xs">
+              <thead className="bg-ink-50/70">
+                <tr>
+                  <th className="th">구분</th>
+                  <th className="th text-right">매출세액</th>
+                  <th className="th text-right">매입세액</th>
+                  <th className="th text-right">납부예상(장부)</th>
+                  <th className="th text-right">신고·납부</th>
+                  <th className="th text-right">상태</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-ink-100">
+                {est.map((r) => {
+                  const filed = FILED_VAT[r.key]
+                  const pays = paidFor(r.key)
+                  const paidSum = pays.reduce((a, e) => a + Number(e.total_amount || 0), 0)
+                  const done = filed ? Math.abs(paidSum - filed.paid) < 100 : false
+                  return (
+                    <tr key={r.key}>
+                      <td className="td font-medium text-ink-900">
+                        {r.label}
+                        <span className="block text-[11px] font-normal text-ink-400">납부기한 {r.due}</span>
+                      </td>
+                      <td className="td num">{formatKRW(r.saleVat)}</td>
+                      <td className="td num">{formatKRW(r.buyVat)}</td>
+                      <td className="td num font-bold">{formatKRW(r.net)}</td>
+                      <td className="td num text-ink-500">
+                        {filed ? (
+                          <>
+                            {formatKRW(filed.paid)}
+                            <span className="block text-[11px] font-normal text-ink-400">{filed.label}</span>
+                          </>
+                        ) : (
+                          <span className="text-ink-300">미신고</span>
+                        )}
+                      </td>
+                      <td className="td num">
+                        {filed ? (
+                          done ? (
+                            <span className="chip bg-emerald-50 text-emerald-700">납부완료</span>
+                          ) : (
+                            <span className="chip bg-amber-50 text-amber-700">
+                              {paidSum ? `차액 ${formatKRW(paidSum - filed.paid)}` : '미납'}
+                            </span>
+                          )
+                        ) : (
+                          <span className="text-ink-300">—</span>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+      <p className="text-xs leading-relaxed text-ink-500">
+        금액은 장부 부가세 합계 기준이며, 카드·면세·간이 등은 신고서와 다를 수 있습니다. 확정 신고는 세무서 자료로 최종 확인하세요.
+      </p>
+    </div>
   )
 }

@@ -198,7 +198,13 @@ export default function Payroll() {
     () => new Set((profiles || []).map((p) => String(p.full_name || '').trim()).filter(Boolean)),
     [profiles],
   )
-  const personKind = (name) => (staffNames.has(String(name || '').trim()) ? '내부' : '외부·단기')
+  /* 계정 없이 내부 직원으로 근무하는 분 (명세서 대상, 3.3% 아님) */
+  const INTERNAL_EXTRA = useMemo(() => new Set(['손선욱']), [])
+  const personKind = (name) => {
+    const n = String(name || '').trim()
+    if (staffNames.has(n) || INTERNAL_EXTRA.has(n)) return '내부'
+    return '외부·단기'
+  }
 
   /* 향란 → 보람 → 혜민 순서 (계정관리 담당자 순서와 동일), 나머지는 이름순 */
   const rankOf = useMemo(() => {
@@ -494,7 +500,7 @@ export default function Payroll() {
                 단기·외부 인력 ({tempShown.length}건)
               </h2>
               <p className="mt-0.5 text-xs text-ink-500">
-                계정이 없는 분(손선욱·행사 단기인력 등)은 여기서 따로 관리됩니다. 합계 {formatKRW(sumTotal(tempShown))}원
+                아르바이트 등 외부 인력은 여기서 따로 관리됩니다. 합계 {formatKRW(sumTotal(tempShown))}원
                 {tempPayout.rep ? (
                   <> · 지출결의 포함 실지급 <strong className="text-ink-800">{formatKRW(tempPayout.total)}원</strong></>
                 ) : null}

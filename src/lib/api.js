@@ -255,6 +255,19 @@ export function upsertSnapshot(snapDate, balances, memo, userId) {
   return unwrap(supabase.from('fund_snapshots').upsert(row, { onConflict: 'snap_date' }).select().single())
 }
 
+/* 통장 거래내역 원본 (계좌별 조회용, migration_bank_transactions.sql 필요) */
+export function listBankTransactions(acctNo, { from, to, limit = 500 } = {}) {
+  let q = supabase
+    .from('bank_transactions')
+    .select('*')
+    .eq('acct_no', acctNo)
+    .order('transacted_at', { ascending: false })
+    .limit(limit)
+  if (from) q = q.gte('trans_date', from)
+  if (to) q = q.lte('trans_date', to)
+  return unwrap(q)
+}
+
 /* ------------------------------------------------------------------ */
 /* 장부 (매출 / 매입 / 운영비 / 지출결의)                                */
 /* ------------------------------------------------------------------ */

@@ -11,6 +11,37 @@ import { listEntries, listProfiles, updateProfile } from '../lib/api'
  * 인적사항(부서·연락처·입사일·생일·재직)을 한 화면에서 관리합니다.
  * 이름·계정은 계정관리에서 다룹니다.
  */
+
+/* 근속: N년 N개월 (입사일 기준) */
+function tenure(hireDate) {
+  if (!hireDate) return '—'
+  const from = new Date(`${hireDate}T00:00:00`)
+  const now = new Date()
+  if (Number.isNaN(from.getTime()) || from > now) return '—'
+  let months = (now.getFullYear() - from.getFullYear()) * 12 + (now.getMonth() - from.getMonth())
+  if (now.getDate() < from.getDate()) months -= 1
+  if (months < 0) return '—'
+  const y = Math.floor(months / 12)
+  const m = months % 12
+  if (y <= 0) return `${m}개월`
+  return m ? `${y}년 ${m}개월` : `${y}년`
+}
+
+/* 생일: 만나이 · D-day */
+function birthday(birthDate) {
+  if (!birthDate) return ''
+  const b = new Date(`${birthDate}T00:00:00`)
+  if (Number.isNaN(b.getTime())) return ''
+  const now = new Date()
+  let age = now.getFullYear() - b.getFullYear()
+  if (now.getMonth() < b.getMonth() || (now.getMonth() === b.getMonth() && now.getDate() < b.getDate())) age -= 1
+  const thisYear = new Date(now.getFullYear(), b.getMonth(), b.getDate())
+  const next = thisYear >= new Date(now.getFullYear(), now.getMonth(), now.getDate())
+    ? thisYear
+    : new Date(now.getFullYear() + 1, b.getMonth(), b.getDate())
+  const dday = Math.round((next - new Date(now.getFullYear(), now.getMonth(), now.getDate())) / 86400000)
+  return `만 ${age}세 · D-${dday}`
+}
 export default function Members() {
   const { user } = useAuth()
   const toast = useToast()
@@ -155,13 +186,14 @@ export default function Members() {
           {profiles.length ? (
             <div className="card overflow-hidden">
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[860px] border-collapse text-xs">
+                <table className="w-full min-w-[940px] border-collapse text-xs">
                   <thead className="bg-ink-50/70">
                     <tr>
                       <th className="th">이름</th>
                       <th className="th">부서</th>
                       <th className="th">연락처</th>
                       <th className="th">입사일</th>
+                      <th className="th">근속</th>
                       <th className="th">생일</th>
                       <th className="th text-right">인건비 누적</th>
                       <th className="th">상태</th>
@@ -201,13 +233,15 @@ export default function Members() {
                               onChange={(e) => setCell(p.id, { hire_date: e.target.value || null })}
                             />
                           </td>
-                          <td className="td">
+                          <td className="td whitespace-nowrap text-ink-600">{tenure(work.hire_date)}</td>
+                          <td className="td whitespace-nowrap">
                             <input
                               type="date"
                               className="input w-auto py-1 text-xs"
                               value={work.birth_date || ''}
                               onChange={(e) => setCell(p.id, { birth_date: e.target.value || null })}
                             />
+                            <span className="mt-0.5 block text-[11px] text-ink-500">{birthday(work.birth_date)}</span>
                           </td>
                           <td className="td num">{formatKRW(payByName[String(p.full_name || '').trim()] || 0)}</td>
                           <td className="td">
