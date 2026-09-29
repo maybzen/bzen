@@ -119,9 +119,18 @@ export default function Partners() {
     return [...map.values()].filter((g) => g.length > 1)
   }, [partners])
 
+  /* 사업자번호가 적힌 거래처는 본관이므로 남길 이름으로 자동 추천 */
+  const suggestedKeepId = useMemo(() => {
+    if (selectedPartners.length < 2) return ''
+    const withBiz = selectedPartners.filter((p) => /사업자번호/.test(p.memo || ''))
+    if (withBiz.length === 1) return withBiz[0].id
+    if (withBiz.length > 1) return withBiz[0].id
+    return selectedPartners[0].id
+  }, [selectedPartners])
+
   const openMerge = async () => {
     if (selectedPartners.length < 2) return
-    setMergeTarget(selectedPartners[0].id)
+    setMergeTarget(suggestedKeepId || selectedPartners[0].id)
     setMergeStats(null)
     setMergeOpen(true)
     try {
@@ -154,10 +163,26 @@ export default function Partners() {
       let movedEntries = 0
       let movedCols = 0
       let addPayable = 0
+      /* 남길 거래처에 남은 사업자번호·연락처 메모를 모은 뒤, 예전 이름은 별칭으로 남깁니다 */
+      const keepMemo = [keep.memo || '']
       for (const s of sources) {
-        const er = await supabase.from('entries').update({ counterparty: keep.name }).eq('counterparty', s.name).select('id')
-        if (er.error) throw er.error
-        movedEntries += (er.data || []).length
+        if (s.memo && !keepMemo.join('\n').includes(s.memo)) keepMemo.push(s.memo)
+        keepMemo.push(`구 표기: ${s.name}`)
+      }
+      for (const s of sources) {
+        /* 예전 이름이 메모에 이미 있으면 넣지 않고, 거래처명만 통일합니다 (내역은 지우지 않음) */
+        const { data: olds, error: oerr } = await supabase
+          .from('entries')
+          .select('id,memo')
+          .eq('counterparty', s.name)
+        if (oerr) throw oerr
+        for (const row of olds || []) {
+          if (row.memo && row.memo.includes('구 표기:')) continue
+          const memo = [row.memo, `구 표기: ${s.name}`].filter(Boolean).join(' · ')
+          const up = await supabase.from('entries').update({ counterparty: keep.name, memo }).eq('id', row.id)
+          if (up.error) throw up.error
+          movedEntries += 1
+        }
         const cr = await supabase.from('collections').update({ counterparty: keep.name }).eq('counterparty', s.name).select('id')
         if (cr.error) throw cr.error
         movedCols += (cr.data || []).length
@@ -177,14 +202,17 @@ export default function Partners() {
         const del = await supabase.from('counterparties').delete().eq('id', s.id)
         if (del.error) throw del.error
       }
-      if (addPayable) {
-        const up = await supabase
-          .from('counterparties')
-          .update({ payable_balance: Number(keep.payable_balance || 0) + addPayable })
-          .eq('id', keep.id)
-        if (up.error) throw up.error
-      }
-      toast.success(`${sources.length}곳을 '${keep.name}'(으)로 합쳤습니다. 장부 ${movedEntries}건·수금 ${movedCols}건 이동.`)
+      const ku = await supabase
+        .from('counterparties')
+        .update({
+          memo: keepMemo.filter(Boolean).join('\n'),
+          payable_balance: Number(keep.payable_balance || 0) + addPayable,
+        })
+        .eq('id', keep.id)
+      if (ku.error) throw ku.error
+      toast.success(
+        `${sources.length}곳을 '${keep.name}'(으)로 합쳤습니다. 장부 ${movedEntries}건·수금 ${movedCols}건 이름 통일, 예전 명칭은 메모에 남겼습니다.`,
+      )
       setMergeOpen(false)
       setSelected({})
       setReloadKey((k) => k + 1)
@@ -838,7 +866,7 @@ export default function Partners() {
         open={mergeOpen}
         onClose={merging ? undefined : () => setMergeOpen(false)}
         title="거래처 합치기"
-        subtitle="장부·수금·서류·프로젝트 연결을 유지되는 쪽으로 옮기고 나머지는 삭제합니다."
+        subtitle="장부·수금·서류·프로젝트 연결을 유지되는 쪽으로 옮깁니다. 장부 내역은 지우지 않고 명칭만 통일하며, 예전 이름은 메모에 남깁니다."
         footer={
           <>
             <button type="button" className="btn-ghost" onClick={() => setMergeOpen(false)} disabled={merging}>
@@ -879,7 +907,7 @@ export default function Partners() {
                     className={`rounded-lg border px-3 py-2 text-xs ${keep ? 'border-brand-300 bg-brand-50/60' : 'border-ink-200'}`}
                   >
                     <p className="font-bold text-ink-900">
-                      {p.name} {keep ? <span className="text-brand-700">· 유지</span> : <span className="text-ink-400">· 삭제됨</span>}
+                      {p.name} {keep ? <span className="text-brand-700">· 유지</span> : <span className="text-ink-400">· 명칭만 통일</span>}
                     </p>
                     <p className="mt-0.5 text-ink-500">
                       장부 {s.entries}건 · 수금 {s.collections}건 · 프로젝트 연결 {s.links}곳 · 서류 {s.docs}건
@@ -891,7 +919,8 @@ export default function Partners() {
             </ul>
           )}
           <p className="text-xs leading-relaxed text-ink-500">
-            미지급 잔액은 유지되는 쪽에 합산됩니다. 담당자·메모 등 대장 정보는 유지되는 쪽 기준이며, 삭제는 되돌릴 수 없습니다.
+            사업자번호가 적힌 쪽을 유지할 쪽으로 자동 골라 둡니다. 미지급 잔액은 유지되는 쪽에 합산되고, 나머지 거래처의 메모(사업자번호·연락처)는 유지되는 쪽 메모로 옮겨집니다. 내역은 전부 남고 각 행 메모에
+            <span className="mx-1 font-semibold text-ink-700">구 표기: 예전이름</span>이 붙습니다. 거래처 행 삭제는 되돌릴 수 없습니다.
           </p>
         </div>
       </Modal>
