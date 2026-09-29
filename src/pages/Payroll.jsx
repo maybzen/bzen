@@ -499,6 +499,7 @@ export default function Payroll() {
                   <> · 지출결의 포함 실지급 <strong className="text-ink-800">{formatKRW(tempPayout.total)}원</strong></>
                 ) : null}
                 {unattributedReport ? <> · 이용자 미표기 {formatKRW(unattributedReport)}원 별도</> : null}
+                <span className="mt-0.5 block">사업소득 3.3% 원천징수 대상 · 명세서 없이 지급액 기준 관리합니다.</span>
               </p>
             </header>
             {tempShown.length ? (
@@ -508,12 +509,10 @@ export default function Payroll() {
                 profiles={profiles}
                 attachmentsByEntry={attachmentsByEntry}
                 canEdit={isAdmin}
+                onEdit={openEdit}
                 onDelete={isAdmin ? setRemoving : undefined}
                 onOpenAttachments={setViewerFiles}
                 canChangeAuthor={isAdmin}
-                onSlip={slipsMissing ? undefined : setSlipEntry}
-                slipEntryIds={slipIds}
-                slipLabel="상세"
                 extraPayMap={Object.fromEntries(reportByPerson)}
               />
             ) : (

@@ -16,7 +16,8 @@ export const NAV = [
   { to: '/expense-reports', label: '지출결의', icon: 'coins', perm: 'expense-reports' },
   { to: '/projects', label: '프로젝트', icon: 'folder', perm: 'projects' },
   { to: '/partners', label: '거래처', icon: 'building', perm: 'partners' },
-  { to: '/fixed-costs', label: '고정비', icon: 'coins', perm: 'fixed' },
+  { to: '/fixed-costs', label: '고정비', icon: 'chart', perm: 'fixed' },
+  { to: '/members', label: '구성원', icon: 'users', adminOnly: true },
   { to: '/payroll', label: '급여관리', icon: 'coins', adminOnly: true },
   { to: '/leaves', label: '휴무대장', icon: 'file', perm: 'leaves' },
   { to: '/tax', label: '세금관리', icon: 'calendar', perm: 'tax' },
@@ -28,8 +29,8 @@ export const NAV = [
 
 const NAV_GROUPS = [
   { title: '장부', items: ['/dashboard', '/sales', '/purchases', '/collections', '/expenses', '/expense-reports'] },
-  { title: '사업', items: ['/projects', '/partners'] },
-  { title: '인사·급여', items: ['/fixed-costs', '/payroll', '/leaves'] },
+  { title: '사업', items: ['/projects', '/partners', '/fixed-costs'] },
+  { title: '인사관리', items: ['/members', '/payroll', '/leaves'] },
   { title: '세금·정산', items: ['/tax', '/reports'] },
   { title: '관리', items: ['/users', '/funds', '/settings'] },
 ]
