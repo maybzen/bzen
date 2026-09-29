@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import Icon from './Icon'
 import CardUserSelect from './CardUserSelect'
+import PartnerPicker from './PartnerPicker'
 import { AmountInput, Field, InlineAlert, Modal, Spinner } from './ui'
 import { useToast } from './Toast'
 import { CATEGORIES, ENTRY_META, INTERNAL_PROJECT_NAME, PAYMENT_METHODS, categoryHint, suggestCategory } from '../lib/constants'
 import { formatFileSize, formatKRW, todayISO } from '../lib/format'
-import { createEntry, deleteAttachment, listFundRows, updateEntry, uploadAttachment } from '../lib/api'
+import { createEntry, deleteAttachment, ensurePartnerByName, listFundRows, updateEntry, uploadAttachment } from '../lib/api'
 
 const MAX_FILE = 20 * 1024 * 1024
 
@@ -211,6 +212,10 @@ export default function EntryFormModal({
       }
 
       toast.success(initial?.id ? '수정되었습니다.' : `${isReport ? '지출결의' : meta.label}이(가) 등록되었습니다.`)
+      /* 거래처가 대장에 없으면 자동 등록 (표기만 다른 곳은 기존 것으로 연결) */
+      if (payload.counterparty) {
+        ensurePartnerByName(payload.counterparty, userId).catch(() => {})
+      }
       onSaved?.(record, uploaded)
       onClose?.()
     } catch (err) {
@@ -284,20 +289,11 @@ export default function EntryFormModal({
           )}
 
           <Field label={labels.party}>
-            <input
-              className="input"
-              list="counterparty-list"
-              placeholder={entryType === 'sale' ? '예: ○○ 주식회사' : '예: □□ 상사'}
+            <PartnerPicker
               value={form.counterparty}
               onChange={set('counterparty')}
+              placeholder={entryType === 'sale' ? '예: ○○ 주식회사' : '예: □□ 상사'}
             />
-            {partnerNames.length ? (
-              <datalist id="counterparty-list">
-                {partnerNames.map((name) => (
-                  <option key={name} value={name} />
-                ))}
-              </datalist>
-            ) : null}
           </Field>
 
           <Field label={labels.category}>

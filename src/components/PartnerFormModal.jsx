@@ -175,12 +175,21 @@ export default function PartnerFormModal({ open, onClose, onSaved, initial, read
   const [docs, setDocs] = useState([])
   const [docsLoading, setDocsLoading] = useState(false)
   const [uploading, setUploading] = useState('')
+  const [linkQuery, setLinkQuery] = useState('')
+
+  const linkProjectsShown = useMemo(() => {
+    const q = linkQuery.trim().toLowerCase()
+    const list = linkProps?.projects || []
+    if (!q) return list
+    return list.filter((p) => String(p.name || '').toLowerCase().includes(q))
+  }, [linkProps, linkQuery])
 
   const partnerId = initial?.id || null
 
   useEffect(() => {
     if (!open) return
     setError('')
+    setLinkQuery('')
     if (initial) {
       setForm({
         name: initial.name || '',
@@ -595,9 +604,22 @@ export default function PartnerFormModal({ open, onClose, onSaved, initial, read
           <p className="mt-0.5 text-xs text-ink-500">
             체크하면 연결됩니다. 한 거래처가 여러 행사에 겹쳐도 각각 체크하면 됩니다.
           </p>
-          {linkProps.projects.length ? (
-            <div className="mt-2.5 flex flex-col gap-1.5">
-              {linkProps.projects.map((p) => {
+          <div className="relative mt-2.5">
+            <Icon
+              name="search"
+              size={14}
+              className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-400"
+            />
+            <input
+              className="input py-1.5 pl-8 text-xs"
+              placeholder="프로젝트 검색"
+              value={linkQuery}
+              onChange={(e) => setLinkQuery(e.target.value)}
+            />
+          </div>
+          {linkProjectsShown.length ? (
+            <div className="mt-2.5 flex max-h-64 flex-col gap-1.5 overflow-auto">
+              {linkProjectsShown.map((p) => {
                 const linked = linkProps.linkedIds.has(p.id)
                 const busy = linkProps.busyId === `${p.id}:${partnerId}`
                 return (

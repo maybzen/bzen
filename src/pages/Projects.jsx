@@ -10,7 +10,7 @@ import { useAuth } from '../auth/AuthContext'
 import { PROJECT_STATUS } from '../lib/constants'
 import { contractSplit, formatDateHuman, formatKRW, formatPercent, normalizeVendorName } from '../lib/format'
 import { buildPnl, groupByProject, summarize } from '../lib/summary'
-import { createEntry, createProject, deleteProject, ensurePartnerByName, isMissingTableError, linkProjectPartner, listEntries, listPartners, listProfiles, listProjectPartners, listProjects, updateProject } from '../lib/api'
+import { createEntry, createProject, deleteProject, ensurePartnerByName, isMissingTableError, linkProjectPartner, listEntries, listPartners, listProfiles, listProjectPartners, listProjects, unlinkProjectPartner, updateProject } from '../lib/api'
 
 /**
  * 카드에 쓰는 손익 표기. 세무·회계 표현을 그대로 씁니다.
@@ -759,10 +759,14 @@ function AgencyDealModal({ partners, userId, initial = null, onClose, onSaved })
     return { total: t ? t[1].replace(/,/g, '') : '', rate: r ? r[1] : '3' }
   }
   const initParsed = initial?.project ? parseTotalRate(initial.project.memo) : { total: '', rate: '3' }
+  const initAgencyName = (() => {
+    if (!initial?.partnerId) return ''
+    return (partners || []).find((p) => p.id === initial.partnerId)?.name || ''
+  })()
   const [form, setForm] = useState({
     name: initial?.project?.name || '',
     client: initial?.project?.client || '',
-    partnerId: initial?.partnerId || '',
+    agencyName: initAgencyName,
     total: initParsed.total,
     rate: initParsed.rate,
     fee: initial?.project?.contract_amount ? String(initial.project.contract_amount) : '',
@@ -794,12 +798,12 @@ function AgencyDealModal({ partners, userId, initial = null, onClose, onSaved })
     e.preventDefault()
     if (!form.name.trim()) return setError('행사이름을 입력해 주세요.')
     if (!form.client.trim()) return setError('발주처를 입력해 주세요.')
-    if (!form.partnerId) return setError('대행업체를 선택해 주세요.')
-    const partner = (partners || []).find((p) => p.id === form.partnerId)
-    if (!partner) return setError('대행업체를 선택해 주세요.')
+    if (!form.agencyName.trim()) return setError('대행업체를 입력해 주세요.')
     setSaving(true)
     setError('')
     try {
+      const partner = await ensurePartnerByName(form.agencyName.trim(), userId).catch(() => null)
+      if (!partner) return setError('대행업체를 확인해 주세요.')
       if (initial?.project?.id) {
         await updateProject(initial.project.id, {
           name: form.name.trim(),
@@ -810,6 +814,10 @@ function AgencyDealModal({ partners, userId, initial = null, onClose, onSaved })
           referrer: form.referrer.trim(),
           memo: form.memo.trim(),
         })
+        if (initial.partnerId && initial.partnerId !== partner.id) {
+          await unlinkProjectPartner(initial.project.id, initial.partnerId).catch(() => {})
+        }
+        await linkProjectPartner(initial.project.id, partner.id, userId, '대행')
         if (form.client.trim()) {
           ensurePartnerByName(form.client.trim(), userId).catch(() => {})
         }
@@ -894,15 +902,8 @@ function AgencyDealModal({ partners, userId, initial = null, onClose, onSaved })
         <Field label="발주처 (원청)" required>
           <PartnerPicker value={form.client} onChange={set('client')} placeholder="예: 부산관광고등학교" />
         </Field>
-        <Field label="대행업체 (실제 수행사)" required>
-          <select className="input" value={form.partnerId} onChange={set('partnerId')}>
-            <option value="">선택하세요</option>
-            {(partners || []).map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
+        <Field label="대행업체 (실제 수행사)" required hint="치면 검색되고, 없으면 저장할 때 새로 등록됩니다">
+          <PartnerPicker value={form.agencyName} onChange={set('agencyName')} placeholder="예: (사)부산컨벤션산업협회" />
         </Field>
         <Field label="총계약액 (원, VAT포함)" hint="대행업체에 전달되는 금액 포함 전체">
           <AmountInput

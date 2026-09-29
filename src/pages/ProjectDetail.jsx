@@ -154,6 +154,29 @@ export default function ProjectDetail() {
     }
   }
 
+  /* 후보 전체 일괄 연결 (대장 있는 곳만) */
+  const handleLinkAll = async () => {
+    const targets = candidateVendors.filter((v) => v.partner)
+    if (!targets.length) return
+    setLinkBusy(true)
+    try {
+      let ok = 0
+      for (const v of targets) {
+        // eslint-disable-next-line no-await-in-loop
+        try {
+          await linkProjectPartner(id, v.partner.id, user?.id)
+          ok += 1
+        } catch {
+          /* 개별 실패는 건너뜁니다 */
+        }
+      }
+      toast.success(`${targets.length}곳 중 ${ok}곳을 연결했습니다.`)
+      await refreshLinks()
+    } finally {
+      setLinkBusy(false)
+    }
+  }
+
   /* 협력 ↔ 대행계약 전환 (대표만) */
   const handleSetRole = async (partnerId, role) => {
     setLinkBusy(true)
@@ -447,6 +470,7 @@ export default function ProjectDetail() {
             ledgerEntries={entries}
             onLink={handleLink}
             onUnlink={handleUnlink}
+            onLinkAll={handleLinkAll}
             onSetRole={handleSetRole}
             onPartnerSaved={(p) => {
               refreshLinks()
@@ -531,7 +555,7 @@ export default function ProjectDetail() {
  * 프로젝트마다 따로 연결하므로 중복 걱정 없습니다.
  * 장부에만 있고 미연결인 곳은 후보로 보여주고, 밥집처럼 엮지 않을 곳은 그냥 두면 됩니다.
  */
-function VendorPanel({ links, linked, candidates, linkBusy, isAdmin, userId, partners, profiles, ledgerEntries, onLink, onUnlink, onSetRole, onPartnerSaved }) {
+function VendorPanel({ links, linked, candidates, linkBusy, isAdmin, userId, partners, profiles, ledgerEntries, onLink, onUnlink, onLinkAll, onSetRole, onPartnerSaved }) {
   const [q, setQ] = useState('')
   const [newOpen, setNewOpen] = useState(false)
   const ql = q.trim().toLowerCase()
@@ -654,9 +678,19 @@ function VendorPanel({ links, linked, candidates, linkBusy, isAdmin, userId, par
       ) : null}
       {candidatesShown.length ? (
         <div className={linkedShown.length ? 'border-t border-ink-100' : ''}>
-          <p className="bg-ink-50/60 px-4 py-2 text-[11px] font-bold text-ink-500">
-            연결 후보 (장부에만 있는 곳 · 밥집처럼 엮지 않을 곳은 두세요)
-          </p>
+          <div className="flex items-center justify-between gap-2 bg-ink-50/60 px-4 py-2">
+            <p className="text-[11px] font-bold text-ink-500">
+              연결 후보 (장부에만 있는 곳 · 밥집처럼 엮지 않을 곳은 두세요)
+            </p>
+            <button
+              type="button"
+              onClick={() => onLinkAll?.()}
+              disabled={linkBusy || !candidatesShown.some((v) => v.partner)}
+              className="shrink-0 text-[11px] font-bold text-brand-700 hover:underline disabled:opacity-50"
+            >
+              전체 연결
+            </button>
+          </div>
           <ul className="divide-y divide-ink-100">
             {candidatesShown.map((v) => (
               <li key={v.name} className="flex items-center gap-3 px-4 py-2.5">
