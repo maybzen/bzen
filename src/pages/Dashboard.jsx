@@ -9,12 +9,16 @@ import { EmptyState, LoadingBlock, PageHeader, StatCard } from '../components/ui
 import { useAuth } from '../auth/AuthContext'
 import { useStaffPermissions } from '../lib/permissions'
 import {
+  addChecklistItem,
+  deleteChecklistItem,
   listAttachments,
+  listChecklistItems,
   listCollections,
   listEntries,
   listPartners,
   listProfiles,
   listProjects,
+  updateChecklistItem,
 } from '../lib/api'
 import { isStaffVisible, staffIdsFromProfiles } from '../lib/permissions'
 import {
@@ -30,7 +34,7 @@ import {
 } from '../lib/format'
 import { groupByMonth, groupByProject, summarize } from '../lib/summary'
 
-/* 홈페이지 확인 필요 목록 (브라우저에 저장, 관리자 수정 가능) */
+/* 홈페이지 확인 필요 목록 (DB 공유, 없으면 브라우저 저장으로 폴백) */
 const HOME_ALERTS_DEFAULT = [
   { id: 'yoon', text: '윤호식 직접지급 매입근거 확인 (5/8 1,298만·7/9 1,100만·8/14 167만 / 브이오디오 매입 913만원과 차이)' },
   { id: 'beaver', text: '비버웍스 입금 93만원 성격 확인' },
@@ -38,44 +42,7 @@ const HOME_ALERTS_DEFAULT = [
   { id: 'pg', text: 'PG 수수료 중복 의혹 (~15만원)' },
 ]
 
-function loadHomeItems() {
-  try {
-    const raw = localStorage.getItem('bzen.home.alerts.items.v3')
-    const parsed = raw ? JSON.parse(raw) : null
-    if (Array.isArray(parsed) && parsed.every((x) => x && typeof x.id === 'string')) return parsed
-  } catch {
-    /* 무시 */
-  }
-  return HOME_ALERTS_DEFAULT
-}
-
-function loadHomeChecks() {
-  try {
-    const raw = localStorage.getItem('bzen.home.alerts.done.v3')
-    const parsed = raw ? JSON.parse(raw) : {}
-    return parsed && typeof parsed === 'object' ? parsed : {}
-  } catch {
-    return {}
-  }
-}
-
-function saveHomeItems(items) {
-  try {
-    localStorage.setItem('bzen.home.alerts.items.v3', JSON.stringify(items))
-  } catch {
-    /* 저장 실패 무시 */
-  }
-}
-
-function saveHomeChecks(checks) {
-  try {
-    localStorage.setItem('bzen.home.alerts.done.v3', JSON.stringify(checks))
-  } catch {
-    /* 저장 실패 무시 */
-  }
-}
-
-/* 회사 PC에서 업데이트할 때 확인할 목록 (관리자만, 브라우저에 저장) */
+/* 회사 PC에서 업데이트할 때 확인할 목록 (관리자만, DB 공유) */
 const SYNC_CHECKLIST_DEFAULT = [
   { id: 's-pull', text: '회사 PC에서 main pull 받기 (git pull --ff-only)' },
   { id: 's-sql-partners', text: 'SQL 실행: migration_project_partners.sql (프로젝트↔거래처 연결용, 미실행)' },
@@ -87,30 +54,141 @@ const SYNC_CHECKLIST_DEFAULT = [
   { id: 's-backup', text: '월 1회 CSV 전체 백업 (보고서 → 상세 CSV)' },
 ]
 
-function loadSyncItems() {
-  // 저장된 목록에 없는 기본 항목은 뒤에 덧붙입니다 (체크 상태 유지).
-  const merge = (stored) => {
-    const ids = new Set(stored.map((x) => x.id))
-    return [...stored, ...SYNC_CHECKLIST_DEFAULT.filter((x) => !ids.has(x.id))]
-  }
+function readLocalList(itemsKey, doneKey, defaults, mergeDefaults = false) {
   try {
-    const raw = localStorage.getItem('bzen.home.sync.items.v1')
+    const raw = localStorage.getItem(itemsKey)
     const parsed = raw ? JSON.parse(raw) : null
-    if (Array.isArray(parsed) && parsed.every((x) => x && typeof x.id === 'string')) return merge(parsed)
+    if (Array.isArray(parsed) && parsed.every((x) => x && typeof x.id === 'string')) {
+      let checks = {}
+      try {
+        const c = JSON.parse(localStorage.getItem(doneKey))
+        if (c && typeof c === 'object') checks = c
+      } catch {
+        /* 무시 */
+      }
+      const items = parsed.map((x) => ({ id: x.id, text: String(x.text || ''), done: Boolean(checks[x.id]) }))
+      if (mergeDefaults) {
+        const ids = new Set(items.map((x) => x.id))
+        for (const d of defaults) if (!ids.has(d.id)) items.push({ ...d, done: false })
+      }
+      return items
+    }
   } catch {
     /* 무시 */
   }
-  return SYNC_CHECKLIST_DEFAULT
+  return defaults.map((d) => ({ ...d, done: false }))
 }
 
-function loadSyncChecks() {
+function saveLocalList(itemsKey, doneKey, items) {
   try {
-    const raw = localStorage.getItem('bzen.home.sync.done.v1')
-    const parsed = raw ? JSON.parse(raw) : {}
-    return parsed && typeof parsed === 'object' ? parsed : {}
+    localStorage.setItem(itemsKey, JSON.stringify(items.map(({ id, text }) => ({ id, text }))))
+    const checks = {}
+    for (const x of items) if (x.done) checks[x.id] = true
+    localStorage.setItem(doneKey, JSON.stringify(checks))
   } catch {
-    return {}
+    /* 저장 실패 무시 */
   }
+}
+
+/* DB 우선, 테이블 없으면 로컬 모드. DB가 비어 있으면 로컬 내용을 1회 이관합니다. */
+function useChecklist(listKey, itemsKey, doneKey, defaults, userId, mergeDefaults = false) {
+  const [items, setItems] = useState(() => readLocalList(itemsKey, doneKey, defaults, mergeDefaults))
+  const [useDb, setUseDb] = useState(false)
+
+  useEffect(() => {
+    let alive = true
+    listChecklistItems(listKey)
+      .then(async (rows) => {
+        if (!alive) return
+        if (rows && rows.length) {
+          setItems(rows.map((r) => ({ id: r.id, text: r.text, done: !!r.done })))
+          setUseDb(true)
+          return
+        }
+        const local = readLocalList(itemsKey, doneKey, defaults, mergeDefaults)
+        const seeded = []
+        for (const it of local) {
+          try {
+            // eslint-disable-next-line no-await-in-loop
+            const row = await addChecklistItem(listKey, it.text, userId)
+            if (it.done) await updateChecklistItem(row.id, { done: true })
+            seeded.push({ id: row.id, text: row.text, done: !!it.done })
+          } catch {
+            return // 중간 실패 시 로컬 모드 유지
+          }
+        }
+        if (!alive) return
+        setItems(seeded)
+        setUseDb(true)
+      })
+      .catch(() => {
+        /* 테이블 없음 → 로컬 모드 유지 */
+      })
+    return () => {
+      alive = false
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [listKey])
+
+  const persistLocal = (next) => {
+    setItems(next)
+    saveLocalList(itemsKey, doneKey, next)
+  }
+  const toggle = async (id) => {
+    const cur = items.find((x) => x.id === id)
+    if (!cur) return
+    if (useDb) {
+      setItems((prev) => prev.map((x) => (x.id === id ? { ...x, done: !x.done } : x)))
+      try {
+        await updateChecklistItem(id, { done: !cur.done })
+      } catch {
+        setItems((prev) => prev.map((x) => (x.id === id ? { ...x, done: cur.done } : x)))
+      }
+    } else {
+      persistLocal(items.map((x) => (x.id === id ? { ...x, done: !x.done } : x)))
+    }
+  }
+  const add = async (text) => {
+    const t = String(text || '').trim()
+    if (!t) return
+    if (useDb) {
+      try {
+        const row = await addChecklistItem(listKey, t, userId)
+        setItems((prev) => [...prev, { id: row.id, text: row.text, done: false }])
+      } catch {
+        /* 무시 */
+      }
+    } else {
+      persistLocal([...items, { id: `a${Date.now().toString(36)}`, text: t, done: false }])
+    }
+  }
+  const remove = async (id) => {
+    if (useDb) {
+      setItems((prev) => prev.filter((x) => x.id !== id))
+      try {
+        await deleteChecklistItem(id)
+      } catch {
+        /* 무시 */
+      }
+    } else {
+      persistLocal(items.filter((x) => x.id !== id))
+    }
+  }
+  const rename = async (id, text) => {
+    const t = String(text || '').trim()
+    if (!t) return
+    if (useDb) {
+      setItems((prev) => prev.map((x) => (x.id === id ? { ...x, text: t } : x)))
+      try {
+        await updateChecklistItem(id, { text: t })
+      } catch {
+        /* 무시 */
+      }
+    } else {
+      persistLocal(items.map((x) => (x.id === id ? { ...x, text: t } : x)))
+    }
+  }
+  return { items, useDb, toggle, add, remove, rename }
 }
 import { TaxAlertBanner } from './Tax'
 
@@ -132,108 +210,35 @@ export default function Dashboard() {
   const [query, setQuery] = useState('')
   const [searching, setSearching] = useState(false)
   const [results, setResults] = useState(null)
-  const [homeItems, setHomeItems] = useState(() => loadHomeItems())
-  const [homeChecks, setHomeChecks] = useState(() => loadHomeChecks())
+  const home = useChecklist('home', 'bzen.home.alerts.items.v3', 'bzen.home.alerts.done.v3', HOME_ALERTS_DEFAULT, user?.id)
+  const sync = useChecklist('sync', 'bzen.home.sync.items.v1', 'bzen.home.sync.done.v1', SYNC_CHECKLIST_DEFAULT, user?.id, true)
   const [showDone, setShowDone] = useState(false)
   const [newAlert, setNewAlert] = useState('')
-  const [syncItems, setSyncItems] = useState(() => loadSyncItems())
-  const [syncChecks, setSyncChecks] = useState(() => loadSyncChecks())
   const [newSync, setNewSync] = useState('')
   const [syncOpen, setSyncOpen] = useState(true)
+  const [editing, setEditing] = useState(null) // { list: 'home' | 'sync', id, text }
 
-  const saveSync = (items, checks) => {
-    try {
-      localStorage.setItem('bzen.home.sync.items.v1', JSON.stringify(items))
-      localStorage.setItem('bzen.home.sync.done.v1', JSON.stringify(checks))
-    } catch {
-      /* 저장 실패 무시 */
-    }
-  }
-
-  const toggleSyncCheck = (id) => {
-    setSyncChecks((prev) => {
-      const next = { ...prev }
-      if (next[id]) delete next[id]
-      else next[id] = true
-      setSyncItems((items) => {
-        saveSync(items, next)
-        return items
-      })
-      return next
-    })
-  }
-
-  const addSyncItem = (e) => {
-    e.preventDefault()
-    const text = newSync.trim()
-    if (!text) return
-    const id = `s${Date.now().toString(36)}`
-    setSyncItems((prev) => {
-      const next = [...prev, { id, text }]
-      setSyncChecks((checks) => {
-        saveSync(next, checks)
-        return checks
-      })
-      return next
-    })
-    setNewSync('')
-  }
-
-  const removeSyncItem = (id) => {
-    setSyncItems((prev) => {
-      const next = prev.filter((x) => x.id !== id)
-      setSyncChecks((checks) => {
-        const nc = { ...checks }
-        delete nc[id]
-        saveSync(next, nc)
-        return nc
-      })
-      return next
-    })
-  }
-
-  const syncOpenCount = syncItems.filter((x) => !syncChecks[x.id]).length
-
-  const toggleHomeCheck = (id) => {
-    setHomeChecks((prev) => {
-      const next = { ...prev }
-      if (next[id]) delete next[id]
-      else next[id] = true
-      saveHomeChecks(next)
-      return next
-    })
-  }
+  const homeOpen = home.items.filter((x) => !x.done)
+  const homeDone = home.items.filter((x) => x.done)
+  const syncOpenCount = sync.items.filter((x) => !x.done).length
 
   const addHomeAlert = (e) => {
     e.preventDefault()
-    const text = newAlert.trim()
-    if (!text) return
-    const id = `a${Date.now().toString(36)}`
-    setHomeItems((prev) => {
-      const next = [...prev, { id, text }]
-      saveHomeItems(next)
-      return next
-    })
+    home.add(newAlert)
     setNewAlert('')
   }
-
-  const removeHomeAlert = (id) => {
-    setHomeItems((prev) => {
-      const next = prev.filter((x) => x.id !== id)
-      saveHomeItems(next)
-      return next
-    })
-    setHomeChecks((prev) => {
-      if (!prev[id]) return prev
-      const next = { ...prev }
-      delete next[id]
-      saveHomeChecks(next)
-      return next
-    })
+  const addSyncItem = (e) => {
+    e.preventDefault()
+    sync.add(newSync)
+    setNewSync('')
   }
-
-  const homeOpen = homeItems.filter((x) => !homeChecks[x.id])
-  const homeDone = homeItems.filter((x) => homeChecks[x.id])
+  const saveEditing = (e) => {
+    e.preventDefault()
+    if (!editing) return
+    if (editing.list === 'home') home.rename(editing.id, editing.text)
+    else sync.rename(editing.id, editing.text)
+    setEditing(null)
+  }
   const [alertsOpen, setAlertsOpen] = useState(() => {
     try {
       return localStorage.getItem('bzen.home.alerts.open.v1') !== '0'
@@ -636,20 +641,51 @@ export default function Dashboard() {
               <ul className="divide-y divide-ink-100">
                 {homeOpen.map((item) => (
                   <li key={item.id} className="flex items-start gap-1 px-4 py-2.5 transition hover:bg-ink-50/60">
-                    <button
-                      type="button"
-                      onClick={() => toggleHomeCheck(item.id)}
-                      className="flex min-w-0 flex-1 items-start gap-2.5 text-left"
-                    >
-                      <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border border-ink-300 bg-white text-transparent">
-                        <Icon name="check" size={13} strokeWidth={2.6} />
-                      </span>
-                      <span className="text-sm text-ink-800">{item.text}</span>
-                    </button>
+                    {editing?.list === 'home' && editing?.id === item.id ? (
+                      <form onSubmit={saveEditing} className="flex min-w-0 flex-1 items-center gap-1.5">
+                        <input
+                          autoFocus
+                          className="input min-w-0 flex-1 py-1 text-xs"
+                          value={editing.text}
+                          onChange={(e) => setEditing({ ...editing, text: e.target.value })}
+                        />
+                        <button type="submit" className="shrink-0 text-xs font-bold text-brand-700 hover:underline">
+                          저장
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setEditing(null)}
+                          className="shrink-0 text-xs text-ink-400 hover:underline"
+                        >
+                          취소
+                        </button>
+                      </form>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => home.toggle(item.id)}
+                        className="flex min-w-0 flex-1 items-start gap-2.5 text-left"
+                      >
+                        <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border border-ink-300 bg-white text-transparent">
+                          <Icon name="check" size={13} strokeWidth={2.6} />
+                        </span>
+                        <span className="text-sm text-ink-800">{item.text}</span>
+                      </button>
+                    )}
+                    {isAdmin && !(editing?.list === 'home' && editing?.id === item.id) ? (
+                      <button
+                        type="button"
+                        onClick={() => setEditing({ list: 'home', id: item.id, text: item.text })}
+                        className="shrink-0 rounded-md p-1 text-ink-300 transition hover:bg-brand-50 hover:text-brand-700"
+                        aria-label="수정"
+                      >
+                        <Icon name="pencil" size={14} />
+                      </button>
+                    ) : null}
                     {isAdmin ? (
                       <button
                         type="button"
-                        onClick={() => removeHomeAlert(item.id)}
+                        onClick={() => home.remove(item.id)}
                         className="shrink-0 rounded-md p-1 text-ink-300 transition hover:bg-rose-50 hover:text-loss"
                         aria-label="삭제"
                       >
@@ -694,21 +730,52 @@ export default function Dashboard() {
                 <ul className="divide-y divide-ink-100 border-t border-ink-100">
                   {homeDone.map((item) => (
                     <li key={item.id} className="flex items-start gap-1 px-4 py-2.5 transition hover:bg-ink-50/60">
-                      <button
-                        type="button"
-                        onClick={() => toggleHomeCheck(item.id)}
-                        className="flex min-w-0 flex-1 items-start gap-2.5 text-left"
-                        title="클릭하면 미완료로 되돌립니다"
-                      >
-                        <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-emerald-600 text-white">
-                          <Icon name="check" size={13} strokeWidth={2.6} />
-                        </span>
-                        <span className="text-sm text-ink-400 line-through">{item.text}</span>
-                      </button>
+                      {editing?.list === 'home' && editing?.id === item.id ? (
+                        <form onSubmit={saveEditing} className="flex min-w-0 flex-1 items-center gap-1.5">
+                          <input
+                            autoFocus
+                            className="input min-w-0 flex-1 py-1 text-xs"
+                            value={editing.text}
+                            onChange={(e) => setEditing({ ...editing, text: e.target.value })}
+                          />
+                          <button type="submit" className="shrink-0 text-xs font-bold text-brand-700 hover:underline">
+                            저장
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setEditing(null)}
+                            className="shrink-0 text-xs text-ink-400 hover:underline"
+                          >
+                            취소
+                          </button>
+                        </form>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => home.toggle(item.id)}
+                          className="flex min-w-0 flex-1 items-start gap-2.5 text-left"
+                          title="클릭하면 미완료로 되돌립니다"
+                        >
+                          <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-emerald-600 text-white">
+                            <Icon name="check" size={13} strokeWidth={2.6} />
+                          </span>
+                          <span className="text-sm text-ink-400 line-through">{item.text}</span>
+                        </button>
+                      )}
+                      {isAdmin && !(editing?.list === 'home' && editing?.id === item.id) ? (
+                        <button
+                          type="button"
+                          onClick={() => setEditing({ list: 'home', id: item.id, text: item.text })}
+                          className="shrink-0 rounded-md p-1 text-ink-300 transition hover:bg-brand-50 hover:text-brand-700"
+                          aria-label="수정"
+                        >
+                          <Icon name="pencil" size={14} />
+                        </button>
+                      ) : null}
                       {isAdmin ? (
                         <button
                           type="button"
-                          onClick={() => removeHomeAlert(item.id)}
+                          onClick={() => home.remove(item.id)}
                           className="shrink-0 rounded-md p-1 text-ink-300 transition hover:bg-rose-50 hover:text-loss"
                           aria-label="삭제"
                         >
@@ -742,31 +809,62 @@ export default function Dashboard() {
               {syncOpen ? (
                 <>
                   <ul className="divide-y divide-ink-100">
-                    {syncItems.map((item) => {
-                      const done = Boolean(syncChecks[item.id])
+                    {sync.items.map((item) => {
+                      const done = item.done
                       return (
                         <li key={item.id} className="flex items-start gap-1 px-4 py-2.5 transition hover:bg-ink-50/60">
-                          <button
-                            type="button"
-                            onClick={() => toggleSyncCheck(item.id)}
-                            className="flex min-w-0 flex-1 items-start gap-2.5 text-left"
-                          >
-                            <span
-                              className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition ${
-                                done
-                                  ? 'border-sky-600 bg-sky-600 text-white'
-                                  : 'border-ink-300 bg-white text-transparent'
-                              }`}
+                          {editing?.list === 'sync' && editing?.id === item.id ? (
+                            <form onSubmit={saveEditing} className="flex min-w-0 flex-1 items-center gap-1.5">
+                              <input
+                                autoFocus
+                                className="input min-w-0 flex-1 py-1 text-xs"
+                                value={editing.text}
+                                onChange={(e) => setEditing({ ...editing, text: e.target.value })}
+                              />
+                              <button type="submit" className="shrink-0 text-xs font-bold text-brand-700 hover:underline">
+                                저장
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setEditing(null)}
+                                className="shrink-0 text-xs text-ink-400 hover:underline"
+                              >
+                                취소
+                              </button>
+                            </form>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => sync.toggle(item.id)}
+                              className="flex min-w-0 flex-1 items-start gap-2.5 text-left"
                             >
-                              <Icon name="check" size={13} strokeWidth={2.6} />
-                            </span>
-                            <span className={`text-sm ${done ? 'text-ink-400 line-through' : 'text-ink-800'}`}>
-                              {item.text}
-                            </span>
-                          </button>
+                              <span
+                                className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition ${
+                                  done
+                                    ? 'border-sky-600 bg-sky-600 text-white'
+                                    : 'border-ink-300 bg-white text-transparent'
+                                }`}
+                              >
+                                <Icon name="check" size={13} strokeWidth={2.6} />
+                              </span>
+                              <span className={`text-sm ${done ? 'text-ink-400 line-through' : 'text-ink-800'}`}>
+                                {item.text}
+                              </span>
+                            </button>
+                          )}
+                          {!(editing?.list === 'sync' && editing?.id === item.id) ? (
+                            <button
+                              type="button"
+                              onClick={() => setEditing({ list: 'sync', id: item.id, text: item.text })}
+                              className="shrink-0 rounded-md p-1 text-ink-300 transition hover:bg-brand-50 hover:text-brand-700"
+                              aria-label="수정"
+                            >
+                              <Icon name="pencil" size={14} />
+                            </button>
+                          ) : null}
                           <button
                             type="button"
-                            onClick={() => removeSyncItem(item.id)}
+                            onClick={() => sync.remove(item.id)}
                             className="shrink-0 rounded-md p-1 text-ink-300 transition hover:bg-rose-50 hover:text-loss"
                             aria-label="삭제"
                           >

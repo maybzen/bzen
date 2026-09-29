@@ -180,6 +180,34 @@ export function isMissingTableError(error) {
 }
 
 /* ------------------------------------------------------------------ */
+/* 체크리스트 (확인 필요 목록 + 업데이트 체크리스트, 기기 공유)            */
+/* ------------------------------------------------------------------ */
+
+export function listChecklistItems(list) {
+  return unwrap(
+    supabase.from('checklist_items').select('*').eq('list', list).order('position').order('created_at'),
+  )
+}
+
+export function addChecklistItem(list, text, userId) {
+  return unwrap(
+    supabase.from('checklist_items').insert({ list, text, created_by: userId }).select().single(),
+  )
+}
+
+export function updateChecklistItem(id, patch) {
+  const clean = { ...patch }
+  delete clean.id
+  delete clean.created_at
+  clean.updated_at = new Date().toISOString()
+  return unwrap(supabase.from('checklist_items').update(clean).eq('id', id).select().single())
+}
+
+export function deleteChecklistItem(id) {
+  return unwrap(supabase.from('checklist_items').delete().eq('id', id))
+}
+
+/* ------------------------------------------------------------------ */
 /* 자금관리 (계좌·대출·카드 마스터 + 잔고 스냅샷. 관리자 전용)              */
 /* ------------------------------------------------------------------ */
 

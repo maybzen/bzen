@@ -7,7 +7,7 @@ import { useToast } from '../components/Toast'
 import { ConfirmDialog, EmptyState, LoadingBlock, PageHeader, SegmentedControl, StatCard } from '../components/ui'
 import { useAuth } from '../auth/AuthContext'
 import { PROJECT_STATUS } from '../lib/constants'
-import { contractSplit, formatDateHuman, formatKRW, formatPercent } from '../lib/format'
+import { contractSplit, formatDateHuman, formatKRW, formatPercent, normalizeVendorName } from '../lib/format'
 import { buildPnl, groupByProject, summarize } from '../lib/summary'
 import { deleteProject, isMissingTableError, listEntries, listPartners, listProfiles, listProjectPartners, listProjects } from '../lib/api'
 
@@ -263,7 +263,7 @@ export default function Projects() {
     const paidByProjectName = new Map()
     for (const e of entries || []) {
       if (e.entry_type !== 'purchase' || !e.project_id) continue
-      const key = `${e.project_id}||${String(e.counterparty || '').trim()}`
+      const key = `${e.project_id}||${normalizeVendorName(e.counterparty)}`
       paidByProjectName.set(key, (paidByProjectName.get(key) || 0) + Number(e.supply_amount || 0))
     }
     const byAgency = new Map()
@@ -274,7 +274,7 @@ export default function Projects() {
       if (!p || !project) continue
       if (!byAgency.has(p.id)) byAgency.set(p.id, { partner: p, deals: [], contract: 0, paid: 0 })
       const csplit = contractSplit(project)
-      const paid = paidByProjectName.get(`${project.id}||${p.name}`) || 0
+      const paid = paidByProjectName.get(`${project.id}||${normalizeVendorName(p.name)}`) || 0
       const deal = { project, contract: csplit.supply, paid, fee: csplit.supply - paid }
       const row = byAgency.get(p.id)
       row.deals.push(deal)
@@ -472,9 +472,7 @@ export default function Projects() {
                             <Link to={`/projects/${d.project.id}`} className="text-ink-800 hover:text-brand-700 hover:underline">
                               {d.project.name}
                             </Link>{' '}
-                            {d.contract > 0 && d.contract <= 55000000 ? (
-                              <span className="chip bg-emerald-50 text-emerald-700">수의계약</span>
-                            ) : null}
+                            <span className="chip bg-emerald-50 text-emerald-700">수의계약</span>
                           </td>
                           <td className="td num">{formatKRW(d.contract)}</td>
                           <td className="td num text-ink-500">
