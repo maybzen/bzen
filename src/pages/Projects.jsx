@@ -4,12 +4,12 @@ import Icon from '../components/Icon'
 import ProjectFormModal from '../components/ProjectFormModal'
 import { ProfitBar } from '../components/Charts'
 import { useToast } from '../components/Toast'
-import { ConfirmDialog, EmptyState, LoadingBlock, PageHeader, SegmentedControl, StatCard } from '../components/ui'
+import { ConfirmDialog, EmptyState, Field, InlineAlert, LoadingBlock, Modal, PageHeader, SegmentedControl, StatCard } from '../components/ui'
 import { useAuth } from '../auth/AuthContext'
 import { PROJECT_STATUS } from '../lib/constants'
 import { contractSplit, formatDateHuman, formatKRW, formatPercent, normalizeVendorName } from '../lib/format'
 import { buildPnl, groupByProject, summarize } from '../lib/summary'
-import { deleteProject, isMissingTableError, listEntries, listPartners, listProfiles, listProjectPartners, listProjects } from '../lib/api'
+import { createEntry, createProject, deleteProject, isMissingTableError, linkProjectPartner, listEntries, listPartners, listProfiles, listProjectPartners, listProjects } from '../lib/api'
 
 /**
  * 카드에 쓰는 손익 표기. 세무·회계 표현을 그대로 씁니다.
@@ -257,6 +257,7 @@ export default function Projects() {
 
   /* 대행계약 (대표만): 계약만 하고 행사는 업체가 진행, 수수료 수취 */
   const [viewTab, setViewTab] = useState('projects')
+  const [dealOpen, setDealOpen] = useState(false)
   const agencyRows = useMemo(() => {
     const partnerById = new Map((partners || []).map((p) => [p.id, p]))
     const projectById = new Map((projects || []).filter((p) => !p.is_hidden).map((p) => [p.id, p]))
@@ -437,7 +438,14 @@ export default function Projects() {
             </div>
             <p className="text-xs leading-relaxed text-ink-500">
               계약만 하고 행사는 업체가 진행하는 건입니다. 여성기업·소기업 수의계약 한도는 5,500만원입니다.
+              총계약금이 들어오면 수수료만 매출로 잡고, 나머지는 대행업체에 전달합니다.
             </p>
+            <div>
+              <button type="button" className="btn-primary" onClick={() => setDealOpen(true)}>
+                <Icon name="plus" size={16} />
+                대행계약 등록
+              </button>
+            </div>
             {agencyRows.map((a) => (
               <section key={a.partner.id} className="card overflow-hidden">
                 <header className="flex flex-wrap items-center justify-between gap-2 border-b border-ink-200 px-4 py-3.5">
@@ -705,6 +713,18 @@ export default function Projects() {
         userId={user?.id}
       />
 
+      {isAdmin && dealOpen ? (
+        <AgencyDealModal
+          partners={partners}
+          userId={user?.id}
+          onClose={() => setDealOpen(false)}
+          onSaved={() => {
+            setDealOpen(false)
+            setReloadKey((k) => k + 1)
+          }}
+        />
+      ) : null}
+
       <ConfirmDialog
         open={Boolean(removing)}
         busy={busy}
@@ -721,8 +741,171 @@ export default function Projects() {
   )
 }
 
-function ProposalCard({ project, row, status, isAdmin, managerName, onEdit, onDelete }) {
-  /* 제안서·미진행도 손익은 장부에서 자동 계산합니다.
+/**
+ * 대행계약 등록 (대표 전용).
+ * 행사이름·발주처·대행업체·총계약·수수료를 받아 프로젝트(계약=수수료) +
+ * 대행 연결 + 수수료 매출까지 한 번에 만듭니다. 없는 업체는 거래처에서 먼저 등록하세요.
+ */
+function AgencyDealModal({ partners, userId, onClose, onSaved }) {
+  const toast = useToast()
+  const [form, setForm] = useState({ name: '', client: '', partnerId: '', total: '', rate: '3', fee: '', start: '', end: '', memo: '' })
+  const [feeTouched, setFeeTouched] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  const set = (key, transform) => (e) => {
+    const v = transform ? transform(e.target.value) : e.target.value
+    setForm((f) => {
+      const next = { ...f, [key]: v }
+      if ((key === 'total' || key === 'rate') && !feeTouched) {
+        const t = Number(String(next.total).replace(/[^0-9]/g, '')) || 0
+        const r = Number(next.rate) || 0
+        next.fee = t && r ? String(Math.round((t * r) / 100)) : ''
+      }
+      return next
+    })
+  }
+  const feeNum = Number(String(form.fee).replace(/[^0-9]/g, '')) || 0
+  const totalNum = Number(String(form.total).replace(/[^0-9]/g, '')) || 0
+
+  const submit = async (e) => {
+    e.preventDefault()
+    if (!form.name.trim()) return setError('행사이름을 입력해 주세요.')
+    if (!form.client.trim()) return setError('발주처를 입력해 주세요.')
+    if (!form.partnerId) return setError('대행업체를 선택해 주세요.')
+    const partner = (partners || []).find((p) => p.id === form.partnerId)
+    if (!partner) return setError('대행업체를 선택해 주세요.')
+    setSaving(true)
+    setError('')
+    try {
+      const project = await createProject({
+        name: form.name.trim(),
+        client: form.client.trim(),
+        venue: '',
+        status: 'active',
+        start_date: form.start || null,
+        end_date: form.end || null,
+        contract_amount: feeNum,
+        memo: [
+          `대행계약: 총계약 ${formatKRW(totalNum)}원 중 수수료 ${form.rate || 0}%만 매출.`,
+          `수행 ${partner.name} (나머지 ${formatKRW(totalNum - feeNum)}원 전달).`,
+          String(form.memo || '').trim(),
+        ]
+          .filter(Boolean)
+          .join('\n'),
+      })
+      await linkProjectPartner(project.id, partner.id, userId, '대행')
+      if (feeNum > 0) {
+        const supply = Math.round(feeNum / 1.1)
+        await createEntry(
+          {
+            entry_date: form.start || new Date().toISOString().slice(0, 10),
+            counterparty: form.client.trim(),
+            project_id: project.id,
+            category: '용역매출',
+            description: `대행 수수료 (총계약 ${formatKRW(totalNum)}원의 ${form.rate || 0}%)`,
+            supply_amount: supply,
+            vat_amount: feeNum - supply,
+            payment_method: '계좌이체',
+            memo: '대행계약 수수료만 매출',
+            entry_type: 'sale',
+          },
+          userId,
+        )
+      }
+      toast.success('대행계약을 등록했습니다.')
+      onSaved?.()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Modal
+      open
+      onClose={saving ? undefined : onClose}
+      title="대행계약 등록"
+      subtitle="계약은 수수료만 매출로 잡고, 나머지는 대행업체 전달금입니다."
+      footer={
+        <>
+          <button type="button" className="btn-ghost" onClick={onClose} disabled={saving}>
+            취소
+          </button>
+          <button type="submit" form="agency-deal-form" className="btn-primary" disabled={saving}>
+            {saving ? '저장 중…' : '등록'}
+          </button>
+        </>
+      }
+    >
+      <form id="agency-deal-form" onSubmit={submit} className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        {error ? (
+          <div className="sm:col-span-2">
+            <InlineAlert tone="error">{error}</InlineAlert>
+          </div>
+        ) : null}
+        <Field label="행사이름" required className="sm:col-span-2">
+          <input className="input" value={form.name} onChange={set('name')} placeholder="예: BMICE 인증제 관광 개발 컨설팅 및 운영" />
+        </Field>
+        <Field label="발주처 (원청)" required>
+          <input className="input" value={form.client} onChange={set('client')} placeholder="예: 부산관광고등학교" />
+        </Field>
+        <Field label="대행업체 (실제 수행사)" required>
+          <select className="input" value={form.partnerId} onChange={set('partnerId')}>
+            <option value="">선택하세요</option>
+            {(partners || []).map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="총계약액 (원, VAT포함)" hint="대행업체에 전달되는 금액 포함 전체">
+          <input
+            className="input text-right font-num tabular-nums"
+            inputMode="numeric"
+            value={form.total}
+            onChange={set('total')}
+            placeholder="예: 49000000"
+          />
+        </Field>
+        <Field label="수수료율 (%)">
+          <input
+            className="input text-right font-num tabular-nums"
+            inputMode="decimal"
+            value={form.rate}
+            onChange={set('rate')}
+            placeholder="3"
+          />
+        </Field>
+        <Field label="수수료 (원, VAT포함)" hint="장부 계약금액·매출이 됩니다" className="sm:col-span-2">
+          <input
+            className="input text-right font-num tabular-nums"
+            inputMode="numeric"
+            value={form.fee}
+            onChange={(e) => {
+              setFeeTouched(true)
+              set('fee')(e)
+            }}
+            placeholder="예: 1470000"
+          />
+        </Field>
+        <Field label="시작일">
+          <input type="date" className="input" value={form.start} onChange={set('start')} />
+        </Field>
+        <Field label="종료일">
+          <input type="date" className="input" value={form.end} onChange={set('end')} />
+        </Field>
+        <Field label="메모" className="sm:col-span-2">
+          <textarea className="input min-h-[64px] resize-y" value={form.memo} onChange={set('memo')} />
+        </Field>
+      </form>
+    </Modal>
+  )
+}
+
+function ProposalCard({ project, row, status, isAdmin, managerName, onEdit, onDelete }) {  /* 제안서·미진행도 손익은 장부에서 자동 계산합니다.
      제안 준비에 쓴 부대비용은 잡히고 매출은 없으므로 영업이익이 그대로(-) 손실이 됩니다.
      매출이 없으면 이익률은 산출할 수 없어 '—'로 둡니다. */
   const pnl = buildPnl(row?.sale, row?.purchase, row?.opex)
