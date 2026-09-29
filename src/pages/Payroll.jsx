@@ -273,6 +273,8 @@ export default function Payroll() {
   )
 
   const salaryTotal = useMemo(() => sumTotal(salaryRows), [salaryRows])
+  const reportTotal = useMemo(() => sumTotal(reportRows), [reportRows])
+  const payoutTotal = useMemo(() => salaryTotal + reportTotal, [salaryTotal, reportTotal])
   const prevSalaryTotal = useMemo(() => sumTotal(prevEntries.filter(isSalary)), [prevEntries])
   const insuranceTotal = useMemo(() => sumTotal(insuranceRows), [insuranceRows])
   const taxTotal = useMemo(() => sumTotal(taxRows), [taxRows])
@@ -401,7 +403,7 @@ export default function Payroll() {
             </InlineAlert>
           ) : null}
 
-          <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 xl:grid-cols-5">
             <StatCard
               label={`${m}월 급여총액`}
               value={salaryTotal}
@@ -412,6 +414,13 @@ export default function Payroll() {
                   ? '전월 내역 없음'
                   : `${diff >= 0 ? '+' : ''}${formatKRW(diff)}원 (${diffPct >= 0 ? '+' : ''}${diffPct.toFixed(1)}%)`
               }
+            />
+            <StatCard
+              label="총 지급액"
+              value={payoutTotal}
+              tone="sale"
+              icon="trending-up"
+              hint={`급여 ${formatKRW(salaryTotal)}원 + 지출결의 ${formatKRW(reportTotal)}원`}
             />
             <StatCard
               label="지급 인원"

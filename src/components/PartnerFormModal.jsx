@@ -167,7 +167,7 @@ function DocPreview({ doc }) {
   )
 }
 
-export default function PartnerFormModal({ open, onClose, onSaved, initial, readOnly = false, userId, ledger = null, isAdmin = false, profiles = [], linkProps = null }) {
+export default function PartnerFormModal({ open, onClose, onSaved, initial, readOnly = false, userId, ledger = null, isAdmin = false, profiles = [], linkProps = null, existingNames = [] }) {
   const toast = useToast()
   const [form, setForm] = useState(EMPTY)
   const [saving, setSaving] = useState(false)
@@ -218,9 +218,46 @@ export default function PartnerFormModal({ open, onClose, onSaved, initial, read
     [readOnly, form.name, form.memo, form.group_name],
   )
 
+  /* 유사 거래처 경고: 법인격 표기 무시 + 포함 관계 + 자모 바이그램 유사도 */
+  const similarPartners = useMemo(() => {
+    if (readOnly) return []
+    const target = normalizeVendorName(form.name)
+    if (!target || target.length < 2) return []
+    const bigrams = (s) => {
+      const set = new Set()
+      for (let i = 0; i < s.length - 1; i++) set.add(s.slice(i, i + 2))
+      return set
+    }
+    const targetBi = bigrams(target)
+    const out = []
+    for (const p of existingNames || []) {
+      if (partnerId && p.id === partnerId) continue
+      const name = String(p.name || '').trim()
+      const n = normalizeVendorName(name)
+      if (!n) continue
+      let kind = ''
+      if (n === target) kind = '동일'
+      else if (n.includes(target) || target.includes(n)) kind = '유사'
+      else {
+        const nb = bigrams(n)
+        let inter = 0
+        for (const b of nb) if (targetBi.has(b)) inter += 1
+        const sim = targetBi.size + nb.size ? (2 * inter) / (targetBi.size + nb.size) : 0
+        if (sim >= 0.55 && Math.min(n.length, target.length) >= 2) kind = '유사'
+      }
+      if (kind) out.push({ id: p.id, name, kind })
+    }
+    return out
+      .sort((a, b) => (a.kind === b.kind ? a.name.localeCompare(b.name, 'ko') : a.kind === '동일' ? -1 : 1))
+      .slice(0, 5)
+  }, [readOnly, form.name, existingNames, partnerId])
+
   const submit = async (e) => {
     e.preventDefault()
     if (!form.name.trim()) return setError('거래처명을 입력해 주세요.')
+    if (!partnerId && similarPartners.some((p) => p.kind === '동일')) {
+      return setError(`이미 등록된 거래처입니다 (${similarPartners.find((p) => p.kind === '동일').name}). 기존 항목을 수정해 주세요.`)
+    }
 
     setSaving(true)
     setError('')
@@ -364,6 +401,29 @@ export default function PartnerFormModal({ open, onClose, onSaved, initial, read
             placeholder="예: ○○ 주식회사"
             disabled={readOnly}
           />
+          {similarPartners.length ? (
+            <div
+              className={`mt-1.5 rounded-lg border px-2.5 py-2 text-xs leading-relaxed ${
+                similarPartners.some((p) => p.kind === '동일')
+                  ? 'border-rose-200 bg-rose-50/60 text-rose-800'
+                  : 'border-amber-200 bg-amber-50/60 text-amber-800'
+              }`}
+            >
+              <p className="font-bold">
+                {similarPartners.some((p) => p.kind === '동일')
+                  ? '이미 등록된 거래처입니다. 새로 만들지 말고 기존 항목을 수정하세요.'
+                  : '비슷한 거래처가 있습니다. 중복 등록 전에 확인하세요.'}
+              </p>
+              <ul className="mt-1 flex flex-col gap-0.5">
+                {similarPartners.map((p) => (
+                  <li key={p.id} className="flex items-center gap-1.5">
+                    <span className="font-bold">[{p.kind}]</span>
+                    <span className="truncate">{p.name}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
         </Field>
 
         <Field label="구분" hint="협력사 그룹별로 묶어 봅니다.">

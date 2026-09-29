@@ -646,6 +646,7 @@ export default function Partners() {
         ledger={ledger}
         isAdmin={isAdmin}
         profiles={profiles}
+        existingNames={(partners || []).map((p) => ({ id: p.id, name: p.name }))}
         linkProps={
           editing?.id
             ? {
