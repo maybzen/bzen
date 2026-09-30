@@ -135,11 +135,6 @@ export default function Projects() {
   const [busy, setBusy] = useState(false)
   const [reloadKey, setReloadKey] = useState(0)
   const [statusFilter, setStatusFilter] = useState('active')
-  /* 카드가 많으면 끊어서 보여줍니다 (렌더 부담 완화) */
-  const [visibleCount, setVisibleCount] = useState(24)
-  useEffect(() => {
-    setVisibleCount(24)
-  }, [statusFilter, yearFilter, sortOrder])
   /* 금액 표시 기준: 공급가액(세무 기준) ↔ 부가세포함(계약서 대조용) */
   const [vatMode, setVatMode] = useState(() => {
     try {
@@ -191,6 +186,11 @@ export default function Projects() {
       /* 저장 실패 무시 */
     }
   }, [yearFilter])
+  /* 카드가 많으면 끊어서 보여줍니다 (렌더 부담 완화) */
+  const [visibleCount, setVisibleCount] = useState(24)
+  useEffect(() => {
+    setVisibleCount(24)
+  }, [statusFilter, yearFilter, sortOrder])
 
   const load = useCallback(async () => {
     setLoading(true)
