@@ -39,6 +39,7 @@ export default function ScheduleModal({
   profiles = [],
   projects = [],
   syncBundle = null,
+  onLocate = null,
 }) {
   const toast = useToast()
   const today = todayISO()
@@ -404,7 +405,7 @@ export default function ScheduleModal({
             )}
           </div>
 
-          {home ? <HomeChecklist home={home} isAdmin={isAdmin} userId={userId} /> : null}
+          {home ? <HomeChecklist home={home} isAdmin={isAdmin} userId={userId} onLocate={onLocate} /> : null}
 
           {syncBundle ? <SyncChecklist bundle={syncBundle} /> : null}
 
@@ -453,7 +454,7 @@ export default function ScheduleModal({
 }
 
 /* 확인 필요 목록 (대시보드에서 여기로 이동). 같은 DB를 공유합니다. */
-function HomeChecklist({ home, isAdmin, userId }) {
+function HomeChecklist({ home, isAdmin, userId, onLocate = null }) {
   const [draft, setDraft] = useState('')
   const [showDone, setShowDone] = useState(false)
   const [editingId, setEditingId] = useState(null)
@@ -530,6 +531,16 @@ function HomeChecklist({ home, isAdmin, userId }) {
                   <span className="text-xs text-ink-800">{item.text}</span>
                 </button>
               )}
+              {onLocate ? (
+                <button
+                  type="button"
+                  onClick={() => onLocate(item.text)}
+                  title="관련 내역 검색으로 이동"
+                  className="shrink-0 rounded-full bg-brand-50 px-2 py-1 text-[10px] font-bold text-brand-700 transition hover:bg-brand-100"
+                >
+                  관련내역
+                </button>
+              ) : null}
               {isAdmin && editingId !== item.id ? (
                 <>
                   <button

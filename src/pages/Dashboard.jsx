@@ -237,9 +237,9 @@ export default function Dashboard() {
   const canSee = (perm) => isAdmin || perms.includes(perm)
 
   /* 전체 검색: 프로젝트·거래처·장부·수금을 한 번에 찾아 메뉴로 연결합니다 */
-  const runSearch = async (e) => {
+  const runSearch = async (e, forced) => {
     e?.preventDefault()
-    const q = query.trim()
+    const q = String(forced ?? query).trim()
     if (!q) return
     setSearching(true)
     try {
@@ -282,6 +282,41 @@ export default function Dashboard() {
     if (e.entry_type === 'sale') return { to: 'sales', perm: 'sales' }
     if (e.entry_type === 'purchase') return { to: 'purchases', perm: 'purchases' }
     return { to: 'expenses', perm: 'expenses' }
+  }
+
+  /* 확인필요 항목 → 관련내역. 문장에서 거래처로 보이는 단어를 뽑아 전체검색합니다. */
+  const locateChecklistItem = async (text) => {
+    const norm = (s) => String(s || '').toLowerCase().replace(/\s+/g, '')
+    const STOP = new Set([
+      '확인', '직접', '직접지급', '관련', '성격', '의혹', '중복', '분리', '이름',
+      '목록', '필요', '매입근거', '내역', '통일', '대조', '지급', '여부', '건수',
+    ])
+    const tokens = String(text || '')
+      .split(/[\s·/,()[\]—–~"“”':;]+/)
+      .map((t) => t.replace(/^[^가-힣a-zA-Z0-9]+|[^가-힣a-zA-Z0-9]+$/g, ''))
+      .filter((t) => t.length >= 2 && !/^\d/.test(t))
+    let vendors = []
+    try {
+      vendors = ((await listPartners().catch(() => [])) || []).map((p) => p.name).filter(Boolean)
+    } catch {
+      /* 거래처를 못 읽어도 첫 단어로 검색합니다 */
+    }
+    const nv = vendors.map(norm)
+    let best = ''
+    for (const t of tokens) {
+      const nt = norm(t)
+      if (STOP.has(t) || STOP.has(nt)) continue
+      if (nv.some((v) => (v && nt && (v.includes(nt) || nt.includes(v))) || t === v)) {
+        if (nt.length > norm(best).length) best = t
+      }
+    }
+    const keyword = best
+      || tokens.find((t) => /[가-힣]{2,}/.test(t) && !STOP.has(t))
+      || tokens[0]
+      || ''
+    if (!keyword) return
+    setQuery(keyword)
+    await runSearch(null, keyword)
   }
 
   const monthKeys = useMemo(() => lastMonthKeys(12), [])
@@ -535,6 +570,7 @@ export default function Dashboard() {
           profiles={profiles}
           projects={projects}
           syncBundle={{ sync, editing, setEditing, saveEditing, newSync, setNewSync, addSyncItem }}
+          onLocate={locateChecklistItem}
         />
       ) : null}
 
@@ -1200,7 +1236,7 @@ export function DataAuditPanel({ menuSlug = null }) {
 /* 이번 달 챙길 일 — 자동(대출·세금) + 직접 등록. 관리자만. 누르면 일정 화면 */
 /* ------------------------------------------------------------------ */
 
-function ScheduleCard({ userId, home, isAdmin, profiles, projects, syncBundle }) {
+function ScheduleCard({ userId, home, isAdmin, profiles, projects, syncBundle, onLocate = null }) {
   const [open, setOpen] = useState(false)
   const [loans, setLoans] = useState([])
   const [manuals, setManuals] = useState([])
@@ -1310,6 +1346,10 @@ function ScheduleCard({ userId, home, isAdmin, profiles, projects, syncBundle })
         profiles={profiles}
         projects={projects}
         syncBundle={syncBundle}
+        onLocate={(text) => {
+          setOpen(false)
+          onLocate?.(text)
+        }}
       />
     </>
   )
