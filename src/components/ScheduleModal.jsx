@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import Icon from './Icon'
-import { ConfirmDialog, EmptyState, Field, InlineAlert, Modal, Spinner } from './ui'
+import { ConfirmDialog, EmptyState, InlineAlert, Modal } from './ui'
 import { useToast } from './Toast'
 import { addChecklistItem, deleteChecklistItem, updateChecklistItem } from '../lib/api'
 import {
@@ -45,9 +45,7 @@ export default function ScheduleModal({
   const [year, setYear] = useState(() => Number(today.slice(0, 4)))
   const [month, setMonth] = useState(() => Number(today.slice(5, 7)))
   const [selected, setSelected] = useState(today)
-  const [text, setText] = useState('')
   const [quickText, setQuickText] = useState('')
-  const [date, setDate] = useState(today)
   const [editingId, setEditingId] = useState(null)
   const [editText, setEditText] = useState('')
   const [editDate, setEditDate] = useState('')
@@ -60,11 +58,9 @@ export default function ScheduleModal({
     setError('')
     setEditingId(null)
     setConfirmId(null)
-    setText('')
     setQuickText('')
     const t = todayISO()
     setSelected(t)
-    setDate(t)
     setYear(Number(t.slice(0, 4)))
     setMonth(Number(t.slice(5, 7)))
   }, [open ])
@@ -106,25 +102,6 @@ export default function ScheduleModal({
 
   const reload = async () => {
     await onChanged?.()
-  }
-
-  const handleAdd = async (e) => {
-    e.preventDefault()
-    const v = text.trim()
-    if (!v) return
-    setBusy(true)
-    setError('')
-    try {
-      const extra = dateSupported && date ? { due_date: date } : {}
-      await addChecklistItem(SCHEDULE_LIST, v, userId, extra)
-      setText('')
-      toast.success('일정이 등록되었습니다.')
-      await reload()
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setBusy(false)
-    }
   }
 
   /* 날짜 패널에서 바로 추가 (선택된 날짜로 들어갑니다) */
@@ -176,8 +153,6 @@ export default function ScheduleModal({
 
   const pickDate = (d) => {
     setSelected(d)
-    // 달력에서 누른 날짜로 바로 등록할 수 있게 등록 폼 날짜도 같이 둡니다
-    setDate(d)
   }
 
   const startEdit = (row) => {
@@ -432,29 +407,6 @@ export default function ScheduleModal({
           {home ? <HomeChecklist home={home} isAdmin={isAdmin} userId={userId} /> : null}
 
           {syncBundle ? <SyncChecklist bundle={syncBundle} /> : null}
-
-          <form onSubmit={handleAdd} className="flex flex-col gap-2 rounded-xl border border-ink-200 bg-ink-50/60 p-3.5">            <p className="text-xs font-bold text-ink-900">직접 등록</p>
-            <div className="flex flex-col gap-2 sm:flex-row">
-              {dateSupported ? (
-                <input
-                  type="date"
-                  className="input shrink-0 sm:w-40"
-                  value={date}
-                  onChange={(e) => setDate(e.target.value)}
-                />
-              ) : null}
-              <input
-                className="input min-w-0 flex-1"
-                placeholder="예: 4대보험 고지서 확인"
-                value={text}
-                onChange={(e) => setText(e.target.value)}
-              />
-              <button type="submit" className="btn-primary shrink-0" disabled={busy || !text.trim()}>
-                {busy ? <Spinner size={14} /> : <Icon name="plus" size={14} />}
-                추가
-              </button>
-            </div>
-          </form>
 
           {manuals.filter((r) => !r.done && r.due_date).length ? (
             <div className="rounded-xl border border-ink-200 bg-white px-3.5 py-3">

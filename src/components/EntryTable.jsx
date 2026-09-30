@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Icon from './Icon'
 import { AmountInput } from './ui'
 import { AttachmentCell } from './Attachments'
@@ -61,6 +61,8 @@ export default function EntryTable({
   canDeleteEntry = null,
   /* 부가세 열 숨기기 (급여처럼 전부 0원일 때) */
   hideVat = false,
+  /* 데이터 점검에서 넘어온 의심 항목 id 목록 → 노란색으로 표시 */
+  highlightIds = [],
   /* 이름별 추가 지급액 (급여 지출결의 등) → 실지급 열 표시 */
   extraPayMap = null,
 }) {
@@ -72,6 +74,19 @@ export default function EntryTable({
   const [bulkAuthor, setBulkAuthor] = useState('')
 
   const editable = bulkEdit && canEdit && typeof onSaveRow === 'function'
+
+  const hlSet = useMemo(() => new Set((highlightIds || []).map(String)), [highlightIds])
+
+  /* 점검 항목으로 이동하면 첫 번째 의심 행으로 스크롤합니다 */
+  useEffect(() => {
+    if (!hlSet.size || !entries.length) return
+    const first = entries.find((e) => hlSet.has(String(e.id)))
+    if (!first) return
+    const t = window.setTimeout(() => {
+      document.getElementById(`entry-${first.id}`)?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    }, 80)
+    return () => window.clearTimeout(t)
+  }, [hlSet, entries])
 
   const setCell = (id, patch) => {
     setRowEdits((m) => ({ ...m, [id]: { ...(m[id] || {}), ...patch } }))
@@ -339,8 +354,19 @@ export default function EntryTable({
               const work = { ...entry, ...edit }
               const dirty = Object.keys(edit).length > 0
               const saving = savingId === entry.id
+              const hl = hlSet.has(String(entry.id))
               return (
-                <tr key={entry.id} className={dirty ? 'bg-brand-50/40 transition' : 'transition hover:bg-ink-50/60'}>
+                <tr
+                  key={entry.id}
+                  id={`entry-${entry.id}`}
+                  className={
+                    hl
+                      ? 'bg-amber-50 transition hover:bg-amber-100/70'
+                      : dirty
+                        ? 'bg-brand-50/40 transition'
+                        : 'transition hover:bg-ink-50/60'
+                  }
+                >
                   {editable ? (
                     <td className="td text-center">
                       <input
@@ -355,6 +381,11 @@ export default function EntryTable({
                     </td>
                   ) : null}
                   <td className="td whitespace-nowrap font-medium">
+                    {hl ? (
+                      <span className="mb-1 inline-block rounded bg-amber-400 px-1.5 py-0.5 text-[10px] font-bold text-white">
+                        점검
+                      </span>
+                    ) : null}
                     {editable ? (
                       <input
                         type="date"
@@ -593,8 +624,9 @@ export default function EntryTable({
             const work = { ...entry, ...edit }
             const dirty = Object.keys(edit).length > 0
             const saving = savingId === entry.id
+            const hl = hlSet.has(String(entry.id))
             return (
-              <li key={entry.id} className={dirty ? 'bg-brand-50/40 px-4 py-3.5' : 'px-4 py-3.5'}>
+              <li key={entry.id} id={`entry-${entry.id}`} className={hl ? 'bg-amber-50 px-4 py-3.5' : dirty ? 'bg-brand-50/40 px-4 py-3.5' : 'px-4 py-3.5'}>
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex min-w-0 flex-1 items-start gap-2">
                     {editable ? (
@@ -610,6 +642,11 @@ export default function EntryTable({
                     ) : null}
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-1.5">
+                        {hl ? (
+                          <span className="rounded bg-amber-400 px-1.5 py-0.5 text-[10px] font-bold text-white">
+                            점검
+                          </span>
+                        ) : null}
                         {showType ? (
                           <span className={`chip ${meta?.chip || 'bg-ink-100 text-ink-600'}`}>{meta?.label}</span>
                         ) : null}

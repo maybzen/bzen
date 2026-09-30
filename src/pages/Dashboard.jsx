@@ -991,7 +991,7 @@ function DataAuditPanel() {
                     {target ? (
                       <button
                         type="button"
-                        onClick={() => navigate(`/${target}?period=all&search=${encodeURIComponent(i.party || '')}`)}
+                        onClick={() => navigate(auditLink(target, i))}
                         className="flex w-full items-start gap-2.5 py-2 text-left transition hover:bg-ink-50"
                       >
                         {body}
@@ -1145,6 +1145,14 @@ function auditTargetFor(entries, entryId) {
   if (e.entry_type === 'sale') return 'sales'
   if (e.entry_type === 'purchase') return 'purchases'
   return 'expenses'
+}
+
+/** 데이터 점검 → 장부 딥링크. 의심 항목 id를 highlight로 넘겨 노란색 표시합니다. */
+function auditLink(target, issue) {
+  const params = new URLSearchParams({ period: 'all', search: issue.party || '' })
+  const ids = issue.entryIds?.length ? issue.entryIds : issue.entryId ? [issue.entryId] : []
+  if (ids.length) params.set('highlight', ids.join(','))
+  return `/${target}?${params.toString()}`
 }
 
 function StaffHome({ period, loading, stats, current, projects, profiles, attachmentsByEntry }) {

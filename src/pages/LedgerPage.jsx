@@ -30,7 +30,7 @@ export default function LedgerPage({ type, source = 'manual', title, description
   const { profile, isAdmin, user } = useAuth()
   const toast = useToast()
   const period = usePeriod('thisMonth', `bzen.period.ledger.${type}.${source}`)
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
 
   const [entries, setEntries] = useState([])
   const [projects, setProjects] = useState([])
@@ -40,6 +40,7 @@ export default function LedgerPage({ type, source = 'manual', title, description
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [debounced, setDebounced] = useState('')
+  const [highlightIds, setHighlightIds] = useState([])
   const [projectFilter, setProjectFilter] = useState('')
   const [personFilter, setPersonFilter] = useState('')
   const [reloadKey, setReloadKey] = useState(0)
@@ -77,6 +78,9 @@ export default function LedgerPage({ type, source = 'manual', title, description
       period.setPreset('custom')
       period.setCustom({ from: '', to: '' })
     }
+    // 데이터 점검에서 넘어올 때: 의심 항목을 노란색으로 표시 (?highlight=id1,id2)
+    const hl = (searchParams.get('highlight') || '').split(',').map((s) => s.trim()).filter(Boolean)
+    setHighlightIds(hl)
   }, [searchParams])
 
   useEffect(() => {
@@ -375,6 +379,25 @@ export default function LedgerPage({ type, source = 'manual', title, description
       ) : null}
 
       <div className="card overflow-hidden">
+        {highlightIds.length ? (
+          <div className="flex items-center gap-2 border-b border-amber-200 bg-amber-50 px-4 py-2.5 text-xs text-amber-800">
+            <span className="min-w-0 flex-1">
+              <strong className="font-bold">데이터 점검에서 이동</strong> · 의심 항목 {highlightIds.length}건을 노란색으로 표시합니다.
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                setHighlightIds([])
+                const next = new URLSearchParams(searchParams)
+                next.delete('highlight')
+                setSearchParams(next, { replace: true })
+              }}
+              className="shrink-0 font-bold hover:underline"
+            >
+              표시 해제
+            </button>
+          </div>
+        ) : null}
         <div className="flex flex-col gap-3 border-b border-ink-200 px-4 py-3.5">
           <PeriodPicker period={period} />
 
@@ -452,6 +475,7 @@ export default function LedgerPage({ type, source = 'manual', title, description
             projects={projects}
             profiles={profiles}
             attachmentsByEntry={attachmentsByEntry}
+            highlightIds={highlightIds}
             canEdit
             onEdit={(entry) => {
               setEditing({
