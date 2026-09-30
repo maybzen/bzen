@@ -408,6 +408,8 @@ export default function EntryFormModal({
               onChange={set('counterparty')}
               placeholder={entryType === 'sale' ? '예: ○○ 주식회사' : '예: □□ 상사'}
               userId={userId}
+              ledgerEntries={visibleEntries}
+              excludeId={initial?.id || ''}
             />
           </Field>
 

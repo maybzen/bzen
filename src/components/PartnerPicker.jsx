@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPartner, listPartners } from '../lib/api'
 import { normalizeVendorName } from '../lib/format'
+import { findSimilarParties } from '../lib/validate'
 import { Field, Modal } from './ui'
 
 /**
  * 거래처 검색 선택창.
  * 치면 대장에서 찾아주고, 없으면 "+ 새로 등록"으로 간단 등록창이 뜹니다.
+ * 등록 대장에 없어도 장부에서 쓰던 비슷한 이름이 있으면 연동 버튼으로 보여줍니다.
  */
-export default function PartnerPicker({ value, onChange, placeholder, autoFocus = false, userId }) {
+export default function PartnerPicker({ value, onChange, placeholder, autoFocus = false, userId, ledgerEntries = [], excludeId = '' }) {
   const [partners, setPartners] = useState([])
   const [open, setOpen] = useState(false)
   const closeTimer = useRef(null)
@@ -38,6 +40,17 @@ export default function PartnerPicker({ value, onChange, placeholder, autoFocus 
     () => (partners || []).some((p) => normalizeVendorName(p.name) === q && q),
     [partners, q],
   )
+
+  /* 장부에서 쓰던 비슷한 이름 (대장 미등록 포함). 같은 곳이면 골라 쓰세요. 표기 흔들림이 줄어듭니다. */
+  const ledgerSimilar = useMemo(() => {
+    const raw = String(value || '').trim()
+    if (!raw || !(ledgerEntries || []).length) return []
+    try {
+      return findSimilarParties(ledgerEntries, raw, { excludeId }).slice(0, 5)
+    } catch {
+      return []
+    }
+  }, [ledgerEntries, value, excludeId])
 
   const pick = (name) => {
     onChange?.({ target: { value: name } })
@@ -101,6 +114,25 @@ export default function PartnerPicker({ value, onChange, placeholder, autoFocus 
               >
                 + ‘{String(value).trim()}’ 새로 등록
               </button>
+            </li>
+          ) : null}
+          {ledgerSimilar.length ? (
+            <li className="border-t border-ink-100 px-3 py-1.5">
+              <p className="mb-1 text-[10px] font-bold text-ink-400">장부에서 쓰던 비슷한 이름</p>
+              <div className="flex flex-wrap gap-1">
+                {ledgerSimilar.map(([name, count]) => (
+                  <button
+                    key={name}
+                    type="button"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => pick(name)}
+                    title={`장부 ${count}건에서 이렇게 씀 · 눌러서 이 표기로 통일`}
+                    className="rounded-full bg-ink-100 px-2 py-1 text-[11px] font-semibold text-ink-700 transition hover:bg-brand-100 hover:text-brand-800"
+                  >
+                    {name} · {count}건
+                  </button>
+                ))}
+              </div>
             </li>
           ) : null}
         </ul>
