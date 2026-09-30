@@ -249,8 +249,9 @@ export default function Dashboard() {
         canSee('partners') ? listPartners().catch(() => []) : Promise.resolve([]),
         canSee('collections') ? listCollections().catch(() => []) : Promise.resolve([]),
       ])
-      const ql = q.toLowerCase()
-      const match = (...vals) => vals.some((v) => String(v || '').toLowerCase().includes(ql))
+      const ql = q.toLowerCase().replace(/\s+/g, '')
+      const match = (...vals) =>
+        vals.some((v) => String(v || '').toLowerCase().replace(/\s+/g, '').includes(ql))
       /* 직원 검색: 사원 작성분만 (관리자 작성분 제외) */
       const staffIds = staffIdsFromProfiles(profiles)
       const visibleEntries = isAdmin
@@ -940,6 +941,22 @@ export function DataAuditPanel({ menuSlug = null }) {
     return (netted || []).filter((n) => n.entryId && auditTargetFor(entries, n.entryId) === menuSlug)
   }, [netted, entries, menuSlug])
 
+  /* 지금 필터에 보이는 지적을 한 번에 확인 완료합니다 (되돌리기 가능) */
+  const dismissAllShown = async () => {
+    if (!shown.length) return
+    try {
+      for (const issue of shown) {
+        // eslint-disable-next-line no-await-in-loop
+        await addChecklistItem(AUDIT_DONE_LIST, stableKeyForIssue(issue), null)
+      }
+      await loadDismissed()
+      toast.success(`${shown.length}건 확인 완료 (아래에서 되돌리기 가능)`)
+    } catch (err) {
+      toast.error(`전체 확인 실패: ${err?.message || '알 수 없는 오류'}`)
+      await loadDismissed()
+    }
+  }
+
   const summary = useMemo(() => summarizeAudit(scopedIssues), [scopedIssues])
   const shown = useMemo(() => {
     const list = filter === 'all' ? scopedIssues : scopedIssues.filter((i) => i.code === filter)
@@ -1044,6 +1061,15 @@ export function DataAuditPanel({ menuSlug = null }) {
             >
               {reloading ? '검사 중…' : '다시 검사'}
             </button>
+            {shown.length ? (
+              <button
+                type="button"
+                onClick={dismissAllShown}
+                className="rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 transition hover:bg-emerald-200"
+              >
+                전체 확인
+              </button>
+            ) : null}
           </div>
 
           {shown.length ? (

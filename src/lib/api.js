@@ -302,11 +302,15 @@ export async function listEntries({
     if (source) q = q.eq('source', source)
     if (excludeSource) q = q.neq('source', excludeSource)
     if (search && search.trim()) {
-      // 괄호·공백 등은 와일드카드로 바꿔 검색 (예: 현대자동차(주)본사 → DB의 괄호 포함 표기와 매칭)
-      const s = `%${search.trim().replace(/[\s%,()]+/g, '%')}%`
-      q = q.or(
-        `counterparty.ilike.${s},description.ilike.${s},category.ilike.${s},doc_no.ilike.${s},memo.ilike.${s}`,
-      )
+      // 띄어쓰기·기호를 무시하고 찾도록 글자 사이를 와일드카드로 연결
+      // (예: 부산은행 → 부산 은행·(주)부산은행·부산-은행 모두 매칭)
+      const compact = search.trim().replace(/[\s%,()]+/g, '')
+      if (compact) {
+        const s = `%${compact.split('').join('%')}%`
+        q = q.or(
+          `counterparty.ilike.${s},description.ilike.${s},category.ilike.${s},doc_no.ilike.${s},memo.ilike.${s}`,
+        )
+      }
     }
 
     const { data, error } = await q

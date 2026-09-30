@@ -390,7 +390,7 @@ export default function Partners() {
   }, [partners])
 
   const rows = useMemo(() => {
-    const q = search.trim().toLowerCase()
+    const q = search.trim().toLowerCase().replace(/\s+/g, '')
     const filtered = partners.filter((p) => {
       const st = p.status || '정상'
       if (statusFilter === 'active' && st === '폐업') return false
@@ -398,7 +398,7 @@ export default function Partners() {
       if (groupFilter && (p.group_name || '기타') !== groupFilter) return false
       if (!q) return true
       return [p.name, p.group_name, p.contact_person, p.job_title, p.phone_main, p.phone, p.email, p.memo].some((v) =>
-        String(v || '').toLowerCase().includes(q),
+        String(v || '').toLowerCase().replace(/\s+/g, '').includes(q),
       )
     })
     const byName = (a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'ko')
