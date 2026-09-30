@@ -50,6 +50,7 @@ export const CATEGORIES = {
     '소모품비',
     '도서인쇄비',
     '접대비',
+    '기업업무추진비',
     '회의비',
     '여비교통비',
     '복리후생비',
@@ -90,6 +91,7 @@ export const CATEGORY_HINTS = {
   소모품비: '문구·사무용품',
   도서인쇄비: '명함·감사패·인쇄물·도서',
   접대비: '거래처 접대·선물·상품권',
+  기업업무추진비: '거래처 접대·회식·선물 등 업무추진비',
   회의비: '회의비·세미나 catering 등',
   여비교통비: '택시·KTX 등 출장 이동비',
   복리후생비: '식대·다과·면접·경조사 등 직원 복지',
@@ -111,6 +113,7 @@ export function categoryHint(name) {
  * entryType이 주어지면 해당 유형 규칙만 봅니다 (장부 입력용).
  */
 const SUGGEST_RULES = [
+  { re: /업무추진|추진비/, type: 'opex', category: '기업업무추진비' },
   { re: /상품권/, type: 'opex', category: '접대비' },
   { re: /골프|유흥|노래방|접대/, type: 'opex', category: '접대비' },
   { re: /수리|수선/, type: 'opex', category: '수선비' },

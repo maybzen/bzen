@@ -179,7 +179,7 @@ export default function EntryFormModal({
   )
 
   const warnings = useMemo(() => {
-    if (supply <= 0 && vat <= 0) return []
+    if (supply === 0 && vat === 0) return []
     return checkEntryDraft(draftValues, { entries: visibleEntries, excludeId: initial?.id || '' })
   }, [draftValues, supply, vat, visibleEntries, initial?.id])
 
@@ -210,7 +210,7 @@ export default function EntryFormModal({
     setError('')
 
     if (!form.entry_date) return setError('일자를 선택해 주세요.')
-    if (supply <= 0 && vat <= 0) return setError('금액을 입력해 주세요.')
+    if (supply === 0 && vat === 0) return setError('금액을 입력해 주세요. (카드 취소건은 음수로 입력)')
     if (isReport && !form.requester_id && !userId) return setError('지출자를 선택해 주세요.')
     // 장부 대조 데이터가 아직 없으면 잠깐 기다렸다가 검사합니다 (중복 경고를 놓치지 않기 위해).
     // 8초 안에 안 오면 입력값 자체의 문제(깨진 텍스트·부가세·비목)만으로 판단하고 진행합니다.
