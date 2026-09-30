@@ -135,6 +135,27 @@ export default function Projects() {
   const [busy, setBusy] = useState(false)
   const [reloadKey, setReloadKey] = useState(0)
   const [statusFilter, setStatusFilter] = useState('active')
+  /* 금액 표시 기준: 공급가액(세무 기준) ↔ 부가세포함(계약서 대조용) */
+  const [vatMode, setVatMode] = useState(() => {
+    try {
+      return localStorage.getItem('bzen.vatmode.projects') || 'supply'
+    } catch {
+      return 'supply'
+    }
+  })
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('bzen.vatmode.projects', vatMode)
+    } catch {
+      /* 저장 실패 무시 */
+    }
+  }, [vatMode])
+  const incl = vatMode === 'incl'
+  /* 표시용 금액: 부가세포함 모드에서는 세액 합산 (계약서 대조용. 이익에는 부가세 예수금 포함) */
+  const dispSale = (r) => r.sale + (incl ? Number(r.saleVat || 0) : 0)
+  const dispPurchase = (r) => r.purchase + (incl ? Number(r.purchaseVat || 0) : 0)
+  const dispOpex = (r) => r.opex + (incl ? Number(r.opexVat || 0) : 0)
   const [sortOrder, setSortOrder] = useState(() => {
     try {
       return localStorage.getItem('bzen.sort.projects') || 'desc'
@@ -265,7 +286,13 @@ export default function Projects() {
   }, [links, partners])
 
   const totals = useMemo(() => summarize(entries), [entries])
-  const maxSale = Math.max(1, ...rows.map((r) => Math.max(r.sale, Math.abs(r.profit))))
+  const totalsSale = totals.revenue + (incl ? totals.sale.vat : 0)
+  const totalsCogs = totals.cogs + (incl ? totals.purchase.vat : 0)
+  const totalsExpense = totals.expense + (incl ? totals.opex.vat : 0)
+  const totalsGross = totalsSale - totalsCogs
+  const totalsProfit = totalsGross - totalsExpense
+  const basisHint = incl ? '부가세포함 기준 (계약서 대조용)' : '공급가액 기준'
+  const maxSale = Math.max(1, ...rows.map((r) => Math.max(dispSale(r), Math.abs(r.profit))))
 
   /* 대행계약 (대표만): 계약만 하고 행사는 업체가 진행, 수수료 수취 */
   const [viewTab, setViewTab] = useState('projects')
@@ -349,19 +376,19 @@ export default function Projects() {
         />
         {isAdmin ? (
           <>
-            <StatCard label="순매출액" value={totals.revenue} tone="sale" icon="trending-up" hint="공급가액 기준" />
-            <StatCard label="매출총이익" value={totals.gross} tone={totals.gross >= 0 ? 'profit' : 'loss'} icon="chart" hint={totals.grossMargin === null ? '매출 없음' : `매출총이익률 ${formatPercent(totals.grossMargin)}`} />
+            <StatCard label="순매출액" value={totalsSale} tone="sale" icon="trending-up" hint={basisHint} />
+            <StatCard label="매출총이익" value={totalsGross} tone={totalsGross >= 0 ? 'profit' : 'loss'} icon="chart" hint={totalsSale ? `매출총이익률 ${formatPercent(totalsGross / totalsSale)}` : '매출 없음'} />
             <StatCard
               label="영업이익"
-              value={totals.operating}
-              tone={totals.operating >= 0 ? 'profit' : 'loss'}
+              value={totalsProfit}
+              tone={totalsProfit >= 0 ? 'profit' : 'loss'}
               icon="coins"
-              hint={totals.operatingMargin === null ? '매출 없음' : `영업이익률 ${formatPercent(totals.operatingMargin)}`}
+              hint={totalsSale ? `영업이익률 ${formatPercent(totalsProfit / totalsSale)}` : '매출 없음'}
             />
           </>
         ) : (
           <>
-            <StatCard label="전체 비용" value={totals.cost} tone="opex" icon="cart" hint="매입 + 운영비" />
+            <StatCard label="전체 비용" value={totalsCogs + totalsExpense} tone="opex" icon="cart" hint={`매입 + 운영비 · ${basisHint}`} />
             <StatCard label="진행중" value={String(statusCounts.active || 0)} unit="개" tone="neutral" icon="folder" />
             <StatCard label="완료" value={String(statusCounts.done || 0)} unit="개" tone="neutral" icon="check" />
           </>
@@ -403,6 +430,15 @@ export default function Projects() {
                 { key: 'asc', label: '과거순' },
               ]}
             />
+            <SegmentedControl
+              size="sm"
+              value={vatMode}
+              onChange={setVatMode}
+              options={[
+                { key: 'supply', label: '공급가액' },
+                { key: 'incl', label: '부가세포함' },
+              ]}
+            />
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-xs font-semibold text-ink-500">연도</span>
@@ -435,6 +471,7 @@ export default function Projects() {
             </div>
             <span className="text-[11px] text-ink-400">
               연도는 프로젝트를 고르는 기준입니다. 카드 금액은 항상 전체 기간 기준입니다.
+              {incl ? ' · 부가세포함 보기는 계약서 대조용이며 이익에 부가세 예수금이 포함됩니다.' : ''}
             </span>
           </div>
         </div>
@@ -570,9 +607,11 @@ export default function Projects() {
           {rows.map((row) => {
             const project = row.project
             const status = PROJECT_STATUS[project.status] || PROJECT_STATUS.active
-            /* 계약 대비 매출은 공급가액끼리 비교해야 맞습니다 */
+            /* 계약 대비 매출은 같은 기준으로 비교해야 맞습니다 */
             const csplit = contractSplit(project)
-            const achieved = csplit.supply > 0 ? (row.sale / csplit.supply) * 100 : null
+            const baseSupply = incl ? csplit.total : csplit.supply
+            const baseSale = incl ? dispSale(row) : row.sale
+            const achieved = baseSupply > 0 ? (baseSale / baseSupply) * 100 : null
 
             // 제안서·미진행은 장부 집계 대신 제안 정보 위주로 보여줍니다.
             if (project.status === 'proposal' || project.status === 'dropped') {
@@ -642,9 +681,9 @@ export default function Projects() {
                 </div>
 
                 <PnlGrid
-                  pnl={buildPnl(row.sale, row.purchase, row.opex)}
+                  pnl={buildPnl(dispSale(row), dispPurchase(row), dispOpex(row))}
                   achieved={achieved}
-                  contractAmount={csplit.supply}
+                  contractAmount={incl ? csplit.total : csplit.supply}
                   showContract
                   bare={!isAdmin}
                 />

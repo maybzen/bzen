@@ -86,13 +86,16 @@ export function groupByMonth(entries, monthKeys) {
 export function groupByProject(entries, projects) {
   const map = new Map()
   for (const p of projects || []) {
-    map.set(p.id, { project: p, sale: 0, purchase: 0, opex: 0, profit: 0, margin: null, count: 0 })
+    map.set(p.id, { project: p, sale: 0, purchase: 0, opex: 0, saleVat: 0, purchaseVat: 0, opexVat: 0, profit: 0, margin: null, count: 0 })
   }
   const unassigned = {
     project: null,
     sale: 0,
     purchase: 0,
     opex: 0,
+    saleVat: 0,
+    purchaseVat: 0,
+    opexVat: 0,
     profit: 0,
     margin: null,
     count: 0,
@@ -101,9 +104,10 @@ export function groupByProject(entries, projects) {
   for (const e of entries || []) {
     const row = e.project_id && map.has(e.project_id) ? map.get(e.project_id) : unassigned
     const supply = Number(e.supply_amount || 0)
-    if (e.entry_type === 'sale') row.sale += supply
-    else if (e.entry_type === 'purchase') row.purchase += supply
-    else if (e.entry_type === 'opex') row.opex += supply
+    const vat = Number(e.vat_amount || 0)
+    if (e.entry_type === 'sale') { row.sale += supply; row.saleVat += vat }
+    else if (e.entry_type === 'purchase') { row.purchase += supply; row.purchaseVat += vat }
+    else if (e.entry_type === 'opex') { row.opex += supply; row.opexVat += vat }
     row.count += 1
   }
 
