@@ -556,12 +556,11 @@ export default function EntryTable({
                           <button
                             type="button"
                             onClick={() => onEdit?.(entry)}
-                            className="flex items-center gap-1 rounded-md px-1.5 py-1.5 text-xs font-semibold text-ink-500 transition hover:bg-brand-50 hover:text-brand-700"
-                            aria-label="상세 보기·수정"
-                            title="상세 보기·수정"
+                            className="rounded-md p-1.5 text-ink-500 transition hover:bg-brand-50 hover:text-brand-700"
+                            aria-label="수정"
+                            title="수정"
                           >
-                            <Icon name="pencil" size={13} />
-                            상세
+                            <Icon name="pencil" size={15} />
                           </button>
                         ) : null}
                         {editable && dirty ? (
