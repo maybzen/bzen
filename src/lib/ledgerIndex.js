@@ -6,7 +6,7 @@
  * 등록·수정·삭제가 일어나면 무효화한 뒤 구독자에게 알립니다.
  */
 import { useEffect, useState } from 'react'
-import { auditEntries, partyVariants } from './validate'
+import { auditEntries, findNettedGroups, partyVariants } from './validate'
 
 let cache = null
 let pending = null
@@ -17,6 +17,7 @@ function build(entries) {
     entries,
     partyIndex: partyVariants(entries),
     issues: auditEntries(entries),
+    netted: findNettedGroups(entries),
     loadedAt: Date.now(),
   }
 }
@@ -97,6 +98,7 @@ export function useLedgerIndex({ enabled = true } = {}) {
   return {
     entries: index?.entries || [],
     issues: index?.issues || [],
+    netted: index?.netted || [],
     partyIndex: index?.partyIndex || null,
     loading,
     ready: Boolean(index),

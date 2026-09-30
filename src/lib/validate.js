@@ -338,15 +338,7 @@ export function auditEntries(entries) {
   }
 
   /* 완전중복 (같은 날짜·거래처·절대금액이 2건 이상). 결제(+)/취소(-)는 상계합니다. */
-  const byKey = new Map()
-  for (const e of entries) {
-    const total = Math.round(Number(e.total_amount) || 0)
-    if (!e.entry_date || total === 0) continue
-    const key = `${e.entry_date}|${normalizeParty(e.counterparty)}|${Math.abs(total)}`
-    const o = byKey.get(key) || []
-    o.push(e)
-    byKey.set(key, o)
-  }
+  const byKey = groupByDatePartyAbs(entries)
   for (const group of byKey.values()) {
     const pos = group.filter((e) => Math.round(Number(e.total_amount) || 0) > 0)
     const neg = group.filter((e) => Math.round(Number(e.total_amount) || 0) < 0)
@@ -452,6 +444,54 @@ export function auditEntries(entries) {
   }
 
   return issues
+}
+
+/* ------------------------------------------------------------------ */
+/* 결제·취소 상계 묶음                                                   */
+/* ------------------------------------------------------------------ */
+
+/** 같은 날짜·거래처·절대금액 묶음 (중복 판정과 상계 표시가 함께 씁니다) */
+function groupByDatePartyAbs(entries) {
+  const byKey = new Map()
+  for (const e of entries || []) {
+    const total = Math.round(Number(e.total_amount) || 0)
+    if (!e.entry_date || total === 0) continue
+    const key = `${e.entry_date}|${normalizeParty(e.counterparty)}|${Math.abs(total)}`
+    const o = byKey.get(key)
+    if (o) o.push(e)
+    else byKey.set(key, [e])
+  }
+  return byKey
+}
+
+/**
+ * 결제(+)/취소(-)가 상계되어 정상이 된 묶음.
+ * 대시보드 "상계로 해소됨" 표시용. [{ id, date, party, absAmount, pos, neg, entryId, entryIds }]
+ */
+export function findNettedGroups(entries) {
+  const out = []
+  for (const group of groupByDatePartyAbs(entries).values()) {
+    if (group.length < 2) continue
+    const pos = group.filter((e) => Math.round(Number(e.total_amount) || 0) > 0)
+    const neg = group.filter((e) => Math.round(Number(e.total_amount) || 0) < 0)
+    if (!neg.length) continue
+    const net = pos.length - neg.length
+    if (Math.abs(net) >= 2) continue
+    const first = pos[0] || neg[0]
+    const absAmount = Math.abs(Math.round(Number(first.total_amount) || 0))
+    out.push({
+      id: `net-${group.map((e) => e.id).join('_')}`,
+      date: first.entry_date,
+      party: first.counterparty,
+      absAmount,
+      pos: pos.length,
+      neg: neg.length,
+      entryId: first.id,
+      entryIds: group.map((e) => e.id),
+    })
+  }
+  out.sort((a, b) => String(b.date).localeCompare(String(a.date)))
+  return out
 }
 
 /* ------------------------------------------------------------------ */

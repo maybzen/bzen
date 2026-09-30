@@ -847,11 +847,12 @@ const AUDIT_DONE_LIST = 'audit_done'
 export function DataAuditPanel({ menuSlug = null }) {
   const [open, setOpen] = useState(false)
   const [filter, setFilter] = useState('all')
-  const { issues, loading, ready, entries } = useLedgerIndex()
+  const { issues, netted = [], loading, ready, entries } = useLedgerIndex()
   const navigate = useNavigate()
   const [reloading, setReloading] = useState(false)
   const [dismissed, setDismissed] = useState([])
   const [showDone, setShowDone] = useState(false)
+  const [showNetted, setShowNetted] = useState(false)
 
   const loadDismissed = useCallback(async () => {
     try {
@@ -926,11 +927,17 @@ export function DataAuditPanel({ menuSlug = null }) {
     }
   }
 
-  /* 메뉴 화면에서는 그 메뉴의 지적만 보여줍니다 (표기 흔들림처럼归属 없는 건 제외) */
+  /* 메뉴 화면에서는 그 메뉴의 지적만 보여줍니다 (표기 흔들림처럼 귀속 없는 건 제외) */
   const scopedIssues = useMemo(() => {
     if (!menuSlug) return activeIssues
     return activeIssues.filter((i) => i.entryId && auditTargetFor(entries, i.entryId) === menuSlug)
   }, [activeIssues, entries, menuSlug])
+
+  /* 상계로 해소된 묶음도 메뉴 화면에서는 그 메뉴 것만 보여줍니다 */
+  const scopedNetted = useMemo(() => {
+    if (!menuSlug) return netted
+    return (netted || []).filter((n) => n.entryId && auditTargetFor(entries, n.entryId) === menuSlug)
+  }, [netted, entries, menuSlug])
 
   const summary = useMemo(() => summarizeAudit(scopedIssues), [scopedIssues])
   const shown = useMemo(() => {
@@ -1127,6 +1134,34 @@ export function DataAuditPanel({ menuSlug = null }) {
             <p className="mt-2 text-[11px] text-ink-400">
               그 밖에 {shown.length - AUDIT_LIMIT}건이 있습니다. 항목을 눌러 해당 장부에서 확인하세요.
             </p>
+          ) : null}
+
+          {scopedNetted.length ? (
+            <div className="mt-2 border-t border-ink-100 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowNetted((v) => !v)}
+                className="flex items-center gap-1 text-[11px] font-semibold text-ink-400 hover:text-ink-600"
+                aria-expanded={showNetted}
+              >
+                <Icon name={showNetted ? 'chevron-down' : 'chevron-right'} size={13} />
+                상계로 해소됨 {scopedNetted.length}건
+              </button>
+              {showNetted ? (
+                <ul className="mt-1 flex flex-col divide-y divide-ink-100">
+                  {scopedNetted.slice(0, AUDIT_LIMIT).map((n) => (
+                    <li key={n.id} className="flex items-center gap-2 py-1.5">
+                      <span className="shrink-0 rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700">
+                        상계됨
+                      </span>
+                      <span className="min-w-0 flex-1 truncate text-[11px] text-ink-500">
+                        {n.party} · {formatDateHuman(n.date)} · {formatKRW(n.absAmount)}원 · 결제 {n.pos}건·취소 {n.neg}건 → 정상
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </div>
           ) : null}
         </div>
       ) : null}
