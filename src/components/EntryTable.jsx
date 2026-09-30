@@ -4,6 +4,7 @@ import { AmountInput } from './ui'
 import { AttachmentCell } from './Attachments'
 import { ENTRY_META } from '../lib/constants'
 import { formatDateHuman, formatKRW } from '../lib/format'
+import { ISSUE_META } from '../lib/validate'
 
 function personName(profiles, id) {
   if (!id) return '—'
@@ -61,8 +62,9 @@ export default function EntryTable({
   canDeleteEntry = null,
   /* 부가세 열 숨기기 (급여처럼 전부 0원일 때) */
   hideVat = false,
-  /* 데이터 점검에서 넘어온 의심 항목 id 목록 → 노란색으로 표시 */
+  /* 데이터 점검에서 넘어온 의심 항목 id 목록 → 색으로 표시 */
   highlightIds = [],
+  highlightIssue = '',
   /* 이름별 추가 지급액 (급여 지출결의 등) → 실지급 열 표시 */
   extraPayMap = null,
 }) {
@@ -76,6 +78,20 @@ export default function EntryTable({
   const editable = bulkEdit && canEdit && typeof onSaveRow === 'function'
 
   const hlSet = useMemo(() => new Set((highlightIds || []).map(String)), [highlightIds])
+
+  /* 사유별 색: 중복·깨짐은 빨강, 부가세·표기는 노랑, 누락은 파랑 */
+  const hlLabel = ISSUE_META[highlightIssue]?.label || '점검'
+  const hlRow = highlightIssue === 'duplicate' || highlightIssue === 'broken'
+    ? 'bg-rose-50 transition hover:bg-rose-100/70'
+    : highlightIssue === 'field'
+      ? 'bg-sky-50 transition hover:bg-sky-100/70'
+      : 'bg-amber-50 transition hover:bg-amber-100/70'
+  const hlChip = highlightIssue === 'duplicate' || highlightIssue === 'broken'
+    ? 'bg-rose-500 text-white'
+    : highlightIssue === 'field'
+      ? 'bg-sky-500 text-white'
+      : 'bg-amber-400 text-white'
+  const dim = hlSet.size ? 'opacity-60' : ''
 
   /* 점검 항목으로 이동하면 첫 번째 의심 행으로 스크롤합니다 */
   useEffect(() => {
@@ -361,10 +377,10 @@ export default function EntryTable({
                   id={`entry-${entry.id}`}
                   className={
                     hl
-                      ? 'bg-amber-50 transition hover:bg-amber-100/70'
+                      ? `${hlRow} ring-1 ring-inset ${highlightIssue === 'duplicate' || highlightIssue === 'broken' ? 'ring-rose-300' : highlightIssue === 'field' ? 'ring-sky-300' : 'ring-amber-300'}`
                       : dirty
-                        ? 'bg-brand-50/40 transition'
-                        : 'transition hover:bg-ink-50/60'
+                        ? `bg-brand-50/40 transition ${dim}`
+                        : `transition hover:bg-ink-50/60 ${dim}`
                   }
                 >
                   {editable ? (
@@ -382,8 +398,8 @@ export default function EntryTable({
                   ) : null}
                   <td className="td whitespace-nowrap font-medium">
                     {hl ? (
-                      <span className="mb-1 inline-block rounded bg-amber-400 px-1.5 py-0.5 text-[10px] font-bold text-white">
-                        점검
+                      <span className={`mb-1 inline-block rounded px-1.5 py-0.5 text-[10px] font-bold ${hlChip}`}>
+                        {hlLabel}
                       </span>
                     ) : null}
                     {editable ? (
@@ -626,7 +642,17 @@ export default function EntryTable({
             const saving = savingId === entry.id
             const hl = hlSet.has(String(entry.id))
             return (
-              <li key={entry.id} id={`entry-${entry.id}`} className={hl ? 'bg-amber-50 px-4 py-3.5' : dirty ? 'bg-brand-50/40 px-4 py-3.5' : 'px-4 py-3.5'}>
+              <li
+                key={entry.id}
+                id={`entry-${entry.id}`}
+                className={
+                  hl
+                    ? `${hlRow} px-4 py-3.5`
+                    : dirty
+                      ? `bg-brand-50/40 px-4 py-3.5 ${dim}`
+                      : `px-4 py-3.5 ${dim}`
+                }
+              >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex min-w-0 flex-1 items-start gap-2">
                     {editable ? (
@@ -643,8 +669,8 @@ export default function EntryTable({
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-1.5">
                         {hl ? (
-                          <span className="rounded bg-amber-400 px-1.5 py-0.5 text-[10px] font-bold text-white">
-                            점검
+                          <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${hlChip}`}>
+                            {hlLabel}
                           </span>
                         ) : null}
                         {showType ? (

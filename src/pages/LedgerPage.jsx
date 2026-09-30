@@ -10,6 +10,7 @@ import { ConfirmDialog, EmptyState, LoadingBlock, Modal, PageHeader, StatCard } 
 import { useAuth } from '../auth/AuthContext'
 import { isStaffVisible, staffIdsFromProfiles } from '../lib/permissions'
 import { CATEGORIES, ENTRY_META } from '../lib/constants'
+import { ISSUE_META } from '../lib/validate'
 import { downloadTextFile, parseAmount, parseCSV, toCSV } from '../lib/csv'
 import { formatKRW } from '../lib/format'
 import {
@@ -41,6 +42,7 @@ export default function LedgerPage({ type, source = 'manual', title, description
   const [search, setSearch] = useState('')
   const [debounced, setDebounced] = useState('')
   const [highlightIds, setHighlightIds] = useState([])
+  const [highlightIssue, setHighlightIssue] = useState('')
   const [projectFilter, setProjectFilter] = useState('')
   const [personFilter, setPersonFilter] = useState('')
   const [reloadKey, setReloadKey] = useState(0)
@@ -78,9 +80,10 @@ export default function LedgerPage({ type, source = 'manual', title, description
       period.setPreset('custom')
       period.setCustom({ from: '', to: '' })
     }
-    // 데이터 점검에서 넘어올 때: 의심 항목을 노란색으로 표시 (?highlight=id1,id2)
+    // 데이터 점검에서 넘어올 때: 의심 항목을 색으로 표시 (?highlight=id1,id2&issue=duplicate)
     const hl = (searchParams.get('highlight') || '').split(',').map((s) => s.trim()).filter(Boolean)
     setHighlightIds(hl)
+    setHighlightIssue(searchParams.get('issue') || '')
   }, [searchParams])
 
   useEffect(() => {
@@ -380,23 +383,18 @@ export default function LedgerPage({ type, source = 'manual', title, description
 
       <div className="card overflow-hidden">
         {highlightIds.length ? (
-          <div className="flex items-center gap-2 border-b border-amber-200 bg-amber-50 px-4 py-2.5 text-xs text-amber-800">
-            <span className="min-w-0 flex-1">
-              <strong className="font-bold">데이터 점검에서 이동</strong> · 의심 항목 {highlightIds.length}건을 노란색으로 표시합니다.
-            </span>
-            <button
-              type="button"
-              onClick={() => {
-                setHighlightIds([])
-                const next = new URLSearchParams(searchParams)
-                next.delete('highlight')
-                setSearchParams(next, { replace: true })
-              }}
-              className="shrink-0 font-bold hover:underline"
-            >
-              표시 해제
-            </button>
-          </div>
+          <HighlightBanner
+            count={highlightIds.length}
+            issue={highlightIssue}
+            onClear={() => {
+              setHighlightIds([])
+              setHighlightIssue('')
+              const next = new URLSearchParams(searchParams)
+              next.delete('highlight')
+              next.delete('issue')
+              setSearchParams(next, { replace: true })
+            }}
+          />
         ) : null}
         <div className="flex flex-col gap-3 border-b border-ink-200 px-4 py-3.5">
           <PeriodPicker period={period} />
@@ -476,6 +474,7 @@ export default function LedgerPage({ type, source = 'manual', title, description
             profiles={profiles}
             attachmentsByEntry={attachmentsByEntry}
             highlightIds={highlightIds}
+            highlightIssue={highlightIssue}
             canEdit
             onEdit={(entry) => {
               setEditing({
@@ -565,6 +564,31 @@ export default function LedgerPage({ type, source = 'manual', title, description
             : '기간을 넓히거나 새 내역을 등록해 보세요.'}
         </p>
       ) : null}
+    </div>
+  )
+}
+
+/* --------------------------- 데이터 점검 하이라이트 배너 --------------------------- */
+
+function HighlightBanner({ count, issue, onClear }) {
+  const label = ISSUE_META[issue]?.label || '점검'
+  const hint = ISSUE_META[issue]?.hint || '지적된 내역입니다'
+  const strong = issue === 'duplicate' || issue === 'broken'
+  return (
+    <div
+      className={`flex items-center gap-2 border-b px-4 py-2.5 text-xs ${
+        strong ? 'border-rose-200 bg-rose-50 text-rose-800' : 'border-amber-200 bg-amber-50 text-amber-800'
+      }`}
+    >
+      <span className="min-w-0 flex-1">
+        <strong className="font-bold">
+          데이터 점검({label})에서 이동
+        </strong>{' '}
+        · {hint} · {count}건을 {strong ? '빨간색' : '노란색'}으로 표시합니다. 나머지는 흐리게 보입니다.
+      </span>
+      <button type="button" onClick={onClear} className="shrink-0 font-bold hover:underline">
+        표시 해제
+      </button>
     </div>
   )
 }

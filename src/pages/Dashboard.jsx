@@ -1147,11 +1147,12 @@ function auditTargetFor(entries, entryId) {
   return 'expenses'
 }
 
-/** 데이터 점검 → 장부 딥링크. 의심 항목 id를 highlight로 넘겨 노란색 표시합니다. */
+/** 데이터 점검 → 장부 딥링크. 의심 항목 id + 사유코드를 넘겨 색으로 표시합니다. */
 function auditLink(target, issue) {
   const params = new URLSearchParams({ period: 'all', search: issue.party || '' })
   const ids = issue.entryIds?.length ? issue.entryIds : issue.entryId ? [issue.entryId] : []
   if (ids.length) params.set('highlight', ids.join(','))
+  if (issue.code) params.set('issue', issue.code)
   return `/${target}?${params.toString()}`
 }
 
