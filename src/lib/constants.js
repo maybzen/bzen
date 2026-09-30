@@ -39,7 +39,7 @@ export const ENTRY_META = {
 export const ENTRY_TYPE_KEYS = ['sale', 'purchase', 'opex']
 
 export const CATEGORIES = {
-  sale: ['용역매출', '제작매출', '광고대행', '유지보수', '라이선스', '기타매출'],
+  sale: ['용역매출', '제작매출', '광고대행', '유지보수', '라이선스', '지원금·보조금', '환급금·환입', '기타매출'],
   purchase: ['외주용역비', '원재료비', '상품매입', '운반비', '장비구입', '기타매입'],
   opex: [
     '인건비',
@@ -73,6 +73,8 @@ export const CATEGORY_HINTS = {
   광고대행: '광고 대행 수수료·매출',
   유지보수: '유지보수 계약 매출',
   라이선스: '라이선스 판매 매출',
+  '지원금·보조금': '정부·기관 지원금 (영업매출 아님)',
+  '환급금·환입': '환급·되돌려받은 돈 (영업매출 아님)',
   기타매출: '위에 해당하지 않는 매출',
   // 매입
   외주용역비: '외부 업체에 맡긴 일 비용',
@@ -111,6 +113,8 @@ export function categoryHint(name) {
  * entryType이 주어지면 해당 유형 규칙만 봅니다 (장부 입력용).
  */
 const SUGGEST_RULES = [
+  { re: /지원금|보조금/, type: 'sale', category: '지원금·보조금' },
+  { re: /환급|환입|환불/, type: 'sale', category: '환급금·환입' },
   { re: /업무추진|추진비/, type: 'opex', category: '기업업무추진비' },
   { re: /상품권/, type: 'opex', category: '기업업무추진비' },
   { re: /골프|유흥|노래방|접대|추진비/, type: 'opex', category: '기업업무추진비' },

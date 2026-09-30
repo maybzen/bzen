@@ -201,7 +201,8 @@ export default function Dashboard() {
   const { isAdmin, profile, user } = useAuth()
   const { perms } = useStaffPermissions(profile)
   const toast = useToast()
-  const period = usePeriod('thisMonth', 'bzen.period.dashboard')
+  const navigate = useNavigate()
+  const period = usePeriod('thisMonth')
 
   const [loading, setLoading] = useState(true)
   const [current, setCurrent] = useState([])
@@ -284,7 +285,7 @@ export default function Dashboard() {
     return { to: 'expenses', perm: 'expenses' }
   }
 
-  /* 확인필요 항목 → 관련내역. 문장에서 거래처로 보이는 단어를 뽑아 전체검색합니다. */
+  /* 확인필요 항목 → 관련 거래내역으로 바로 이동. 장부에서 찾아 첫 항목 메뉴로 갑니다. */
   const locateChecklistItem = async (text) => {
     const norm = (s) => String(s || '').toLowerCase().replace(/\s+/g, '')
     const STOP = new Set([
@@ -316,6 +317,21 @@ export default function Dashboard() {
       || ''
     if (!keyword) return
     setQuery(keyword)
+    // 장부에서 직접 찾아 첫 건의 메뉴로 이동 (하이라이트 포함). 없으면 전체검색으로 폴백.
+    try {
+      const found = await listEntries({ search: keyword, maxRows: 60 })
+      const rows = (isAdmin ? found : (found || []).filter((e) => e?.created_by === user?.id || e?.requester_id === user?.id)) || []
+      if (rows.length) {
+        const t = entryTarget(rows[0])
+        if (isAdmin || perms.includes(t.perm)) {
+          const ids = rows.slice(0, 10).map((r) => r.id).join(',')
+          navigate(`/${t.to}?period=all&search=${encodeURIComponent(keyword)}&highlight=${encodeURIComponent(ids)}`)
+          return
+        }
+      }
+    } catch {
+      /* 아래 검색으로 폴백 */
+    }
     await runSearch(null, keyword)
   }
 
