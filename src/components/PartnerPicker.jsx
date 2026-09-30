@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPartner, listPartners } from '../lib/api'
 import { normalizeVendorName } from '../lib/format'
 import { findSimilarParties } from '../lib/validate'
+import { linkedRaws, linkNames, loadAliases, rootOf, unlinkName } from '../lib/aliases'
+import { refreshLedgerIndex } from '../lib/ledgerIndex'
 import { Field, Modal } from './ui'
 
 /**
@@ -25,8 +27,15 @@ export default function PartnerPicker({ value, onChange, placeholder, autoFocus 
     listPartners().then((rows) => setPartners(rows || [])).catch(() => {})
   }
 
+  const [aliasTick, setAliasTick] = useState(0)
+  const [linkError, setLinkError] = useState('')
+  const [linkBusy, setLinkBusy] = useState(false)
+
   useEffect(() => {
     reloadPartners()
+    loadAliases()
+      .then(() => setAliasTick((t) => t + 1))
+      .catch(() => {})
   }, [])
 
   const q = normalizeVendorName(value)
@@ -41,16 +50,53 @@ export default function PartnerPicker({ value, onChange, placeholder, autoFocus 
     [partners, q],
   )
 
-  /* 장부에서 쓰던 비슷한 이름 (대장 미등록 포함). 같은 곳이면 골라 쓰세요. 표기 흔들림이 줄어듭니다. */
+  /* 장부에서 쓰던 비슷한 이름 (대장 미등록 포함). 연동하면 둘 다 남긴 채 같은 곳으로 묶입니다. */
+  const rawInput = String(value || '').trim()
+  const linked = useMemo(() => (rawInput ? linkedRaws(rawInput) : []), [rawInput, aliasTick])
   const ledgerSimilar = useMemo(() => {
-    const raw = String(value || '').trim()
-    if (!raw || !(ledgerEntries || []).length) return []
+    if (!rawInput || !(ledgerEntries || []).length) return []
     try {
-      return findSimilarParties(ledgerEntries, raw, { excludeId }).slice(0, 5)
+      const myRoot = rootOf(rawInput)
+      return findSimilarParties(ledgerEntries, rawInput, { excludeId })
+        .filter(([name]) => {
+          // 이미 연동된 표기는 제안에서 뺍니다 (공존 중)
+          const r = rootOf(name)
+          return !(myRoot && r && myRoot === r)
+        })
+        .slice(0, 5)
     } catch {
       return []
     }
-  }, [ledgerEntries, value, excludeId])
+  }, [ledgerEntries, rawInput, excludeId, aliasTick])
+
+  const runLink = async (name) => {
+    setLinkError('')
+    setLinkBusy(true)
+    try {
+      const ok = await linkNames(rawInput, name, userId)
+      if (!ok) setLinkError('이미 같은 표기라 연동할 게 없습니다.')
+      setAliasTick((t) => t + 1)
+      refreshLedgerIndex()
+    } catch (err) {
+      setLinkError(err?.message || '연동하지 못했습니다.')
+    } finally {
+      setLinkBusy(false)
+    }
+  }
+
+  const runUnlink = async () => {
+    setLinkError('')
+    setLinkBusy(true)
+    try {
+      await unlinkName(rawInput)
+      setAliasTick((t) => t + 1)
+      refreshLedgerIndex()
+    } catch (err) {
+      setLinkError(err?.message || '해제하지 못했습니다.')
+    } finally {
+      setLinkBusy(false)
+    }
+  }
 
   const pick = (name) => {
     onChange?.({ target: { value: name } })
@@ -116,23 +162,49 @@ export default function PartnerPicker({ value, onChange, placeholder, autoFocus 
               </button>
             </li>
           ) : null}
-          {ledgerSimilar.length ? (
+          {ledgerSimilar.length || linked.length ? (
             <li className="border-t border-ink-100 px-3 py-1.5">
               <p className="mb-1 text-[10px] font-bold text-ink-400">장부에서 쓰던 비슷한 이름</p>
-              <div className="flex flex-wrap gap-1">
-                {ledgerSimilar.map(([name, count]) => (
+              {linked.length ? (
+                <p className="mb-1.5 flex flex-wrap items-center gap-1.5 text-[11px] text-ink-600">
+                  <span className="rounded bg-emerald-100 px-1.5 py-0.5 font-bold text-emerald-700">연동됨</span>
+                  <span className="min-w-0 flex-1 truncate">{linked.join(' · ')}</span>
                   <button
-                    key={name}
                     type="button"
                     onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => pick(name)}
-                    title={`장부 ${count}건에서 이렇게 씀 · 눌러서 이 표기로 통일`}
-                    className="rounded-full bg-ink-100 px-2 py-1 text-[11px] font-semibold text-ink-700 transition hover:bg-brand-100 hover:text-brand-800"
+                    onClick={runUnlink}
+                    disabled={linkBusy}
+                    className="shrink-0 font-bold text-ink-400 hover:underline disabled:opacity-50"
                   >
-                    {name} · {count}건
+                    해제
                   </button>
-                ))}
-              </div>
+                </p>
+              ) : null}
+              {ledgerSimilar.length ? (
+                <div className="flex flex-wrap gap-1">
+                  {ledgerSimilar.map(([name, count]) => (
+                    <span
+                      key={name}
+                      className="flex items-center gap-1 rounded-full bg-ink-100 py-0.5 pl-2 pr-1 text-[11px] font-semibold text-ink-700"
+                    >
+                      <span className="max-w-[140px] truncate" title={`장부 ${count}건에서 이렇게 씀`}>
+                        {name} · {count}건
+                      </span>
+                      <button
+                        type="button"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => runLink(name)}
+                        disabled={linkBusy}
+                        title="두 표기를 연동합니다. 둘 다 장부에 남고 같은 곳으로 묶입니다."
+                        className="shrink-0 rounded-full bg-white px-1.5 py-0.5 text-[10px] font-bold text-brand-700 transition hover:bg-brand-100 disabled:opacity-50"
+                      >
+                        연동
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              ) : null}
+              {linkError ? <p className="mt-1 text-[11px] font-medium text-loss">{linkError}</p> : null}
             </li>
           ) : null}
         </ul>

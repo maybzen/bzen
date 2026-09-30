@@ -53,13 +53,14 @@ function isBizNumber(raw) {
   return /^[\d-]{9,13}$/.test(String(raw || '').trim())
 }
 
-export function partyVariants(entries) {
+export function partyVariants(entries, aliasRoot = null) {
   // 정규화키 → { 총액, 표기들:Set, 건수 }
+  const rootOf = (norm) => (typeof aliasRoot === 'function' && norm ? aliasRoot(norm) || norm : norm)
   const map = new Map()
   for (const e of entries) {
     const raw = String(e?.counterparty || '').trim()
     if (!raw) continue
-    const key = normalizeParty(raw)
+    const key = rootOf(normalizeParty(raw))
     if (!key) continue
     const o = map.get(key) || { key, total: 0, names: new Set(), count: 0 }
     o.names.add(raw)
@@ -106,9 +107,11 @@ export function longestCommonSubstring(names) {
 }
 
 /** DB에 이미 있는 표기 중 draft 의 표기와 같은 거래처로 보이는 이름들 */
-export function findSimilarParties(entries, raw, { excludeId = '' } = {}) {
+export function findSimilarParties(entries, raw, { excludeId = '', aliasRoot = null } = {}) {
   const key = normalizeParty(raw)
   if (!key) return []
+  const rootOf = (norm) => (typeof aliasRoot === 'function' && norm ? aliasRoot(norm) || norm : norm)
+  const rawRoot = rootOf(key)
   const found = new Map()
   for (const e of entries) {
     if (e.id && e.id === excludeId) continue
@@ -117,6 +120,8 @@ export function findSimilarParties(entries, raw, { excludeId = '' } = {}) {
     if (isBizNumber(n)) continue
     const nk = normalizeParty(n)
     if (!similarKey(key, nk)) continue
+    // 연동(별칭)된 표기는 의도된 공존이라 제안·경고에서 뺍니다
+    if (rawRoot && rootOf(nk) === rawRoot) continue
     found.set(n, (found.get(n) || 0) + 1)
   }
   return [...found.entries()]
@@ -230,7 +235,7 @@ function labelOf(type) {
  * options.entries: 장부 전체 (중복·표기 대조용). 없어도 나머지 점검은 동작합니다.
  * options.excludeId: 수정 중인 행은 자기 자신과 비교하지 않습니다.
  */
-export function checkEntryDraft(draft, { entries = [], excludeId = '' } = {}) {
+export function checkEntryDraft(draft, { entries = [], excludeId = '', aliasRoot = null } = {}) {
   const out = []
   const type = draft.entry_type || 'opex'
   const supply = Math.round(Number(draft.supply_amount) || 0)
@@ -287,7 +292,7 @@ export function checkEntryDraft(draft, { entries = [], excludeId = '' } = {}) {
 
   /* 3) 거래처 표기 흔들림 */
   if (entries.length && rawParty && !isBizNumber(rawParty)) {
-    const similar = findSimilarParties(entries, rawParty, { excludeId })
+    const similar = findSimilarParties(entries, rawParty, { excludeId, aliasRoot })
     if (similar.length) {
       out.push({
         code: ISSUE.VARIANT,
@@ -330,8 +335,10 @@ export function checkEntryDraft(draft, { entries = [], excludeId = '' } = {}) {
  * 이미 들어간 데이터에서 어긋난 걸 모읍니다. 대시보드 "데이터 점검" 카드용.
  * 항목마다 대표 entry 하나만 내보내되 count 로 묶습니다.
  */
-export function auditEntries(entries) {
+export function auditEntries(entries, opts = {}) {
   if (!entries || !entries.length) return []
+  const aliasRoot = opts?.aliasRoot || null
+  const rootOf = (norm) => (typeof aliasRoot === 'function' && norm ? aliasRoot(norm) || norm : norm)
 
   const issues = []
 
@@ -354,7 +361,7 @@ export function auditEntries(entries) {
   }
 
   /* 완전중복 (같은 날짜·거래처·절대금액이 2건 이상). 결제(+)/취소(-)는 상계합니다. */
-  const byKey = groupByDatePartyAbs(entries)
+  const byKey = groupByDatePartyAbs(entries, aliasRoot)
   for (const group of byKey.values()) {
     const pos = group.filter((e) => Math.round(Number(e.total_amount) || 0) > 0)
     const neg = group.filter((e) => Math.round(Number(e.total_amount) || 0) < 0)
@@ -386,7 +393,7 @@ export function auditEntries(entries) {
   /* 거래처 표기 흔들림 — 접두/접미 관계로 묶어 본다 (BPEX + 부산항시설관리센터 등) */
   const cluster = new Map()
   const keyOf = (n) => normalizeParty(n)
-  for (const [, v] of partyVariants(entries)) {
+  for (const [, v] of partyVariants(entries, aliasRoot)) {
     let target = null
     for (const c of cluster.values()) {
       if (similarKey(keyOf(c.names[0]), v.key) || [...c.keys].some((k) => similarKey(k, v.key))) {
@@ -405,6 +412,9 @@ export function auditEntries(entries) {
   }
   for (const [, c] of cluster) {
     if (c.names.size < 2) continue
+    // 연동된 표기끼리만 묶인 건 의도된 공존이라 경고하지 않습니다
+    const roots = new Set([...c.names].map((n) => rootOf(normalizeParty(n))))
+    if (roots.size < 2) continue
     const list = [...c.names].sort((a, b) => a.length - b.length)
     const hasBizNo = list.some(isBizNumber)
     // 묶음에 속한 대표 행들을 모아 장부로 넘어갈 수 있게 합니다 (최대 20건)
@@ -482,12 +492,13 @@ export function auditEntries(entries) {
 /* ------------------------------------------------------------------ */
 
 /** 같은 날짜·거래처·절대금액 묶음 (중복 판정과 상계 표시가 함께 씁니다) */
-function groupByDatePartyAbs(entries) {
+function groupByDatePartyAbs(entries, aliasRoot = null) {
+  const rootOf = (norm) => (typeof aliasRoot === 'function' && norm ? aliasRoot(norm) || norm : norm)
   const byKey = new Map()
   for (const e of entries || []) {
     const total = Math.round(Number(e.total_amount) || 0)
     if (!e.entry_date || total === 0) continue
-    const key = `${e.entry_date}|${normalizeParty(e.counterparty)}|${Math.abs(total)}`
+    const key = `${e.entry_date}|${rootOf(normalizeParty(e.counterparty))}|${Math.abs(total)}`
     const o = byKey.get(key)
     if (o) o.push(e)
     else byKey.set(key, [e])
@@ -499,9 +510,9 @@ function groupByDatePartyAbs(entries) {
  * 결제(+)/취소(-)가 상계되어 정상이 된 묶음.
  * 대시보드 "상계로 해소됨" 표시용. [{ id, date, party, absAmount, pos, neg, entryId, entryIds }]
  */
-export function findNettedGroups(entries) {
+export function findNettedGroups(entries, opts = {}) {
   const out = []
-  for (const group of groupByDatePartyAbs(entries).values()) {
+  for (const group of groupByDatePartyAbs(entries, opts?.aliasRoot || null).values()) {
     if (group.length < 2) continue
     const pos = group.filter((e) => Math.round(Number(e.total_amount) || 0) > 0)
     const neg = group.filter((e) => Math.round(Number(e.total_amount) || 0) < 0)

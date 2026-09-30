@@ -7,17 +7,19 @@
  */
 import { useEffect, useState } from 'react'
 import { auditEntries, findNettedGroups, partyVariants } from './validate'
+import { aliasRoot, loadAliases } from './aliases'
 
 let cache = null
 let pending = null
 const listeners = new Set()
 
 function build(entries) {
+  const opts = { aliasRoot }
   return {
     entries,
-    partyIndex: partyVariants(entries),
-    issues: auditEntries(entries),
-    netted: findNettedGroups(entries),
+    partyIndex: partyVariants(entries, aliasRoot),
+    issues: auditEntries(entries, opts),
+    netted: findNettedGroups(entries, opts),
     loadedAt: Date.now(),
   }
 }
@@ -25,7 +27,7 @@ function build(entries) {
 async function load() {
   // api.js 가 이 모듈을 import 하므로 순환 참조를 피하려 동적으로 불러옵니다
   const { listEntries } = await import('./api')
-  const rows = await listEntries({ maxRows: 20000 })
+  const [rows] = await Promise.all([listEntries({ maxRows: 20000 }), loadAliases().catch(() => [])])
   cache = build(rows || [])
   pending = null
   for (const fn of listeners) fn(cache)

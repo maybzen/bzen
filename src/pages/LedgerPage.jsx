@@ -614,7 +614,7 @@ function HighlightBanner({ count, issue, onClear }) {
         <strong className="font-bold">
           데이터 점검({label})에서 이동
         </strong>{' '}
-        · {hint} · {count}건을 {strong ? '빨간색' : '노란색'}으로 표시합니다. 나머지는 흐리게 보입니다.
+        · {hint} · {count}건을 {strong ? '빨간색' : '노란색'}으로 표시합니다.
       </span>
       <button type="button" onClick={onClear} className="shrink-0 font-bold hover:underline">
         표시 해제

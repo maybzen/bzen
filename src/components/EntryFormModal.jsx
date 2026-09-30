@@ -10,6 +10,7 @@ import { createEntry, deleteAttachment, listFundRows, updateEntry, uploadAttachm
 import { ensureLedgerIndex, useLedgerIndex } from '../lib/ledgerIndex'
 import { isStaffVisible, staffIdsFromProfiles } from '../lib/permissions'
 import { ISSUE_META, checkEntryDraft } from '../lib/validate'
+import { aliasRoot } from '../lib/aliases'
 
 const MAX_FILE = 20 * 1024 * 1024
 
@@ -180,7 +181,7 @@ export default function EntryFormModal({
 
   const warnings = useMemo(() => {
     if (supply === 0 && vat === 0) return []
-    return checkEntryDraft(draftValues, { entries: visibleEntries, excludeId: initial?.id || '' })
+    return checkEntryDraft(draftValues, { entries: visibleEntries, excludeId: initial?.id || '', aliasRoot })
   }, [draftValues, supply, vat, visibleEntries, initial?.id])
 
   /* 저장 전 경고를 확인해야 하는 단계인가 */
@@ -227,7 +228,7 @@ export default function EntryFormModal({
           ? fresh?.entries || []
           : (fresh?.entries || []).filter((e) => isStaffVisible(e, staffIds))
         if (rows.length) {
-          liveWarnings = checkEntryDraft(draftValues, { entries: rows, excludeId: initial?.id || '' })
+          liveWarnings = checkEntryDraft(draftValues, { entries: rows, excludeId: initial?.id || '', aliasRoot })
         }
       } catch {
         /* 대조 없이 진행 */

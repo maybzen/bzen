@@ -93,7 +93,6 @@ export default function EntryTable({
     : highlightIssue === 'field'
       ? 'bg-sky-500 text-white'
       : 'bg-amber-400 text-white'
-  const dim = hlSet.size ? 'opacity-60' : ''
 
   /* 점검 항목으로 이동하면 첫 번째 의심 행으로 스크롤합니다 */
   useEffect(() => {
@@ -382,8 +381,8 @@ export default function EntryTable({
                     hl
                       ? `${hlRow} ring-1 ring-inset ${highlightIssue === 'duplicate' || highlightIssue === 'broken' ? 'ring-rose-300' : highlightIssue === 'field' ? 'ring-sky-300' : 'ring-amber-300'}`
                       : dirty
-                        ? `bg-brand-50/40 transition ${dim}`
-                        : `transition hover:bg-ink-50/60 ${dim}`
+                        ? 'bg-brand-50/40 transition'
+                        : 'transition hover:bg-ink-50/60'
                   }
                 >
                   {editable ? (
@@ -612,9 +611,9 @@ export default function EntryTable({
               </td>
               <td className="td num font-bold">{formatKRW(totals.supply)}</td>
               {hideVat ? null : <td className="td num font-bold">{formatKRW(totals.vat)}</td>}
-              <td className="td num font-extrabold text-brand-700">{formatKRW(totals.total)}</td>
+              <td className="td num font-extrabold text-ink-900">{formatKRW(totals.total)}</td>
               {extraPayMap ? (
-                <td className="td num font-extrabold text-brand-700">{formatKRW(totals.total + extraTotal)}</td>
+                <td className="td num font-extrabold text-ink-900">{formatKRW(totals.total + extraTotal)}</td>
               ) : null}
               <td className="td" colSpan={3} />
             </tr>
@@ -643,8 +642,8 @@ export default function EntryTable({
                   hl
                     ? `${hlRow} px-4 py-3.5`
                     : dirty
-                      ? `bg-brand-50/40 px-4 py-3.5 ${dim}`
-                      : `px-4 py-3.5 ${dim}`
+                      ? 'bg-brand-50/40 px-4 py-3.5'
+                      : 'px-4 py-3.5'
                 }
               >
                 <div className="flex items-start justify-between gap-3">
@@ -788,7 +787,7 @@ export default function EntryTable({
           <li className="bg-ink-50/80 px-4 py-3">
             <div className="flex items-center justify-between text-sm font-bold text-ink-900">
               <span>합계 ({entries.length}건)</span>
-              <span className="font-num tabular-nums text-brand-700">{formatKRW(totals.total)}원</span>
+              <span className="font-num tabular-nums text-ink-900">{formatKRW(totals.total)}원</span>
             </div>
           </li>
         </ul>

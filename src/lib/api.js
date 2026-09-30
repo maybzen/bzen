@@ -1,5 +1,6 @@
 import { supabase, FUNCTIONS_URL, SUPABASE_ANON_KEY } from './supabase'
 import { invalidateLedgerIndex } from './ledgerIndex'
+import { expansionsFor, loadAliases } from './aliases'
 
 const PAGE = 1000
 
@@ -304,12 +305,28 @@ export async function listEntries({
     if (search && search.trim()) {
       // 띄어쓰기·기호를 무시하고 찾도록 글자 사이를 와일드카드로 연결
       // (예: 부산은행 → 부산 은행·(주)부산은행·부산-은행 모두 매칭)
+      // 연동된 별칭 표기가 있으면 함께 찾습니다 (예: 코레일 → 한국철도공사 포함)
       const compact = search.trim().replace(/[\s%,()]+/g, '')
       if (compact) {
-        const s = `%${compact.split('').join('%')}%`
-        q = q.or(
-          `counterparty.ilike.${s},description.ilike.${s},category.ilike.${s},doc_no.ilike.${s},memo.ilike.${s}`,
-        )
+        const fuzzy = (t) => `%${String(t).replace(/[\s%,()]+/g, '').split('').join('%')}%`
+        const terms = [compact]
+        try {
+          await loadAliases().catch(() => {})
+          for (const raw of expansionsFor(compact)) {
+            const c = String(raw).replace(/[\s%,()]+/g, '')
+            if (c && c !== compact && !terms.includes(c)) terms.push(c)
+          }
+        } catch {
+          /* 별칭 없이 기본 검색 */
+        }
+        const ors = []
+        for (const t of terms.slice(0, 8)) {
+          const s = fuzzy(t)
+          for (const f of ['counterparty', 'description', 'category', 'doc_no', 'memo']) {
+            ors.push(`${f}.ilike.${s}`)
+          }
+        }
+        q = q.or(ors.join(','))
       }
     }
 
