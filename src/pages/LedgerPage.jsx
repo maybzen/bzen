@@ -235,6 +235,7 @@ export default function LedgerPage({ type, source = 'manual', title, description
     try {
       await deleteEntry(removing.id)
       toast.success('삭제되었습니다.')
+      clearHighlightFor(removing.id)
       setRemoving(null)
       setReloadKey((k) => k + 1)
     } catch (error) {
@@ -289,6 +290,7 @@ export default function LedgerPage({ type, source = 'manual', title, description
         }
       }
       toast.success(`${removingMany.length}건 중 ${ok}건을 삭제했습니다.`)
+      for (const id of removingMany) clearHighlightFor(id)
       setRemovingMany(null)
       setReloadKey((k) => k + 1)
     } finally {

@@ -853,6 +853,7 @@ export function DataAuditPanel({ menuSlug = null }) {
   const [dismissed, setDismissed] = useState([])
   const [showDone, setShowDone] = useState(false)
   const [showNetted, setShowNetted] = useState(false)
+  const toast = useToast()
 
   const loadDismissed = useCallback(async () => {
     try {
@@ -913,8 +914,8 @@ export function DataAuditPanel({ menuSlug = null }) {
     try {
       await addChecklistItem(AUDIT_DONE_LIST, stableKeyForIssue(issue), null)
       await loadDismissed()
-    } catch {
-      /* 무시 */
+    } catch (err) {
+      toast.error(`확인 저장 실패: ${err?.message || '알 수 없는 오류'}`)
     }
   }
 
@@ -922,8 +923,8 @@ export function DataAuditPanel({ menuSlug = null }) {
     try {
       await deleteChecklistItem(row.id)
       await loadDismissed()
-    } catch {
-      /* 무시 */
+    } catch (err) {
+      toast.error(`되돌리기 실패: ${err?.message || '알 수 없는 오류'}`)
     }
   }
 

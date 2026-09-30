@@ -5,6 +5,7 @@ import { AttachmentCell } from './Attachments'
 import { ENTRY_META } from '../lib/constants'
 import { formatDateHuman, formatKRW } from '../lib/format'
 import { ISSUE_META } from '../lib/validate'
+import { useToast } from './Toast'
 
 function personName(profiles, id) {
   if (!id) return '—'
@@ -74,6 +75,7 @@ export default function EntryTable({
   const [selected, setSelected] = useState({})
   const [bulkProject, setBulkProject] = useState('')
   const [bulkAuthor, setBulkAuthor] = useState('')
+  const toast = useToast()
 
   const editable = bulkEdit && canEdit && typeof onSaveRow === 'function'
 
@@ -145,7 +147,8 @@ export default function EntryTable({
       }
       cancelRow(entry.id)
       return true
-    } catch {
+    } catch (err) {
+      if (!silent) toast.error(`저장하지 못했습니다: ${err?.message || '알 수 없는 오류'}`)
       return false
     } finally {
       setSavingId(null)
