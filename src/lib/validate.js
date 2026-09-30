@@ -89,6 +89,22 @@ export function similarKey(a, b) {
   return long.startsWith(short) || long.endsWith(short)
 }
 
+/** 여러 표기의 공통 부분 (장부 검색용). 공백 제거 후 2자 이상 공통 문자열 중 가장 긴 것. */
+export function longestCommonSubstring(names) {
+  const clean = (names || []).map((n) => String(n || '').replace(/\s+/g, '')).filter((s) => s.length >= 2)
+  if (clean.length < 2) return ''
+  let best = ''
+  const [first, ...rest] = clean
+  for (let i = 0; i < first.length; i += 1) {
+    for (let j = i + 2; j <= first.length; j += 1) {
+      const sub = first.slice(i, j)
+      if (sub.length <= best.length) continue
+      if (rest.every((s) => s.includes(sub))) best = sub
+    }
+  }
+  return best
+}
+
 /** DB에 이미 있는 표기 중 draft 의 표기와 같은 거래처로 보이는 이름들 */
 export function findSimilarParties(entries, raw, { excludeId = '' } = {}) {
   const key = normalizeParty(raw)
@@ -391,18 +407,33 @@ export function auditEntries(entries) {
     if (c.names.size < 2) continue
     const list = [...c.names].sort((a, b) => a.length - b.length)
     const hasBizNo = list.some(isBizNumber)
+    // 묶음에 속한 대표 행들을 모아 장부로 넘어갈 수 있게 합니다 (최대 20건)
+    const refIds = []
+    const freq = new Map()
+    for (const e of entries) {
+      const n = String(e?.counterparty || '').trim()
+      if (!c.names.has(n)) continue
+      freq.set(n, (freq.get(n) || 0) + 1)
+      if (refIds.length < 20) refIds.push(e.id)
+    }
+    const byFreq = [...c.names].sort((a, b) => (freq.get(b) || 0) - (freq.get(a) || 0))
     issues.push({
       id: `var-${[...c.keys].sort().join('_')}`,
       code: ISSUE.VARIANT,
       level: 'warn',
+      entryId: refIds[0] || null,
+      entryIds: refIds,
       date: '',
-      party: list[0],
+      party: byFreq[0] || list[0],
+      // 여러 표기를 한 번에 찾도록 공통 문자열로 검색합니다 (없으면 최다 빈도 이름)
+      search: longestCommonSubstring(list) || byFreq[0] || list[0],
       amount: c.total,
       count: c.count,
       title: `표기가 ${c.names.size}종류`,
       detail:
         `가장 짧게 쓰는 이름은 “${list[0]}” · 총 ${c.count}건 / ${c.total.toLocaleString()}원` +
-        (hasBizNo ? ' · 사업자번호만 적힌 행이 있어 거래처 연결이 안 됩니다' : ''),
+        (hasBizNo ? ' · 사업자번호만 적힌 행이 있어 거래처 연결이 안 됩니다' : '') +
+        ` · 표기: ${list.slice(0, 4).join(' / ')}${list.length > 4 ? ' 외' : ''}`,
     })
   }
 

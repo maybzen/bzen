@@ -1301,7 +1301,7 @@ function auditTargetFor(entries, entryId) {
 
 /** 데이터 점검 → 장부 딥링크. 의심 항목 id + 사유코드를 넘겨 색으로 표시합니다. */
 function auditLink(target, issue) {
-  const params = new URLSearchParams({ period: 'all', search: issue.party || '' })
+  const params = new URLSearchParams({ period: 'all', search: issue.search || issue.party || '' })
   const ids = issue.entryIds?.length ? issue.entryIds : issue.entryId ? [issue.entryId] : []
   if (ids.length) params.set('highlight', ids.join(','))
   if (issue.code) params.set('issue', issue.code)
@@ -1326,6 +1326,7 @@ function dismissedLabel(text) {
     return `중복 ${date || ''}${Number.isFinite(n) && n ? ` · ${n.toLocaleString()}원` : ''}`
   }
   if (t.startsWith('dup-')) return '중복 (이전에 확인한 묶음)'
+  if (t.startsWith('var-')) return '표기 흔들림 묶음'
   return t
 }
 
