@@ -797,7 +797,9 @@ function AgencyDealModal({ partners, userId, initial = null, onClose, onSaved })
       if ((key === 'total' || key === 'rate') && !feeTouched) {
         const t = Number(String(next.total).replace(/[^0-9]/g, '')) || 0
         const r = Number(next.rate) || 0
-        next.fee = t && r ? String(Math.round((t * r) / 100)) : ''
+        // 수수료율은 공급가액 기준이라 VAT를 얹어 계산 (2025년 대행계약 시트와 동일).
+        // VAT 제외 특약이면 수수료를 직접 고치세요 (고치면 자동 계산이 멈춥니다).
+        next.fee = t && r ? String(Math.round(((t * r) / 100) * 1.1)) : ''
       }
       return next
     })
@@ -931,16 +933,17 @@ function AgencyDealModal({ partners, userId, initial = null, onClose, onSaved })
             placeholder="예: 49000000"
           />
         </Field>
-        <Field label="수수료율 (%)">
+        <Field label="수수료율 (%)" hint="공급가액 기준. VAT 포함 수수료로 자동 계산됩니다">
           <input
-            className="input text-right font-num tabular-nums"
+            type="text"
             inputMode="decimal"
+            className="input text-right font-num tabular-nums"
             value={form.rate}
             onChange={set('rate')}
             placeholder="3"
           />
         </Field>
-        <Field label="수수료 (원, VAT포함)" hint="장부 계약금액·매출이 됩니다" className="sm:col-span-2">
+        <Field label="수수료 (원, VAT포함)" hint="장부 계약금액·매출이 됩니다. VAT 제외 특약이면 직접 고치세요" className="sm:col-span-2">
           <AmountInput
             className="input text-right font-num tabular-nums"
             value={form.fee}
@@ -948,7 +951,7 @@ function AgencyDealModal({ partners, userId, initial = null, onClose, onSaved })
               setFeeTouched(true)
               set('fee')(e)
             }}
-            placeholder="예: 1470000"
+            placeholder="예: 1617000"
           />
         </Field>
         <Field label="시작일">
