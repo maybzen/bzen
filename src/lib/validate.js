@@ -337,35 +337,41 @@ export function auditEntries(entries) {
     }
   }
 
-  /* 완전중복 (같은 날짜·거래처·금액이 2건 이상) */
+  /* 완전중복 (같은 날짜·거래처·절대금액이 2건 이상). 결제(+)/취소(-)는 상계합니다. */
   const byKey = new Map()
   for (const e of entries) {
     const total = Math.round(Number(e.total_amount) || 0)
     if (!e.entry_date || total === 0) continue
-    const key = `${e.entry_date}|${normalizeParty(e.counterparty)}|${total}`
+    const key = `${e.entry_date}|${normalizeParty(e.counterparty)}|${Math.abs(total)}`
     const o = byKey.get(key) || []
     o.push(e)
     byKey.set(key, o)
   }
   for (const group of byKey.values()) {
-    if (group.length < 2) continue
-    const first = group[0]
-    const amount = Math.round(Number(first.total_amount) || 0)
-    const extra = Math.abs(amount) * (group.length - 1)
+    const pos = group.filter((e) => Math.round(Number(e.total_amount) || 0) > 0)
+    const neg = group.filter((e) => Math.round(Number(e.total_amount) || 0) < 0)
+    const net = pos.length - neg.length
+    // 1건·상계완료(0)·취소로 고친 경우(순수 ±1건)는 정상으로 봅니다
+    if (Math.abs(net) < 2) continue
+    const side = net > 0 ? pos : neg
+    const first = side[0] || group[0]
+    const absAmt = Math.abs(Math.round(Number(first.total_amount) || 0))
+    const extra = absAmt * (Math.abs(net) - 1)
     // 같은 금액이 여러 장 붙어 있는 경우가 많아 실제로 중복인지 단서로 남긴다
     const sources = [...new Set(group.map((e) => e.source || 'manual'))]
+    const voidNote = neg.length ? ` · 취소 ${neg.length}건 상계됨` : ''
     issues.push({
-      id: `dup-${group.map((e) => e.id).join('_')}`,
+      id: `dup-${side.map((e) => e.id).join('_')}`,
       code: ISSUE.DUPLICATE,
       level: 'warn',
       entryId: first.id,
-      entryIds: group.map((e) => e.id),
-      count: group.length,
+      entryIds: side.map((e) => e.id),
+      count: Math.abs(net),
       date: first.entry_date,
       party: first.counterparty,
-      amount,
-      title: `${group.length}건으로 같음`,
-      detail: `중복 시 ${extra.toLocaleString()}원 과다 · 출처 ${sources.join(', ')} — 카드명세서가 여러 장이거나 실제로 두 번 찍은 경우입니다.`,
+      amount: Math.round(Number(first.total_amount) || 0),
+      title: `${Math.abs(net)}건으로 같음`,
+      detail: `중복 시 ${extra.toLocaleString()}원 과다${voidNote} · 출처 ${sources.join(', ')} — 카드명세서가 여러 장이거나 실제로 두 번 찍은 경우입니다.`,
     })
   }
 
