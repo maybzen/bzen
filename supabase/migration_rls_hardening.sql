@@ -29,7 +29,7 @@ begin
 end
 $$;
 
--- 1) 장부(entries): 읽기는 공유, 수정·삭제는 본인(등록자) 또는 관리자만 ----------
+-- 1) 장부(entries): 읽기는 공유, 수정·삭제도 공유 (직원끼리 고칠 일은 드물지만 막지 않음)
 alter table public.entries enable row level security;
 
 drop policy if exists "entries_select_shared" on public.entries;
@@ -37,15 +37,15 @@ create policy "entries_select_shared"
   on public.entries for select to authenticated using (true);
 
 drop policy if exists "entries_update_own" on public.entries;
-create policy "entries_update_own"
+drop policy if exists "entries_update_all" on public.entries;
+create policy "entries_update_all"
   on public.entries for update to authenticated
-  using (created_by = auth.uid() or is_admin())
-  with check (created_by = auth.uid() or is_admin());
+  using (true) with check (true);
 
 drop policy if exists "entries_delete_own" on public.entries;
-create policy "entries_delete_own"
-  on public.entries for delete to authenticated
-  using (created_by = auth.uid() or is_admin());
+drop policy if exists "entries_delete_all" on public.entries;
+create policy "entries_delete_all"
+  on public.entries for delete to authenticated using (true);
 
 -- insert는 열어둡니다 (일괄등록이 created_by 없이 들어오는 경우가 있음)
 

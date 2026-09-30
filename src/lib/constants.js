@@ -319,10 +319,8 @@ export const PERIOD_PRESETS = [
   { key: 'thisMonth', label: '이번 달' },
   { key: 'lastMonth', label: '지난 달' },
   { key: 'quarter', label: '이번 분기' },
-  { key: 'lastQuarter', label: '지난 분기' },
   { key: 'quarterPick', label: '분기 선택' },
   { key: 'thisYear', label: '올해' },
-  { key: 'lastYear', label: '작년' },
 ]
 
 /** 분기 시작월(0-based) → 해당 분기 범위 */

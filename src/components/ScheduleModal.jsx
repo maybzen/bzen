@@ -431,7 +431,7 @@ export default function ScheduleModal({
             )}
           </div>
 
-          {home ? <HomeChecklist home={home} isAdmin={isAdmin} userId={userId} onLocate={onLocate} /> : null}
+          {isAdmin && home ? <HomeChecklist home={home} isAdmin={isAdmin} userId={userId} onLocate={onLocate} /> : null}
 
           {syncBundle ? <SyncChecklist bundle={syncBundle} /> : null}
 

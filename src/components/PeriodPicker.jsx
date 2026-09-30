@@ -145,7 +145,7 @@ export default function PeriodPicker({ period, className = '' }) {
           />
         </div>
       ) : (
-        <span className="hidden text-xs font-medium text-ink-500 xl:inline">{range.label}</span>
+        <span className="text-xs font-medium text-ink-500">{range.label}</span>
       )}
     </div>
   )
