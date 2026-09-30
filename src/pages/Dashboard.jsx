@@ -842,6 +842,8 @@ function MiniStat({ label, value, unit = '원', desc, tone = 'ink', to }) {
 /* ------------------------------------------------------------------ */
 
 const AUDIT_LIMIT = 25
+/* 데이터 점검 확인완료 저장용 (text = issue.id). 집·회사 PC 공유라 Supabase에 둡니다. */
+const AUDIT_DONE_LIST = 'audit_done'
 
 function DataAuditPanel() {
   const [open, setOpen] = useState(false)
@@ -849,23 +851,61 @@ function DataAuditPanel() {
   const { issues, loading, ready, entries } = useLedgerIndex()
   const navigate = useNavigate()
   const [reloading, setReloading] = useState(false)
+  const [dismissed, setDismissed] = useState([])
+  const [showDone, setShowDone] = useState(false)
+
+  const loadDismissed = useCallback(async () => {
+    try {
+      const rows = await listChecklistItems(AUDIT_DONE_LIST)
+      setDismissed(rows || [])
+    } catch {
+      /* 테이블 없으면 확인완료 없이 동작 */
+    }
+  }, [])
+
+  useEffect(() => {
+    loadDismissed()
+  }, [loadDismissed])
 
   const reload = async () => {
     setReloading(true)
     try {
       await refreshLedgerIndex()
+      await loadDismissed()
     } finally {
       setReloading(false)
     }
   }
 
-  const summary = useMemo(() => summarizeAudit(issues), [issues])
+  /* 확인완료한 건은 다시 띄우지 않습니다. 장부를 고쳐 원인이 사라져도 자동 제외됩니다. */
+  const dismissedIds = useMemo(() => new Set(dismissed.map((r) => String(r.text))), [dismissed])
+  const activeIssues = useMemo(() => issues.filter((i) => !dismissedIds.has(i.id)), [issues, dismissedIds])
+
+  const dismissIssue = async (issue) => {
+    try {
+      await addChecklistItem(AUDIT_DONE_LIST, issue.id, null)
+      await loadDismissed()
+    } catch {
+      /* 무시 */
+    }
+  }
+
+  const restoreIssue = async (row) => {
+    try {
+      await deleteChecklistItem(row.id)
+      await loadDismissed()
+    } catch {
+      /* 무시 */
+    }
+  }
+
+  const summary = useMemo(() => summarizeAudit(activeIssues), [activeIssues])
   const shown = useMemo(() => {
-    const list = filter === 'all' ? issues : issues.filter((i) => i.code === filter)
+    const list = filter === 'all' ? activeIssues : activeIssues.filter((i) => i.code === filter)
     // 깨진 텍스트 → 중복 → 표기 → 부가세 → 입력누락 순으로 보여주고, 같은 종류는 금액 큰 순
     const rank = { broken: 0, duplicate: 1, variant: 2, vat: 3, field: 4 }
     return [...list].sort((a, b) => (rank[a.code] - rank[b.code]) || (b.amount - a.amount))
-  }, [issues, filter])
+  }, [activeIssues, filter])
 
   if (loading && !ready) {
     return (
@@ -987,25 +1027,65 @@ function DataAuditPanel() {
                   </>
                 )
                 return (
-                  <li key={i.id}>
+                  <li key={i.id} className="flex items-start gap-1.5">
                     {target ? (
                       <button
                         type="button"
                         onClick={() => navigate(auditLink(target, i))}
-                        className="flex w-full items-start gap-2.5 py-2 text-left transition hover:bg-ink-50"
+                        className="flex min-w-0 flex-1 items-start gap-2.5 py-2 text-left transition hover:bg-ink-50"
                       >
                         {body}
                       </button>
                     ) : (
-                      <div className="flex items-start gap-2.5 py-2">{body}</div>
+                      <div className="flex min-w-0 flex-1 items-start gap-2.5 py-2">{body}</div>
                     )}
+                    <button
+                      type="button"
+                      onClick={() => dismissIssue(i)}
+                      title="정상 확인됨 — 다시 띄우지 않습니다"
+                      className="mt-1.5 shrink-0 rounded-full bg-ink-100 px-2 py-1 text-[10px] font-bold text-ink-600 transition hover:bg-emerald-100 hover:text-emerald-700"
+                    >
+                      확인
+                    </button>
                   </li>
                 )
               })}
             </ul>
           ) : (
-            <p className="py-3 text-xs text-ink-500">이 항목은 없습니다.</p>
+            <p className="py-3 text-xs text-ink-500">
+              {dismissed.length ? '남은 항목은 없습니다. 확인 완료한 건은 아래에서 되돌릴 수 있습니다.' : '이 항목은 없습니다.'}
+            </p>
           )}
+
+          {dismissed.length ? (
+            <div className="mt-2 border-t border-ink-100 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowDone((v) => !v)}
+                className="flex items-center gap-1 text-[11px] font-semibold text-ink-400 hover:text-ink-600"
+                aria-expanded={showDone}
+              >
+                <Icon name={showDone ? 'chevron-down' : 'chevron-right'} size={13} />
+                확인 완료 {dismissed.length}건
+              </button>
+              {showDone ? (
+                <ul className="mt-1 flex flex-col divide-y divide-ink-100">
+                  {dismissed.map((r) => (
+                    <li key={r.id} className="flex items-center gap-2 py-1.5">
+                      <span className="min-w-0 flex-1 truncate text-[11px] text-ink-400">{String(r.text)}</span>
+                      <button
+                        type="button"
+                        onClick={() => restoreIssue(r)}
+                        className="shrink-0 text-[11px] font-bold text-brand-700 hover:underline"
+                      >
+                        되돌리기
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </div>
+          ) : null}
 
           {shown.length > AUDIT_LIMIT ? (
             <p className="mt-2 text-[11px] text-ink-400">
