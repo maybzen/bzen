@@ -22,7 +22,7 @@ import {
   updateChecklistItem,
 } from '../lib/api'
 import { refreshLedgerIndex, useLedgerIndex } from '../lib/ledgerIndex'
-import { ISSUE_META, summarizeAudit } from '../lib/validate'
+import { ISSUE_META, normalizeParty, summarizeAudit } from '../lib/validate'
 import ScheduleModal from '../components/ScheduleModal'
 import { SCHEDULE_DONE_LIST, SCHEDULE_LIST, buildSchedule, dday, ddayLabel, dueDateSupported, doneKeysFrom } from '../lib/schedule'
 import { isStaffVisible, staffIdsFromProfiles } from '../lib/permissions'
@@ -202,7 +202,6 @@ export default function Dashboard() {
   const { perms } = useStaffPermissions(profile)
   const toast = useToast()
   const period = usePeriod('thisMonth', 'bzen.period.dashboard')
-  const navigate = useNavigate()
 
   const [loading, setLoading] = useState(true)
   const [current, setCurrent] = useState([])
@@ -845,7 +844,7 @@ const AUDIT_LIMIT = 25
 /* 데이터 점검 확인완료 저장용 (text = issue.id). 집·회사 PC 공유라 Supabase에 둡니다. */
 const AUDIT_DONE_LIST = 'audit_done'
 
-function DataAuditPanel() {
+export function DataAuditPanel({ menuSlug = null }) {
   const [open, setOpen] = useState(false)
   const [filter, setFilter] = useState('all')
   const { issues, loading, ready, entries } = useLedgerIndex()
@@ -867,7 +866,7 @@ function DataAuditPanel() {
     loadDismissed()
   }, [loadDismissed])
 
-  const reload = async () => {
+  const reload = useCallback(async () => {
     setReloading(true)
     try {
       await refreshLedgerIndex()
@@ -875,15 +874,43 @@ function DataAuditPanel() {
     } finally {
       setReloading(false)
     }
-  }
+  }, [loadDismissed])
+
+  /* 패널을 열 때마다 + 탭으로 돌아올 때마다 최신으로. 다시 검사 버튼 없이도 반영됩니다. */
+  useEffect(() => {
+    if (!open) return undefined
+    reload()
+    const onFocus = () => reload()
+    window.addEventListener('focus', onFocus)
+    return () => window.removeEventListener('focus', onFocus)
+  }, [open, reload])
 
   /* 확인완료한 건은 다시 띄우지 않습니다. 장부를 고쳐 원인이 사라져도 자동 제외됩니다. */
-  const dismissedIds = useMemo(() => new Set(dismissed.map((r) => String(r.text))), [dismissed])
-  const activeIssues = useMemo(() => issues.filter((i) => !dismissedIds.has(i.id)), [issues, dismissedIds])
+  /* 중복은 묶음 서명(날짜·거래처·절대금액)으로 저장해서, 메모를 고쳐도 다시 뜨지 않습니다. */
+  const dismissedTexts = useMemo(() => dismissed.map((r) => String(r.text)), [dismissed])
+  const activeIssues = useMemo(
+    () =>
+      issues.filter((issue) => {
+        const stable = stableKeyForIssue(issue)
+        for (const t of dismissedTexts) {
+          if (t === issue.id || t === stable) return false
+          // 예전 확인(구 dup-아이디 묶음)도 묶음 서명으로 이어받습니다
+          if (issue.code === 'duplicate' && t.startsWith('dup-')) {
+            const ids = t.slice(4).split('_').filter(Boolean)
+            for (const id of ids) {
+              const e = entries.find((x) => String(x.id) === id)
+              if (e && dupSigOfEntry(e) === dupSigOfIssue(issue)) return false
+            }
+          }
+        }
+        return true
+      }),
+    [issues, dismissedTexts, entries],
+  )
 
   const dismissIssue = async (issue) => {
     try {
-      await addChecklistItem(AUDIT_DONE_LIST, issue.id, null)
+      await addChecklistItem(AUDIT_DONE_LIST, stableKeyForIssue(issue), null)
       await loadDismissed()
     } catch {
       /* 무시 */
@@ -899,13 +926,22 @@ function DataAuditPanel() {
     }
   }
 
-  const summary = useMemo(() => summarizeAudit(activeIssues), [activeIssues])
+  /* 메뉴 화면에서는 그 메뉴의 지적만 보여줍니다 (표기 흔들림처럼归属 없는 건 제외) */
+  const scopedIssues = useMemo(() => {
+    if (!menuSlug) return activeIssues
+    return activeIssues.filter((i) => i.entryId && auditTargetFor(entries, i.entryId) === menuSlug)
+  }, [activeIssues, entries, menuSlug])
+
+  const summary = useMemo(() => summarizeAudit(scopedIssues), [scopedIssues])
   const shown = useMemo(() => {
-    const list = filter === 'all' ? activeIssues : activeIssues.filter((i) => i.code === filter)
+    const list = filter === 'all' ? scopedIssues : scopedIssues.filter((i) => i.code === filter)
     // 깨진 텍스트 → 중복 → 표기 → 부가세 → 입력누락 순으로 보여주고, 같은 종류는 금액 큰 순
     const rank = { broken: 0, duplicate: 1, variant: 2, vat: 3, field: 4 }
     return [...list].sort((a, b) => (rank[a.code] - rank[b.code]) || (b.amount - a.amount))
-  }, [activeIssues, filter])
+  }, [scopedIssues, filter])
+
+  /* 메뉴 화면에 해당 지적이 없으면 패널 자체를 숨깁니다 */
+  if (menuSlug && !scopedIssues.length) return null
 
   if (loading && !ready) {
     return (
@@ -1072,7 +1108,7 @@ function DataAuditPanel() {
                 <ul className="mt-1 flex flex-col divide-y divide-ink-100">
                   {dismissed.map((r) => (
                     <li key={r.id} className="flex items-center gap-2 py-1.5">
-                      <span className="min-w-0 flex-1 truncate text-[11px] text-ink-400">{String(r.text)}</span>
+                      <span className="min-w-0 flex-1 truncate text-[11px] text-ink-400">{dismissedLabel(String(r.text))}</span>
                       <button
                         type="button"
                         onClick={() => restoreIssue(r)}
@@ -1234,6 +1270,27 @@ function auditLink(target, issue) {
   if (ids.length) params.set('highlight', ids.join(','))
   if (issue.code) params.set('issue', issue.code)
   return `/${target}?${params.toString()}`
+}
+
+/* 중복 묶음 서명 (날짜·거래처·절대금액). 메모·분류를 고쳐도 유지됩니다. */
+function dupSigOfIssue(issue) {
+  return `${issue.date || ''}|${normalizeParty(issue.party || '')}|${Math.abs(Math.round(Number(issue.amount) || 0))}`
+}
+function dupSigOfEntry(e) {
+  return `${e.entry_date || ''}|${normalizeParty(e.counterparty || '')}|${Math.abs(Math.round(Number(e.total_amount) || 0))}`
+}
+function stableKeyForIssue(issue) {
+  return issue.code === 'duplicate' ? `dupkey:${dupSigOfIssue(issue)}` : issue.id
+}
+function dismissedLabel(text) {
+  const t = String(text || '')
+  if (t.startsWith('dupkey:')) {
+    const [date, , abs] = t.slice(7).split('|')
+    const n = Number(abs)
+    return `중복 ${date || ''}${Number.isFinite(n) && n ? ` · ${n.toLocaleString()}원` : ''}`
+  }
+  if (t.startsWith('dup-')) return '중복 (이전에 확인한 묶음)'
+  return t
 }
 
 function StaffHome({ period, loading, stats, current, projects, profiles, attachmentsByEntry }) {

@@ -13,6 +13,7 @@ import { CATEGORIES, ENTRY_META } from '../lib/constants'
 import { ISSUE_META } from '../lib/validate'
 import { downloadTextFile, parseAmount, parseCSV, toCSV } from '../lib/csv'
 import { formatKRW } from '../lib/format'
+import { DataAuditPanel } from './Dashboard'
 import {
   createEntries,
   deleteEntry,
@@ -56,6 +57,8 @@ export default function LedgerPage({ type, source = 'manual', title, description
   const [importOpen, setImportOpen] = useState(false)
 
   const isReport = source === 'expense_report'
+  /* 이 메뉴의 점검 지적만 보여줍니다 (매출→sales, 매입→purchases, 운영비→expenses, 지출결의→expense-reports) */
+  const menuSlug = source === 'expense_report' ? 'expense-reports' : type === 'sale' ? 'sales' : type === 'purchase' ? 'purchases' : 'expenses'
 
   useEffect(() => {
     const t = window.setTimeout(() => setDebounced(search), 300)
@@ -400,6 +403,8 @@ export default function LedgerPage({ type, source = 'manual', title, description
           </div>
         </div>
       ) : null}
+
+      {isAdmin ? <DataAuditPanel menuSlug={menuSlug} /> : null}
 
       <div className="card overflow-hidden">
         {highlightIds.length ? (
