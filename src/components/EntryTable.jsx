@@ -552,15 +552,16 @@ export default function EntryTable({
                             {slipEntryIds?.has?.(entry.id) ? ' ✓' : ''}
                           </button>
                         ) : null}
-                        {(!canEditEntry || canEditEntry(entry)) && onEdit ? (
+                        {(!canEditEntry || canEditEntry(entry)) && onEdit && !(editable && dirty) ? (
                           <button
                             type="button"
                             onClick={() => onEdit?.(entry)}
-                            className="rounded-md p-1.5 text-ink-500 transition hover:bg-brand-50 hover:text-brand-700"
-                            aria-label="수정"
-                            title="수정"
+                            className="flex items-center gap-1 rounded-md px-1.5 py-1.5 text-xs font-semibold text-ink-500 transition hover:bg-brand-50 hover:text-brand-700"
+                            aria-label="상세 보기·수정"
+                            title="상세 보기·수정"
                           >
-                            <Icon name="pencil" size={15} />
+                            <Icon name="pencil" size={13} />
+                            상세
                           </button>
                         ) : null}
                         {editable && dirty ? (
@@ -582,15 +583,6 @@ export default function EntryTable({
                               취소
                             </button>
                           </>
-                        ) : (!canEditEntry || canEditEntry(entry)) && onEdit ? (
-                          <button
-                            type="button"
-                            onClick={() => onEdit?.(entry)}
-                            className="rounded-md px-1.5 py-1.5 text-xs font-semibold text-ink-500 transition hover:bg-brand-50 hover:text-brand-700"
-                            title="상세 보기·수정"
-                          >
-                            상세
-                          </button>
                         ) : null}
                         {onDelete && (!canDeleteEntry || canDeleteEntry(entry)) ? (
                           <button

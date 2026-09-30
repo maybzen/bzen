@@ -243,12 +243,32 @@ export default function LedgerPage({ type, source = 'manual', title, description
 
   /* 운영비 목록 직접 수정 (법인카드식 단계 저장). 일괄편집은 관리자만 */
   const bulkEdit = isAdmin
+  /* 데이터 점검 표시 자동해제: 고친 행은 의심 목록에서 뺍니다 */
+  const clearHighlightFor = (id) => {
+    if (!id) return
+    setHighlightIds((prev) => {
+      const next = prev.filter((x) => String(x) !== String(id))
+      if (next.length !== prev.length) {
+        const params = new URLSearchParams(searchParams)
+        if (next.length) {
+          params.set('highlight', next.join(','))
+        } else {
+          params.delete('highlight')
+          params.delete('issue')
+          setHighlightIssue('')
+        }
+        setSearchParams(params, { replace: true })
+      }
+      return next
+    })
+  }
   /* 본인 행(등록자·지출자)만 수정·삭제 가능. 관리자는 전부 */
   const ownRow = (e) =>
     isAdmin || e?.created_by === user?.id || e?.requester_id === user?.id
   const handleSaveRow = async (entry, payload) => {
     const saved = await updateEntry(entry.id, payload)
     setEntries((rows) => rows.map((r) => (r.id === entry.id ? { ...r, ...saved } : r)))
+    clearHighlightFor(entry.id)
     return saved
   }
   const handleDeleteMany = async () => {
@@ -502,7 +522,10 @@ export default function LedgerPage({ type, source = 'manual', title, description
           setFormOpen(false)
           setEditing(null)
         }}
-        onSaved={() => setReloadKey((k) => k + 1)}
+        onSaved={() => {
+          if (editing?.id) clearHighlightFor(editing.id)
+          setReloadKey((k) => k + 1)
+        }}
         entryType={type}
         source={source}
         initial={editing}
