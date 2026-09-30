@@ -48,7 +48,8 @@ function periodLabel(e) {
   return s
 }
 
-/* 새해 자동 부여: 연차 15일~ (기준표 우선)·동계 10일·전원 보건 12일 */
+/* 새해 자동 부여: 연차 15일~ (기준표 우선)·동계 10일·전원 보건 12일.
+   재직자만, 올해 입사자는 연차 비례(월 1일·최대 11일). 동시 부여 방지를 위해 연 1회만. */
 async function autoGrantYear(all, profileRows, userId, grantedRef) {
   const y = Number(todayKST().slice(0, 4))
   if (grantedRef.current[y]) return 0
@@ -56,12 +57,28 @@ async function autoGrantYear(all, profileRows, userId, grantedRef) {
   const marker = `${y}-01-01`
   const has = (all || []).some((e) => e.entry_date === marker && /부여/.test(e.memo || ''))
   if (has) return 0
+  const byName = new Map((profileRows || []).map((p) => [String(p.full_name || '').trim(), p]))
   const names = [
-    ...new Set([...SHEET_ORDER, ...(profileRows || []).map((p) => p.full_name).filter(Boolean)]),
+    ...new Set([
+      ...SHEET_ORDER.filter((n) => {
+        const p = byName.get(n)
+        return !p || p.active !== false
+      }),
+      ...(profileRows || [])
+        .filter((p) => p.active !== false && String(p.full_name || '').trim())
+        .map((p) => String(p.full_name).trim()),
+    ]),
   ]
   const payloads = []
   for (const person of names) {
-    const annual = Number(GRANT_DEFAULTS[person]?.연차 || 15)
+    const prof = byName.get(person)
+    let annual = Number(GRANT_DEFAULTS[person]?.연차 || 15)
+    // 올해 입사자: 입사 익월부터 월 1일씩 (최대 11일)
+    const hireY = Number(String(prof?.hire_date || '').slice(0, 4))
+    const hireM = Number(String(prof?.hire_date || '').slice(5, 7))
+    if (hireY === y && hireM >= 1 && hireM <= 12) {
+      annual = Math.min(11, Math.max(0, 12 - hireM))
+    }
     payloads.push({ entry_date: marker, person, leave_type: '연차', direction: '발생', days: annual, memo: `${y}년 자동부여`, status: '승인' })
     payloads.push({ entry_date: marker, person, leave_type: '동계휴가', direction: '발생', days: 10, memo: `${y}년 자동부여`, status: '승인' })
     payloads.push({ entry_date: marker, person, leave_type: '보건휴가', direction: '발생', days: 12, memo: `${y}년 자동부여`, status: '승인' })
@@ -117,6 +134,15 @@ export default function Leaves() {
   const [busy, setBusy] = useState(false)
   const grantedRef = useRef({})
 
+  /* 직원은 처음에 본인만 봅니다 (잔여 확인용. 필터에서 바꿀 수 있음) */
+  const ownName = useMemo(
+    () => (profiles || []).find((p) => p.id === user?.id)?.full_name || '',
+    [profiles, user?.id],
+  )
+  useEffect(() => {
+    if (!isAdmin && ownName && !personFilter) setPersonFilter(ownName)
+  }, [isAdmin, ownName, personFilter])
+
   useEffect(() => {
     let mounted = true
     setLoading(true)
@@ -166,9 +192,13 @@ export default function Leaves() {
       const t = e.leave_type || '미분류'
       if (!r.types[t]) r.types[t] = { accrued: 0, used: 0 }
       const d = Number(e.days || 0)
+      // 취소는 없던 일로: 발생에서 차감합니다 (사용에 더하면 잔여가 깎여요)
       if (e.direction === '발생') {
         r.types[t].accrued += d
         r.accrued += d
+      } else if (e.direction === '취소') {
+        r.types[t].accrued -= d
+        r.accrued -= d
       } else {
         r.types[t].used += d
         r.used += d
@@ -508,6 +538,7 @@ function PersonModal({ person, onClose, onRegister, rows, profiles, isAdmin, bus
       const t = e.leave_type || '미분류'
       if (!map[t]) map[t] = { accrued: 0, used: 0 }
       if (e.direction === '발생') map[t].accrued += Number(e.days || 0)
+      else if (e.direction === '취소') map[t].accrued -= Number(e.days || 0)
       else map[t].used += Number(e.days || 0)
     }
     return map
@@ -536,16 +567,16 @@ function PersonModal({ person, onClose, onRegister, rows, profiles, isAdmin, bus
     >
       {!person ? null : (
         <div className="flex flex-col gap-5">
-          {/* 인사정보 */}
+          {/* 인사정보: 직원에게는 본인 외 연락처·생년월일·입사일 숨김 */}
           <section>
             <h3 className="mb-2 text-xs font-bold text-ink-500">인사정보</h3>
             <dl className="grid grid-cols-2 gap-2 sm:grid-cols-3">
               <InfoBox label="이름" value={person} />
               <InfoBox label="부서" value={profile?.department || '—'} />
-              <InfoBox label="연락처" value={profile?.phone || '—'} />
+              <InfoBox label="연락처" value={isAdmin ? profile?.phone || '—' : '—'} />
               <InfoBox label="권한" value={ROLE_LABEL[profile?.role] || '—'} />
-              <InfoBox label="생년월일" value={profile?.birth_date || '—'} />
-              <InfoBox label="입사일" value={profile?.hire_date || '—'} />
+              <InfoBox label="생년월일" value={isAdmin ? profile?.birth_date || '—' : '—'} />
+              <InfoBox label="입사일" value={isAdmin ? profile?.hire_date || '—' : '—'} />
             </dl>
           </section>
 

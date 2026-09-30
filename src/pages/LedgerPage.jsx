@@ -154,14 +154,20 @@ export default function LedgerPage({ type, source = 'manual', title, description
     if (code) return '기타'
     return '미지정'
   }
-  /** 직원 화면: 사원 작성분만 공유합니다 (관리자 작성분 제외) */
+  /** 직원 화면: 사원 작성분만 공유합니다 (관리자 작성분 제외).
+      단, 다른 사원의 인건비(급여) 행은 본인에게도 숨깁니다. */
   const staffIds = useMemo(() => staffIdsFromProfiles(profiles), [profiles])
   const effectiveFilter = personFilter
   /** 퇴사자분은 기타에 합산됩니다 */
-  const base = useMemo(
-    () => (isAdmin ? entries : entries.filter((e) => isStaffVisible(e, staffIds))),
-    [isAdmin, entries, staffIds],
-  )
+  const base = useMemo(() => {
+    if (isAdmin) return entries
+    return entries.filter((e) => {
+      if (!isStaffVisible(e, staffIds)) return false
+      // 남의 급여는 가립니다 (본인 급여·본인 결의는 보임)
+      if (e.category === '인건비' && e.created_by !== user?.id && e.requester_id !== user?.id) return false
+      return true
+    })
+  }, [isAdmin, entries, staffIds, user?.id])
 
   /** 지출결의: 직원 필터 + 직원별 소계 (날짜가 아니라 사람 기준으로 봅니다) */
   const [oldestFirst, setOldestFirst] = useState(false)
@@ -628,12 +634,16 @@ function HighlightBanner({ count, issue, onClear }) {
 function ImportModal({ open, onClose, onDone, type, source, projects, userId, onDownloadTemplate }) {
   const toast = useToast()
   const [rows, setRows] = useState([])
+  const [rejected, setRejected] = useState([])
+  const [warns, setWarns] = useState([])
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     if (!open) {
       setRows([])
+      setRejected([])
+      setWarns([])
       setError('')
     }
   }, [open])
@@ -655,20 +665,41 @@ function ImportModal({ open, onClose, onDone, type, source, projects, userId, on
       if (iDate < 0 || iSupply < 0) throw new Error('"일자" 와 "공급가액" 열이 필요합니다.')
 
       const projectByName = new Map(projects.map((p) => [p.name.trim(), p.id]))
+      const allowedCats = CATEGORIES[type] || []
       const out = []
+      const bad = []
+      const warnList = []
       for (const raw of parsed.slice(1)) {
         const date = String(raw[iDate] || '').trim().replace(/[./]/g, '-')
-        if (!date) continue
+        const supplyRaw = parseAmount(raw[iSupply])
+        const vatRaw = indexOf('부가세') >= 0 ? parseAmount(raw[indexOf('부가세')]) : 0
+        const rowNo = out.length + bad.length + 2
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+          bad.push(`${rowNo}행: 일자 형식 오류 (“${String(raw[iDate] || '').trim()}” → YYYY-MM-DD)`)
+          continue
+        }
+        if (supplyRaw + vatRaw <= 0) {
+          bad.push(`${rowNo}행: 금액이 0원 (공급가액+부가세 확인)`)
+          continue
+        }
         const projectLabel = indexOf('프로젝트') >= 0 ? String(raw[indexOf('프로젝트')] || '').trim() : ''
+        const category = indexOf('항목') >= 0 ? String(raw[indexOf('항목')] || '').trim() : ''
+        if (category && allowedCats.length && !allowedCats.includes(category)) {
+          warnList.push(`${rowNo}행: 비목 “${category}” (이 장부 목록에 없음 — 그대로 등록됨)`)
+        }
+        if (projectLabel && !projectByName.get(projectLabel)) {
+          warnList.push(`${rowNo}행: 프로젝트 “${projectLabel}” 미매칭 (미지정으로 등록됨)`)
+        }
+        const counterparty = indexOf('거래처') >= 0 ? String(raw[indexOf('거래처')] || '').trim() : ''
         out.push({
           entry_type: type,
           source,
           entry_date: date,
-          counterparty: indexOf('거래처') >= 0 ? String(raw[indexOf('거래처')] || '').trim() : '',
-          category: indexOf('항목') >= 0 ? String(raw[indexOf('항목')] || '').trim() : '',
+          counterparty,
+          category,
           description: indexOf('적요') >= 0 ? String(raw[indexOf('적요')] || '').trim() : '',
-          supply_amount: parseAmount(raw[iSupply]),
-          vat_amount: indexOf('부가세') >= 0 ? parseAmount(raw[indexOf('부가세')]) : 0,
+          supply_amount: supplyRaw,
+          vat_amount: vatRaw,
           payment_method: indexOf('결제수단') >= 0 ? String(raw[indexOf('결제수단')] || '').trim() : '',
           memo: indexOf('비고') >= 0 ? String(raw[indexOf('비고')] || '').trim() : '',
           project_id: projectByName.get(projectLabel) || null,
@@ -679,8 +710,12 @@ function ImportModal({ open, onClose, onDone, type, source, projects, userId, on
 
       if (!out.length) throw new Error('등록할 행을 찾지 못했습니다.')
       setRows(out)
+      setRejected(bad)
+      setWarns(warnList)
     } catch (err) {
       setRows([])
+      setRejected([])
+      setWarns([])
       setError(err.message)
     }
   }
@@ -737,6 +772,29 @@ function ImportModal({ open, onClose, onDone, type, source, projects, userId, on
         </div>
 
         {error ? <p className="text-sm font-medium text-loss">{error}</p> : null}
+
+        {rejected.length ? (
+          <div className="rounded-lg border border-rose-200 bg-rose-50/60 p-3 text-xs leading-relaxed text-rose-800">
+            <p className="font-bold">빠진 행 {rejected.length}건 (등록 안 됨)</p>
+            <ul className="mt-1 flex max-h-28 flex-col gap-0.5 overflow-auto">
+              {rejected.map((r, i) => (
+                <li key={i}>· {r}</li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+
+        {warns.length ? (
+          <div className="rounded-lg border border-amber-200 bg-amber-50/60 p-3 text-xs leading-relaxed text-amber-800">
+            <p className="font-bold">확인하고 등록되는 행 {warns.length}건</p>
+            <ul className="mt-1 flex max-h-28 flex-col gap-0.5 overflow-auto">
+              {warns.slice(0, 20).map((r, i) => (
+                <li key={i}>· {r}</li>
+              ))}
+              {warns.length > 20 ? <li>외 {warns.length - 20}건</li> : null}
+            </ul>
+          </div>
+        ) : null}
 
         {rows.length ? (
           <div className="overflow-hidden rounded-lg border border-ink-200">

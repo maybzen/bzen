@@ -65,6 +65,37 @@ export const CATEGORIES = {
 
 export const PAYMENT_METHODS = ['계좌이체', '카드', '현금', '세금계산서', '기타']
 
+/**
+ * 영업매출이 아닌 sale 항목 (순매출액·영업이익에서 제외, 영업외수익으로 분리).
+ * 7/10 퇴직연금 DC 환입(925,279) 같은 건이 여기에 해당합니다.
+ */
+export const NON_OPERATING_SALE_CATEGORIES = ['지원금·보조금', '환급금·환입']
+
+/**
+ * 비목이 잘못 달려 있어도 자동으로 잡아내기 위한 영업외수익 키워드.
+ * 세금계산서 없는 은행 입금(예금이자·퇴직연금 환입·지원금 등)이
+ * 용역매출/기타매출로 들어와도 집계에서 제외됩니다.
+ */
+export const NON_OPERATING_INCOME_PATTERNS = [
+  /예금.*이자|결산이자|이자수익/,
+  /퇴직연금.*환입|환입/,
+  /지원금|보조금/,
+  /잡이익|영업외|배당금/,
+  /환급|환불/,
+]
+
+export function isNonOperatingSale(entryOrCategory) {
+  const cat =
+    typeof entryOrCategory === 'string'
+      ? entryOrCategory
+      : entryOrCategory?.category
+  if (NON_OPERATING_SALE_CATEGORIES.includes(String(cat || '').trim())) return true
+  // 자동 판정: 비목이 영업매출로 달려 있어도 내용상 영업외면 제외
+  if (typeof entryOrCategory === 'string') return false
+  const text = `${entryOrCategory?.counterparty || ''} ${entryOrCategory?.description || ''} ${entryOrCategory?.memo || ''}`
+  return NON_OPERATING_INCOME_PATTERNS.some((re) => re.test(text))
+}
+
 /** 항목 선택 시 보여주는 한 줄 설명 */
 export const CATEGORY_HINTS = {
   // 매출
@@ -131,7 +162,9 @@ const SUGGEST_RULES = [
     type: 'opex',
     category: '복리후생비',
   },
-  { re: /KT|SKT|LGU|SK텔레콤|통신|전화|인터넷|와이파이|휴대폰|포켓와이파이/, type: 'opex', category: '통신비' },
+  { re: /SKT|LGU|SK텔레콤|통신|전화|인터넷|와이파이|휴대폰|포켓와이파이/, type: 'opex', category: '통신비' },
+  /* KTX(기차)는 여비교통비 규칙이 먼저 잡으므로, 여기서 KT는 KTX를 제외합니다 */
+  { re: /KT(?!X)/, type: 'opex', category: '통신비' },
   { re: /우체국|우편/, type: 'opex', category: '통신비' },
   {
     re: /구독|Notion|노션|Adobe|어도비|Microsoft|MS365|AWS|클라우드|GPT|ChatGPT|Claude|클로드|Anthropic|OpenAI|오픈AI|유튜브|넷플릭스|멜론|스포티파이|한글과컴퓨터|안랩|백신/,
@@ -158,9 +191,9 @@ const SUGGEST_RULES = [
   { re: /택배|운송|수송|화물|퀵서비스|용달/, type: 'purchase', category: '운반비' },
   { re: /노트북|컴퓨터|모니터|키보드|마우스|장비|가전|냉장고/, type: 'purchase', category: '장비구입' },
   { re: /상품|도매/, type: 'purchase', category: '상품매입' },
-  { re: /대관/, type: 'purchase', category: '임차료' },
-  { re: /월관리|월 관리/, type: 'purchase', category: '임차료' },
-  { re: /보관|창고/, type: 'purchase', category: '임차료' },
+  { re: /대관/, type: 'opex', category: '임차료' },
+  { re: /월관리|월 관리/, type: 'opex', category: '임차료' },
+  { re: /보관|창고/, type: 'opex', category: '임차료' },
   { re: /생수/, type: 'opex', category: '복리후생비' },
   { re: /회계사|세무사|회계법인/, type: 'opex', category: '지급수수료' },
   { re: /홈페이지|웹사이트/, type: 'purchase', category: '외주용역비' },
@@ -286,6 +319,17 @@ export const PERIOD_PRESETS = [
   { key: 'thisMonth', label: '이번 달' },
   { key: 'lastMonth', label: '지난 달' },
   { key: 'quarter', label: '이번 분기' },
+  { key: 'lastQuarter', label: '지난 분기' },
+  { key: 'quarterPick', label: '분기 선택' },
   { key: 'thisYear', label: '올해' },
   { key: 'lastYear', label: '작년' },
 ]
+
+/** 분기 시작월(0-based) → 해당 분기 범위 */
+export function quarterRange(year, quarter) {
+  const q = Math.min(4, Math.max(1, Number(quarter) || 1))
+  const s = `${year}-${String((q - 1) * 3 + 1).padStart(2, '0')}-01`
+  const lastDay = new Date(Number(year), (q - 1) * 3 + 3, 0).getDate()
+  const e = `${year}-${String((q - 1) * 3 + 3).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
+  return { from: s, to: e, label: `${year}년 ${q}분기` }
+}

@@ -6,12 +6,17 @@ import { useToast } from './Toast'
 import { ENTRY_META, PARTNER_GROUPS, suggestPartnerGroup } from '../lib/constants'
 import {
   PARTNER_DOC_TYPES,
+  contactsTableExists,
   createPartner,
+  createPartnerContact,
+  deletePartnerContact,
   deletePartnerDoc,
   getPartnerDocUrl,
   linkExternalDoc,
+  listPartnerContacts,
   listPartnerDocs,
   updatePartner,
+  updatePartnerContact,
   uploadPartnerDoc,
 } from '../lib/api'
 import { formatDateHuman, formatDateTime, formatFileSize, formatKRW, normalizeVendorName } from '../lib/format'
@@ -176,6 +181,14 @@ export default function PartnerFormModal({ open, onClose, onSaved, initial, read
   const [docsLoading, setDocsLoading] = useState(false)
   const [uploading, setUploading] = useState('')
   const [linkQuery, setLinkQuery] = useState('')
+  /* 추가 담당자 목록 (migration_partner_contacts.sql 실행 후 사용) */
+  const [contacts, setContacts] = useState([])
+  const [contactsSupported, setContactsSupported] = useState(null)
+  const [contactsLoading, setContactsLoading] = useState(false)
+  const [newContact, setNewContact] = useState({ name: '', job_title: '', email: '', phone: '' })
+  const [editingContactId, setEditingContactId] = useState(null)
+  const [editingContact, setEditingContact] = useState({ name: '', job_title: '', email: '', phone: '' })
+  const [contactBusy, setContactBusy] = useState(false)
 
   const linkProjectsShown = useMemo(() => {
     const q = linkQuery.trim().toLowerCase()
@@ -210,6 +223,8 @@ export default function PartnerFormModal({ open, onClose, onSaved, initial, read
   useEffect(() => {
     if (!open || !partnerId) {
       setDocs([])
+      setContacts([])
+      setContactsSupported(null)
       return
     }
     setDocsLoading(true)
@@ -217,6 +232,18 @@ export default function PartnerFormModal({ open, onClose, onSaved, initial, read
       .then((rows) => setDocs(rows || []))
       .catch((e) => toast.error(e.message))
       .finally(() => setDocsLoading(false))
+    setContactsLoading(true)
+    contactsTableExists()
+      .then(({ available }) => {
+        setContactsSupported(available)
+        if (!available) {
+          setContacts([])
+          return
+        }
+        return listPartnerContacts([partnerId]).then((rows) => setContacts(rows || []))
+      })
+      .catch(() => setContactsSupported(false))
+      .finally(() => setContactsLoading(false))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, partnerId])
 
@@ -325,6 +352,73 @@ export default function PartnerFormModal({ open, onClose, onSaved, initial, read
   }
 
   const docsByType = (type) => docs.filter((d) => (d.doc_type || 'other') === type)
+
+  /* 추가 담당자 추가·수정·삭제 */
+  const handleAddContact = async () => {
+    if (!newContact.name.trim() || !partnerId) return
+    setContactBusy(true)
+    try {
+      const saved = await createPartnerContact(
+        partnerId,
+        {
+          name: newContact.name.trim(),
+          job_title: newContact.job_title.trim(),
+          email: newContact.email.trim(),
+          phone: newContact.phone.trim(),
+          sort_order: contacts.length,
+        },
+        userId,
+      )
+      setContacts((c) => [...c, saved])
+      setNewContact({ name: '', job_title: '', email: '', phone: '' })
+      toast.success('담당자가 추가되었습니다.')
+    } catch (err) {
+      toast.error(err.message)
+    } finally {
+      setContactBusy(false)
+    }
+  }
+
+  const startEditContact = (c) => {
+    setEditingContactId(c.id)
+    setEditingContact({
+      name: c.name || '',
+      job_title: c.job_title || '',
+      email: c.email || '',
+      phone: c.phone || '',
+    })
+  }
+
+  const handleSaveContact = async () => {
+    if (!editingContactId || !editingContact.name.trim()) return
+    setContactBusy(true)
+    try {
+      const saved = await updatePartnerContact(editingContactId, {
+        name: editingContact.name.trim(),
+        job_title: editingContact.job_title.trim(),
+        email: editingContact.email.trim(),
+        phone: editingContact.phone.trim(),
+      })
+      setContacts((list) => list.map((c) => (c.id === editingContactId ? { ...c, ...saved } : c)))
+      setEditingContactId(null)
+      toast.success('담당자가 수정되었습니다.')
+    } catch (err) {
+      toast.error(err.message)
+    } finally {
+      setContactBusy(false)
+    }
+  }
+
+  const handleDeleteContact = async (c) => {
+    if (!window.confirm(`"${c.name}" 담당자를 삭제하시겠습니까?`)) return
+    try {
+      await deletePartnerContact(c.id)
+      setContacts((list) => list.filter((x) => x.id !== c.id))
+      toast.success('담당자가 삭제되었습니다.')
+    } catch (err) {
+      toast.error(err.message)
+    }
+  }
 
   /* 거래내역: 법인격 표기 차이 무시하고 이름으로 매칭합니다.
      직원은 사원 작성분만 봅니다 (관리자 작성분 제외). */
@@ -471,7 +565,7 @@ export default function PartnerFormModal({ open, onClose, onSaved, initial, read
           </select>
         </Field>
 
-        <Field label="담당자">
+        <Field label="담당자" hint="대표 담당자 1명. 다른 직원들은 아래 목록에 추가하세요.">
           <input
             className="input"
             value={form.contact_person}
@@ -531,6 +625,154 @@ export default function PartnerFormModal({ open, onClose, onSaved, initial, read
           />
         </Field>
       </form>
+
+      {/* 추가 담당자 목록 */}
+      {partnerId ? (
+        <div className="mt-5 border-t border-ink-100 pt-4">
+          <h3 className="text-sm font-bold text-ink-900">담당자 목록</h3>
+          <p className="mt-0.5 text-xs text-ink-500">
+            대표 담당자 외에 이 거래처의 다른 직원들을 추가합니다.
+          </p>
+          {contactsSupported === false ? (
+            <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2.5 text-xs leading-relaxed text-amber-800">
+              담당자 목록을 쓰려면 Supabase SQL Editor에서
+              <span className="font-bold"> supabase/migration_partner_contacts.sql</span>을 1회 실행해 주세요.
+            </p>
+          ) : contactsLoading ? (
+            <p className="py-3 text-center text-xs text-ink-400">담당자를 불러오는 중…</p>
+          ) : (
+            <div className="mt-2.5 flex flex-col gap-2">
+              {contacts.map((c) =>
+                editingContactId === c.id ? (
+                  <div key={c.id} className="grid grid-cols-2 gap-2 rounded-lg border border-brand-200 bg-brand-50/40 p-2.5">
+                    <input
+                      className="input py-1.5 text-xs"
+                      value={editingContact.name}
+                      onChange={(e) => setEditingContact((f) => ({ ...f, name: e.target.value }))}
+                      placeholder="이름"
+                      disabled={readOnly}
+                    />
+                    <input
+                      className="input py-1.5 text-xs"
+                      value={editingContact.job_title}
+                      onChange={(e) => setEditingContact((f) => ({ ...f, job_title: e.target.value }))}
+                      placeholder="직함"
+                      disabled={readOnly}
+                    />
+                    <input
+                      className="input py-1.5 text-xs"
+                      value={editingContact.email}
+                      onChange={(e) => setEditingContact((f) => ({ ...f, email: e.target.value }))}
+                      placeholder="이메일"
+                      disabled={readOnly}
+                    />
+                    <input
+                      className="input py-1.5 text-xs"
+                      value={editingContact.phone}
+                      onChange={(e) => setEditingContact((f) => ({ ...f, phone: e.target.value }))}
+                      placeholder="전화번호"
+                      disabled={readOnly}
+                    />
+                    {!readOnly ? (
+                      <div className="col-span-2 flex justify-end gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setEditingContactId(null)}
+                          disabled={contactBusy}
+                          className="text-xs font-semibold text-ink-500 hover:underline"
+                        >
+                          취소
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleSaveContact}
+                          disabled={contactBusy}
+                          className="text-xs font-bold text-brand-700 hover:underline disabled:opacity-50"
+                        >
+                          {contactBusy ? '저장 중…' : '저장'}
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : (
+                  <div key={c.id} className="flex items-center gap-2.5 rounded-lg border border-ink-200 px-3 py-2">
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-bold text-ink-800">
+                        {c.name}
+                        {c.job_title ? <span className="ml-1.5 font-medium text-ink-500">{c.job_title}</span> : null}
+                      </span>
+                      <span className="mt-0.5 block truncate text-xs text-ink-500">
+                        {[c.email, c.phone].filter(Boolean).join(' · ') || '연락처 없음'}
+                      </span>
+                    </span>
+                    {!readOnly ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => startEditContact(c)}
+                          className="shrink-0 text-xs font-semibold text-ink-500 hover:underline"
+                        >
+                          수정
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteContact(c)}
+                          className="shrink-0 text-xs font-semibold text-loss hover:underline"
+                        >
+                          삭제
+                        </button>
+                      </>
+                    ) : null}
+                  </div>
+                ),
+              )}
+              {!readOnly && contactsSupported ? (
+                <div className="grid grid-cols-2 gap-2 rounded-lg border border-dashed border-ink-300 p-2.5">
+                  <input
+                    className="input py-1.5 text-xs"
+                    value={newContact.name}
+                    onChange={(e) => setNewContact((f) => ({ ...f, name: e.target.value }))}
+                    placeholder="이름 (필수)"
+                  />
+                  <input
+                    className="input py-1.5 text-xs"
+                    value={newContact.job_title}
+                    onChange={(e) => setNewContact((f) => ({ ...f, job_title: e.target.value }))}
+                    placeholder="직함"
+                  />
+                  <input
+                    className="input py-1.5 text-xs"
+                    value={newContact.email}
+                    onChange={(e) => setNewContact((f) => ({ ...f, email: e.target.value }))}
+                    placeholder="이메일"
+                  />
+                  <input
+                    className="input py-1.5 text-xs"
+                    value={newContact.phone}
+                    onChange={(e) => setNewContact((f) => ({ ...f, phone: e.target.value }))}
+                    placeholder="전화번호"
+                  />
+                  <div className="col-span-2 flex justify-end">
+                    <button
+                      type="button"
+                      onClick={handleAddContact}
+                      disabled={contactBusy || !newContact.name.trim()}
+                      className="text-xs font-bold text-brand-700 hover:underline disabled:opacity-50"
+                    >
+                      {contactBusy ? '추가 중…' : '+ 담당자 추가'}
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+              {!readOnly && !contacts.length && contactsSupported ? (
+                <p className="rounded-lg bg-ink-50 px-3 py-2 text-xs text-ink-400">
+                  등록된 추가 담당자가 없습니다.
+                </p>
+              ) : null}
+            </div>
+          )}
+        </div>
+      ) : null}
 
       {/* 거래내역 */}
       {ledgerInfo ? (

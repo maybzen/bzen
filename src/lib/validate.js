@@ -7,7 +7,7 @@
  *
  * 저장 자체를 막지 않는다. 판단은 사람이 한다.
  */
-import { CATEGORIES } from './constants'
+import { CATEGORIES, NON_OPERATING_SALE_CATEGORIES, isNonOperatingSale } from './constants'
 
 /* ------------------------------------------------------------------ */
 /* 점검 항목 코드                                                      */
@@ -170,10 +170,15 @@ export function findBrokenText(entry) {
 export function checkVat(supply, vat) {
   const s = Math.round(Number(supply) || 0)
   const v = Math.round(Number(vat) || 0)
-  if (s <= 0 || v <= 0) return null
+  if (s <= 0) return null
+  // 세액 0원: 면세·영세일 수 있으니 저장 시점에 별도 확인합니다
+  if (v === 0) {
+    return { expected: Math.round(s * 0.1), actual: 0, diff: -Math.round(s * 0.1), rate: 0, zero: true }
+  }
+  if (v < 0) return null
   const expected = s * 0.1
-  // 1원 반올림 + 0.5% 오차까지는 인정
-  const tolerance = Math.max(100, expected * 0.005)
+  // 반올림 1원 + 0.1% 오차까지만 인정합니다
+  const tolerance = Math.max(1, expected * 0.001)
   const diff = Math.abs(v - Math.round(expected))
   if (diff <= tolerance) return null
   return {
@@ -306,12 +311,21 @@ export function checkEntryDraft(draft, { entries = [], excludeId = '', aliasRoot
   /* 4) 부가세 10% */
   const vatIssue = checkVat(supply, vat)
   if (vatIssue) {
-    out.push({
-      code: ISSUE.VAT,
-      level: 'warn',
-      title: `공급가액 ${supply.toLocaleString()}원 기준 세액은 ${vatIssue.expected.toLocaleString()}원입니다`,
-      detail: `지금 ${vatIssue.actual.toLocaleString()}원(${vatIssue.rate.toFixed(1)}%) — ${Math.abs(vatIssue.diff).toLocaleString()}원 차이. 면세·부분공제·역산 확인해 주세요.`,
-    })
+    if (vatIssue.zero) {
+      out.push({
+        code: ISSUE.VAT,
+        level: 'info',
+        title: '세액이 0원입니다 — 면세·영세·지원금이면 그대로 저장하세요',
+        detail: `공급가액 ${supply.toLocaleString()}원 · 과세 거래인데 세액이 빠진 거면 수정해 주세요.`,
+      })
+    } else {
+      out.push({
+        code: ISSUE.VAT,
+        level: 'warn',
+        title: `공급가액 ${supply.toLocaleString()}원 기준 세액은 ${vatIssue.expected.toLocaleString()}원입니다`,
+        detail: `지금 ${vatIssue.actual.toLocaleString()}원(${vatIssue.rate.toFixed(1)}%) — ${Math.abs(vatIssue.diff).toLocaleString()}원 차이. 면세·부분공제·역산 확인해 주세요.`,
+      })
+    }
   }
 
   /* 5) 비목·프로젝트 */
@@ -322,6 +336,19 @@ export function checkEntryDraft(draft, { entries = [], excludeId = '', aliasRoot
       title: f.text,
       field: f.field,
     })
+  }
+
+  /* 6) 영업외수익 자동 감지: 내용은 영업외인데 비목이 영업매출로 달린 경우 */
+  if (type === 'sale' && !NON_OPERATING_SALE_CATEGORIES.includes(String(draft.category || '').trim())) {
+    if (isNonOperatingSale(draft)) {
+      out.push({
+        code: ISSUE.FIELD,
+        level: 'warn',
+        title: '영업외수익으로 보입니다 — 비목을 확인해 주세요',
+        detail: '이자·환입·지원금·환급 성격은 “환급금·환입” 또는 “지원금·보조금”으로 달아야 영업이익에 섞이지 않습니다.',
+        field: 'category',
+      })
+    }
   }
 
   return out
@@ -447,10 +474,10 @@ export function auditEntries(entries, opts = {}) {
     })
   }
 
-  /* 부가세 10% 아님 */
+  /* 부가세 10% 아님 (세액 0원 면세 건은 저장 시점에 확인하므로 여기선 제외) */
   for (const e of entries) {
     const v = checkVat(e.supply_amount, e.vat_amount)
-    if (!v) continue
+    if (!v || v.zero) continue
     issues.push({
       id: `vat-${e.id}`,
       code: ISSUE.VAT,
@@ -461,6 +488,24 @@ export function auditEntries(entries, opts = {}) {
       amount: Math.round(Number(e.total_amount) || 0),
       title: `세액 ${v.rate.toFixed(1)}%`,
       detail: `공급가액 ${Math.round(Number(e.supply_amount) || 0).toLocaleString()}원 · 세액 ${v.actual.toLocaleString()}원 (10%면 ${v.expected.toLocaleString()}원) · ${e.category || ''}`,
+    })
+  }
+
+  /* 영업외수익 자동 감지 — 내용은 영업외인데 비목이 영업매출로 달린 경우 */
+  for (const e of entries) {
+    if (e?.entry_type !== 'sale') continue
+    if (NON_OPERATING_SALE_CATEGORIES.includes(String(e.category || '').trim())) continue
+    if (!isNonOperatingSale(e)) continue
+    issues.push({
+      id: `nonop-${e.id}`,
+      code: ISSUE.FIELD,
+      level: 'warn',
+      entryId: e.id,
+      date: e.entry_date,
+      party: e.counterparty,
+      amount: Math.round(Number(e.total_amount) || 0),
+      title: '영업외수익 의심 — 비목 확인 필요',
+      detail: `${Math.round(Number(e.total_amount) || 0).toLocaleString()}원 · “${e.category || ''}”로 들어 있지만 이자·환입·지원금·환급 성격으로 보입니다. 집계에서는 영업이익에서 제외됩니다.`,
     })
   }
 

@@ -601,6 +601,7 @@ export default function Dashboard() {
               tone="sale"
               icon="trending-up"
               delta={hasCompare ? changeRate(stats.revenue, prevStats.revenue) : undefined}
+              hint={stats.nonOp?.count ? `영업외 ${formatKRW(stats.nonOp.supply)}원 제외` : undefined}
               to={isAdmin || perms.includes('sales') ? '/sales' : undefined}
             />
             <StatCard
@@ -654,7 +655,7 @@ export default function Dashboard() {
               label="전체 거래 건수"
               value={stats.count}
               unit="건"
-              desc={`매출 ${stats.sale.count} · 매입 ${stats.purchase.count} · 운영비 ${stats.opex.count}`}
+              desc={`매출 ${stats.sale.count} · 매입 ${stats.purchase.count} · 운영비 ${stats.opex.count}${stats.nonOp?.count ? ` · 영업외 ${stats.nonOp.count}` : ''}`}
               tone="ink"
               to={isAdmin || perms.includes('reports') ? '/reports' : undefined}
             />

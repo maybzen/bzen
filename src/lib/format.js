@@ -162,6 +162,13 @@ export function getPeriodRange(preset) {
       const e = new Date(now.getFullYear(), q * 3 + 3, 0)
       return { from: toISODate(s), to: toISODate(e), label: `${now.getFullYear()}년 ${q + 1}분기` }
     }
+    case 'lastQuarter': {
+      const d = addMonths(now, -3)
+      const q = Math.floor(d.getMonth() / 3)
+      const s = new Date(d.getFullYear(), q * 3, 1)
+      const e = new Date(d.getFullYear(), q * 3 + 3, 0)
+      return { from: toISODate(s), to: toISODate(e), label: `${d.getFullYear()}년 ${q + 1}분기` }
+    }
     case 'thisYear':
       return {
         from: `${now.getFullYear()}-01-01`,

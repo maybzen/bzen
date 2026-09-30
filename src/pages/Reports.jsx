@@ -6,7 +6,7 @@ import { MonthlyTrendChart, ProfitBar } from '../components/Charts'
 import { useToast } from '../components/Toast'
 import { LoadingBlock, PageHeader, StatCard } from '../components/ui'
 import { useAuth } from '../auth/AuthContext'
-import { ENTRY_META } from '../lib/constants'
+import { ENTRY_META, NON_OPERATING_SALE_CATEGORIES, isNonOperatingSale } from '../lib/constants'
 import { downloadTextFile, toCSV } from '../lib/csv'
 import {
   changeRate,
@@ -97,17 +97,20 @@ export default function Reports() {
     const internal = projects.filter((p) => p.is_hidden)
     if (!internal.length) return null
     const ids = new Set(internal.map((p) => p.id))
-    let sale = 0, purchase = 0, opex = 0, count = 0
+    let sale = 0, purchase = 0, opex = 0, nonOp = 0, count = 0
     for (const e of entries) {
       if (!e.project_id || !ids.has(e.project_id)) continue
       count += 1
       const supply = Number(e.supply_amount || 0)
-      if (e.entry_type === 'sale') sale += supply
+      if (e.entry_type === 'sale') {
+        if (isNonOperatingSale(e)) nonOp += supply
+        else sale += supply
+      }
       else if (e.entry_type === 'purchase') purchase += supply
       else if (e.entry_type === 'opex') opex += supply
     }
     if (!count) return null
-    return { sale, purchase, opex, profit: sale - purchase - opex, count }
+    return { sale, purchase, opex, nonOp, profit: sale - purchase - opex, count }
   }, [entries, projects])
 
   const opexByCategory = useMemo(() => groupByCategory(entries, 'opex'), [entries])
@@ -116,7 +119,7 @@ export default function Reports() {
   const maxCategory = Math.max(1, ...opexByCategory.map((c) => c.supply))
   const maxPurchase = Math.max(1, ...purchaseByCategory.map((c) => c.supply))
 
-  /** 분기별 부가세 (매출세액 − 매입세액). 음수면 환급 */
+  /** 분기별 부가세 (매출세액 − 매입세액). 음수면 환급. 영업외(지원금·환입)는 과세 제외 */
   const quarterlyVat = useMemo(() => {
     const map = new Map()
     for (const e of entries || []) {
@@ -125,7 +128,10 @@ export default function Reports() {
       const q = `${mk.slice(0, 4)}Q${Math.floor((Number(mk.slice(5, 7)) - 1) / 3) + 1}`
       if (!map.has(q)) map.set(q, { q, saleVat: 0, buyVat: 0 })
       const r = map.get(q)
-      if (e.entry_type === 'sale') r.saleVat += Number(e.vat_amount || 0)
+      if (e.entry_type === 'sale') {
+        if (NON_OPERATING_SALE_CATEGORIES.includes(String(e.category || '').trim())) continue
+        r.saleVat += Number(e.vat_amount || 0)
+      }
       else r.buyVat += Number(e.vat_amount || 0)
     }
     return [...map.values()]
@@ -140,7 +146,8 @@ export default function Reports() {
     lines.push(['매출', stats.sale.supply, stats.sale.vat, stats.sale.total])
     lines.push(['매입', stats.purchase.supply, stats.purchase.vat, stats.purchase.total])
     lines.push(['운영비', stats.opex.supply, stats.opex.vat, stats.opex.total])
-    lines.push(['영업이익', stats.profit, '', ''])
+    if (stats.nonOp?.count) lines.push(['영업외수익(지원금·환입)', stats.nonOp.supply, stats.nonOp.vat, stats.nonOp.total])
+    lines.push(['영업이익(영업매출만)', stats.profit, '', ''])
     lines.push(['이익률(%)', stats.margin === null ? '' : stats.margin.toFixed(1), '', ''])
     lines.push([])
     lines.push(['■ 월별 손익'])
@@ -273,6 +280,17 @@ export default function Reports() {
                   <ReportRow label="매출" tone="sale" data={stats.sale} base={stats.revenue} />
                   <ReportRow label="매입" tone="purchase" data={stats.purchase} base={stats.revenue} />
                   <ReportRow label="운영비" tone="opex" data={stats.opex} base={stats.revenue} />
+                  {stats.nonOp?.count ? (
+                    <tr className="bg-ink-50/50">
+                      <td className="td">
+                        <span className="chip bg-ink-100 text-ink-600">영업외수익</span>
+                      </td>
+                      <td className="td num font-semibold">{formatKRW(stats.nonOp.supply)}</td>
+                      <td className="td num text-ink-500">{formatKRW(stats.nonOp.vat)}</td>
+                      <td className="td num">{formatKRW(stats.nonOp.total)}</td>
+                      <td className="td num text-ink-400">영업이익 제외</td>
+                    </tr>
+                  ) : null}
                 </tbody>
                 <tfoot className="border-t-2 border-ink-200 bg-ink-50/80">
                   <tr>

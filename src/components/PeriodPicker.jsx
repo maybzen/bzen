@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
-import { PERIOD_PRESETS } from '../lib/constants'
+import { PERIOD_PRESETS, quarterRange } from '../lib/constants'
 import { getPeriodRange } from '../lib/format'
 import { SegmentedControl } from './ui'
 
 const ALL_KEY = 'custom'
+const QUARTER_PICK_KEY = 'quarterPick'
 
 const PRESET_KEYS = [...PERIOD_PRESETS.map((p) => p.key), ALL_KEY]
 
@@ -61,6 +62,15 @@ export function usePeriod(initial = 'thisMonth', storageKey = null) {
     if (preset === ALL_KEY) {
       return { from: custom.from, to: custom.to, label: `${custom.from} ~ ${custom.to}` }
     }
+    if (preset === QUARTER_PICK_KEY) {
+      // 분기 선택: custom.from/to 에 해당 분기 범위를 그대로 씁니다
+      if (/^\d{4}-\d{2}-01$/.test(custom.from || '') && isISODate(custom.to)) {
+        const y = Number(custom.from.slice(0, 4))
+        const q = Math.floor((Number(custom.from.slice(5, 7)) - 1) / 3) + 1
+        return { from: custom.from, to: custom.to, label: `${y}년 ${q}분기` }
+      }
+      return getPeriodRange('quarter')
+    }
     return getPeriodRange(preset) || { from: '', to: '', label: '전체 기간' }
   }, [preset, custom])
 
@@ -72,9 +82,51 @@ export default function PeriodPicker({ period, className = '' }) {
 
   const options = useMemo(() => [...PERIOD_PRESETS, { key: ALL_KEY, label: '직접 선택' }], [])
 
+  /* 분기 선택용 연도·분기 (custom.from 기준, 없으면 이번 분기) */
+  const now = new Date()
+  const picked = useMemo(() => {
+    if (/^\d{4}-\d{2}-01$/.test(custom.from || '')) {
+      return {
+        year: Number(custom.from.slice(0, 4)),
+        quarter: Math.floor((Number(custom.from.slice(5, 7)) - 1) / 3) + 1,
+      }
+    }
+    return { year: now.getFullYear(), quarter: Math.floor(now.getMonth() / 3) + 1 }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [preset === QUARTER_PICK_KEY ? custom.from : null])
+  const yearOptions = useMemo(() => {
+    const y = new Date().getFullYear()
+    return [y - 3, y - 2, y - 1, y, y + 1].map((v) => ({ key: String(v), label: `${v}년` }))
+  }, [])
+  const quarterOptions = useMemo(
+    () => [1, 2, 3, 4].map((q) => ({ key: String(q), label: `${q}분기` })),
+    [],
+  )
+  const pickQuarter = (year, quarter) => {
+    const r = quarterRange(year, quarter)
+    setCustom({ from: r.from, to: r.to })
+  }
+
   return (
     <div className={`flex flex-wrap items-center gap-2 ${className}`}>
       <SegmentedControl size="sm" options={options} value={preset} onChange={setPreset} />
+
+      {preset === QUARTER_PICK_KEY ? (
+        <div className="flex items-center gap-1.5">
+          <SegmentedControl
+            size="sm"
+            options={yearOptions}
+            value={String(picked.year)}
+            onChange={(v) => pickQuarter(Number(v), picked.quarter)}
+          />
+          <SegmentedControl
+            size="sm"
+            options={quarterOptions}
+            value={String(picked.quarter)}
+            onChange={(v) => pickQuarter(picked.year, Number(v))}
+          />
+        </div>
+      ) : null}
 
       {preset === ALL_KEY ? (
         <div className="flex items-center gap-1.5">

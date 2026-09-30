@@ -135,6 +135,11 @@ export default function Projects() {
   const [busy, setBusy] = useState(false)
   const [reloadKey, setReloadKey] = useState(0)
   const [statusFilter, setStatusFilter] = useState('active')
+  /* 카드가 많으면 끊어서 보여줍니다 (렌더 부담 완화) */
+  const [visibleCount, setVisibleCount] = useState(24)
+  useEffect(() => {
+    setVisibleCount(24)
+  }, [statusFilter, yearFilter, sortOrder])
   /* 금액 표시 기준: 공급가액(세무 기준) ↔ 부가세포함(계약서 대조용) */
   const [vatMode, setVatMode] = useState(() => {
     try {
@@ -152,7 +157,7 @@ export default function Projects() {
     }
   }, [vatMode])
   const incl = vatMode === 'incl'
-  /* 표시용 금액: 부가세포함 모드에서는 세액 합산 (계약서 대조용. 이익에는 부가세 예수금 포함) */
+  /* 표시용 금액: 부가세포함 모드에서는 세액 합산 (계약서 대조용 금액 표시만. 이익은 항상 공급가액 기준) */
   const dispSale = (r) => r.sale + (incl ? Number(r.saleVat || 0) : 0)
   const dispPurchase = (r) => r.purchase + (incl ? Number(r.purchaseVat || 0) : 0)
   const dispOpex = (r) => r.opex + (incl ? Number(r.opexVat || 0) : 0)
@@ -255,7 +260,7 @@ export default function Projects() {
     const filtered = statusFilter === 'all' ? all : all.filter((r) => r.project.status === statusFilter)
     // 기간순: 시작일 기준. 시작일 없으면 등록순. 시작일 없는 건 뒤로 보냅니다.
     const dir = sortOrder === 'asc' ? 1 : -1
-    return filtered.sort((a, b) => {
+    return [...filtered].sort((a, b) => {
       const da = a.project.start_date || ''
       const db = b.project.start_date || ''
       if (!da && !db) {
@@ -286,12 +291,14 @@ export default function Projects() {
   }, [links, partners])
 
   const totals = useMemo(() => summarize(entries), [entries])
+  /* 표시용 금액(부가세포함 모드에서는 계약서 대조용으로 세액 합산).
+     이익·이익률은 세무 기준(공급가액)으로 항상 고정합니다. */
   const totalsSale = totals.revenue + (incl ? totals.sale.vat : 0)
   const totalsCogs = totals.cogs + (incl ? totals.purchase.vat : 0)
   const totalsExpense = totals.expense + (incl ? totals.opex.vat : 0)
-  const totalsGross = totalsSale - totalsCogs
-  const totalsProfit = totalsGross - totalsExpense
-  const basisHint = incl ? '부가세포함 기준 (계약서 대조용)' : '공급가액 기준'
+  const totalsGross = totals.gross
+  const totalsProfit = totals.profit
+  const basisHint = incl ? '금액은 부가세포함(계약서 대조용) · 이익은 공급가액 기준' : '공급가액 기준'
   const maxSale = Math.max(1, ...rows.map((r) => Math.max(dispSale(r), Math.abs(r.profit))))
 
   /* 대행계약 (대표만): 계약만 하고 행사는 업체가 진행, 수수료 수취 */
@@ -377,13 +384,13 @@ export default function Projects() {
         {isAdmin ? (
           <>
             <StatCard label="순매출액" value={totalsSale} tone="sale" icon="trending-up" hint={basisHint} />
-            <StatCard label="매출총이익" value={totalsGross} tone={totalsGross >= 0 ? 'profit' : 'loss'} icon="chart" hint={totalsSale ? `매출총이익률 ${formatPercent(totalsGross / totalsSale)}` : '매출 없음'} />
+            <StatCard label="매출총이익" value={totalsGross} tone={totalsGross >= 0 ? 'profit' : 'loss'} icon="chart" hint={totals.revenue ? `매출총이익률 ${formatPercent(totals.grossMargin)}` : '매출 없음'} />
             <StatCard
               label="영업이익"
               value={totalsProfit}
               tone={totalsProfit >= 0 ? 'profit' : 'loss'}
               icon="coins"
-              hint={totalsSale ? `영업이익률 ${formatPercent(totalsProfit / totalsSale)}` : '매출 없음'}
+              hint={totals.revenue ? `영업이익률 ${formatPercent(totals.operatingMargin)}` : '매출 없음'}
             />
           </>
         ) : (
@@ -471,7 +478,7 @@ export default function Projects() {
             </div>
             <span className="text-[11px] text-ink-400">
               연도는 프로젝트를 고르는 기준입니다. 카드 금액은 항상 전체 기간 기준입니다.
-              {incl ? ' · 부가세포함 보기는 계약서 대조용이며 이익에 부가세 예수금이 포함됩니다.' : ''}
+              {incl ? ' · 부가세포함 보기는 계약서 대조용 금액 표시이며, 이익·이익률은 항상 공급가액 기준입니다.' : ''}
             </span>
           </div>
         </div>
@@ -604,7 +611,7 @@ export default function Projects() {
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 2xl:grid-cols-3">
-          {rows.map((row) => {
+          {rows.slice(0, visibleCount).map((row) => {
             const project = row.project
             const status = PROJECT_STATUS[project.status] || PROJECT_STATUS.active
             /* 계약 대비 매출은 같은 기준으로 비교해야 맞습니다 */
@@ -681,7 +688,7 @@ export default function Projects() {
                 </div>
 
                 <PnlGrid
-                  pnl={buildPnl(dispSale(row), dispPurchase(row), dispOpex(row))}
+                  pnl={buildPnl(row.sale, row.purchase, row.opex)}
                   achieved={achieved}
                   contractAmount={incl ? csplit.total : csplit.supply}
                   showContract
@@ -701,6 +708,7 @@ export default function Projects() {
                   <span className="flex items-center gap-2">
                     <button
                       type="button"
+                      aria-expanded={Boolean(expandedVendors[project.id])}
                       onClick={() =>
                         setExpandedVendors((m) => ({ ...m, [project.id]: !m[project.id] }))
                       }
@@ -752,6 +760,17 @@ export default function Projects() {
               </article>
             )
           })}
+          {rows.length > visibleCount ? (
+            <div className="col-span-full flex justify-center">
+              <button
+                type="button"
+                onClick={() => setVisibleCount((c) => c + 24)}
+                className="btn-ghost"
+              >
+                더 보기 ({rows.length - visibleCount}개 남음)
+              </button>
+            </div>
+          ) : null}
         </div>
       )}
 

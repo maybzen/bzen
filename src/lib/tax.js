@@ -1,4 +1,5 @@
 import { todayISO } from './format'
+import { isNonOperatingSale } from './constants'
 
 const STORE_KEY = 'bzen.tax.v1'
 
@@ -200,8 +201,10 @@ function vatOf(entries, from, to) {
     const d = String(e.entry_date || '')
     if (d < from || d > to) continue
     count += 1
-    if (e.entry_type === 'sale') saleVat += Number(e.vat_amount || 0)
-    else buyVat += Number(e.vat_amount || 0)
+    // 영업외수익(지원금·환입, 과세 제외)은 매출세액에서 뺍니다
+    if (e.entry_type === 'sale') {
+      if (!isNonOperatingSale(e)) saleVat += Number(e.vat_amount || 0)
+    } else buyVat += Number(e.vat_amount || 0)
   }
   return { saleVat, buyVat, net: saleVat - buyVat, count }
 }

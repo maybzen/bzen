@@ -101,6 +101,8 @@ export default function Members() {
         phone: String(patch.phone ?? p.phone ?? '').trim(),
         hire_date: patch.hire_date ?? p.hire_date ?? null,
         birth_date: patch.birth_date ?? p.birth_date ?? null,
+        // 챙기는 생일 컬럼이 있을 때만 보냅니다 (마이그레이션 전 400 방지)
+        ...(celebrateSupported ? { birth_celebrate: patch.birth_celebrate ?? p.birth_celebrate ?? null } : {}),
         active: patch.active ?? p.active ?? true,
       })
       setProfiles((rows) => rows.map((r) => (r.id === p.id ? { ...r, ...saved } : r)))
@@ -134,13 +136,20 @@ export default function Members() {
 
   const dirtyCount = Object.keys(rowEdits).length
   const activeList = useMemo(() => profiles.filter((p) => p.active !== false), [profiles])
+  /* 챙기는 생일 컬럼(migration_profiles_celebrate.sql) 적용 전에는 숨깁니다 */
+  const celebrateSupported = useMemo(() => profiles.some((p) => p && 'birth_celebrate' in p), [profiles])
+  const celebrateOf = (p) => {
+    const cd = String(p?.birth_celebrate || '').slice(5)
+    if (/^\d{2}-\d{2}$/.test(cd)) return cd
+    return String(p?.birth_date || '').slice(5)
+  }
 
-  /* 이번 달 생일자 */
+  /* 이번 달 생일자 (챙기는 날 기준) */
   const thisMonthBirth = useMemo(() => {
     const mm = String(new Date().getMonth() + 1).padStart(2, '0')
     return profiles
-      .filter((p) => p.active !== false && String(p.birth_date || '').slice(5, 7) === mm)
-      .sort((a, b) => String(a.birth_date || '').localeCompare(String(b.birth_date || '')))
+      .filter((p) => p.active !== false && celebrateOf(p).slice(0, 2) === mm)
+      .sort((a, b) => String(celebrateOf(a) || '').localeCompare(String(celebrateOf(b) || '')))
   }, [profiles])
 
   const totalPay = useMemo(() => Object.values(payByName).reduce((a, v) => a + v, 0), [payByName])
@@ -242,6 +251,20 @@ export default function Members() {
                               onChange={(e) => setCell(p.id, { birth_date: e.target.value || null })}
                             />
                             <span className="mt-0.5 block text-[11px] text-ink-500">{birthday(work.birth_date)}</span>
+                            {celebrateSupported ? (
+                              <>
+                                <input
+                                  type="date"
+                                  className="input mt-1 w-auto py-1 text-xs"
+                                  value={work.birth_celebrate || ''}
+                                  onChange={(e) => setCell(p.id, { birth_celebrate: e.target.value || null })}
+                                  title="실제로 챙기는 날 (비우면 실생일)"
+                                />
+                                <span className="mt-0.5 block text-[11px] text-ink-500">
+                                  {work.birth_celebrate ? `챙기는 날 ${String(work.birth_celebrate).slice(5)}` : '챙기는 날: 실생일과 같음'}
+                                </span>
+                              </>
+                            ) : null}
                           </td>
                           <td className="td num">{formatKRW(payByName[String(p.full_name || '').trim()] || 0)}</td>
                           <td className="td">

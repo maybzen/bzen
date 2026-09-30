@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { Children, cloneElement, isValidElement, useEffect, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { Link } from 'react-router-dom'
 import Icon from './Icon'
@@ -13,7 +13,7 @@ const SIZES = {
   xl: 'sm:max-w-6xl',
 }
 
-export function Modal({ open, onClose, title, subtitle, children, footer, size = 'md' }) {
+export function Modal({ open, onClose, title, subtitle, children, footer, size = 'md', overflowVisible = false }) {
   useEffect(() => {
     if (!open) return undefined
     const onKey = (e) => {
@@ -36,7 +36,7 @@ export function Modal({ open, onClose, title, subtitle, children, footer, size =
       <div
         role="dialog"
         aria-modal="true"
-        className={`relative z-10 flex max-h-[92vh] w-full flex-col animate-fade-in overflow-hidden rounded-t-2xl bg-white shadow-pop sm:rounded-2xl ${SIZES[size] || SIZES.md}`}
+        className={`relative z-10 flex max-h-[92vh] w-full flex-col animate-fade-in ${overflowVisible ? 'overflow-visible' : 'overflow-hidden'} rounded-t-2xl bg-white shadow-pop sm:rounded-2xl ${SIZES[size] || SIZES.md}`}
       >
         <header className="flex items-start justify-between gap-4 border-b border-ink-200 px-5 py-4">
           <div className="min-w-0">
@@ -82,7 +82,7 @@ export function ConfirmDialog({
   return (
     <Modal
       open={open}
-      onClose={onClose}
+      onClose={busy ? undefined : onClose}
       title={title}
       size="sm"
       footer={
@@ -175,15 +175,24 @@ export function PageHeader({ title, description, children }) {
 /* ------------------------------- Field -------------------------------- */
 
 export function Field({ label, hint, required, error, children, className = '' }) {
+  const inputId = useMemo(() => `field-${Math.random().toString(36).slice(2, 9)}`, [])
+  // 자식이 하나일 때만 label과 연결합니다 (여러 개면 그대로 둡니다)
+  let linked = children
+  try {
+    const child = Children.only(children)
+    if (isValidElement(child)) linked = cloneElement(child, { id: child.props.id || inputId })
+  } catch {
+    /* 여러 자식: 연결 생략 */
+  }
   return (
     <div className={className}>
       {label ? (
-        <label className="label">
+        <label className="label" htmlFor={inputId}>
           {label}
           {required ? <span className="ml-0.5 text-loss">*</span> : null}
         </label>
       ) : null}
-      {children}
+      {linked}
       {error ? (
         <p className="mt-1 text-xs font-medium text-loss">{error}</p>
       ) : hint ? (
@@ -294,6 +303,7 @@ export function StatCard({
         type="button"
         onClick={onClick}
         title="클릭해서 목록 필터"
+        aria-pressed={Boolean(selected)}
         className={`card block w-full p-4 text-left transition hover:shadow-pop sm:p-5 ${
           selected ? 'ring-2 ring-brand-500' : ''
         }`}
@@ -345,6 +355,7 @@ export function InlineAlert({ tone = 'info', children, className = '' }) {
   const icons = { info: 'info', warn: 'alert', error: 'alert', success: 'check' }
   return (
     <div
+      role={tone === 'error' ? 'alert' : undefined}
       className={`flex items-start gap-2.5 rounded-lg border px-3.5 py-3 text-xs leading-relaxed ${styles[tone]} ${className}`}
     >
       <Icon name={icons[tone]} size={15} className="mt-0.5 shrink-0" />

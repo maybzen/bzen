@@ -110,6 +110,8 @@ export default function PartnerPicker({ value, onChange, placeholder, autoFocus 
         value={value || ''}
         placeholder={placeholder}
         autoFocus={autoFocus}
+        aria-expanded={open}
+        aria-autocomplete="list"
         onChange={(e) => {
           onChange?.(e)
           setOpen(true)
@@ -131,8 +133,11 @@ export default function PartnerPicker({ value, onChange, placeholder, autoFocus 
             <li key={p.id}>
               <button
                 type="button"
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => pick(p.name)}
+                onPointerDown={(e) => {
+                  // 모바일 터치에서도 blur보다 먼저 선택되도록 pointerdown에서 확정
+                  e.preventDefault()
+                  pick(p.name)
+                }}
                 className="flex w-full items-center justify-between gap-2 px-3 py-1.5 text-left text-xs transition hover:bg-brand-50"
               >
                 <span className="truncate font-semibold text-ink-800">{p.name}</span>
@@ -146,8 +151,8 @@ export default function PartnerPicker({ value, onChange, placeholder, autoFocus 
             <li className="border-t border-ink-100 px-3 py-1.5">
               <button
                 type="button"
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => {
+                onPointerDown={(e) => {
+                  e.preventDefault()
                   setRegName(String(value).trim())
                   setRegContact('')
                   setRegPhone('')

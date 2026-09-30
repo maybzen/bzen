@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import Icon from '../components/Icon'
 import { useToast } from '../components/Toast'
+import { useAuth } from '../auth/AuthContext'
 import { EmptyState, LoadingBlock, PageHeader, SegmentedControl, StatCard } from '../components/ui'
 import { formatKRW, monthEnd, monthKey, monthKeyOf, monthLabel, todayISO, toISODate } from '../lib/format'
 import { INTERNAL_PROJECT_NAME } from '../lib/constants'
@@ -38,6 +39,7 @@ const OVERHEAD_RULES = [
 export default function FixedCosts() {
   const toast = useToast()
   const navigate = useNavigate()
+  const { isAdmin } = useAuth()
   const [loading, setLoading] = useState(true)
   const [entries, setEntries] = useState([])
   const [internalId, setInternalId] = useState('')
@@ -270,15 +272,21 @@ export default function FixedCosts() {
                         <span className="text-xs font-semibold text-ink-400">원</span>
                       </p>
                       <div className="mt-1.5 flex flex-col gap-0.5">
-                        {r.persons.slice(0, 3).map(([name, v]) => (
-                          <p key={name} className="flex items-baseline justify-between gap-2 text-[11px] text-ink-500">
-                            <span className="truncate">{name}</span>
-                            <span className="shrink-0 font-num tabular-nums">{formatKRW(v)}</span>
-                          </p>
-                        ))}
-                        {r.persons.length > 3 ? (
-                          <p className="text-[11px] text-ink-400">외 {r.persons.length - 3}명</p>
-                        ) : null}
+                        {isAdmin ? (
+                          <>
+                            {r.persons.slice(0, 3).map(([name, v]) => (
+                              <p key={name} className="flex items-baseline justify-between gap-2 text-[11px] text-ink-500">
+                                <span className="truncate">{name}</span>
+                                <span className="shrink-0 font-num tabular-nums">{formatKRW(v)}</span>
+                              </p>
+                            ))}
+                            {r.persons.length > 3 ? (
+                              <p className="text-[11px] text-ink-400">외 {r.persons.length - 3}명</p>
+                            ) : null}
+                          </>
+                        ) : (
+                          <p className="text-[11px] text-ink-400">개인별 내역은 관리자만 볼 수 있습니다</p>
+                        )}
                       </div>
                     </Link>
                   )

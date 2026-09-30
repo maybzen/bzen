@@ -291,7 +291,32 @@ export default function ScheduleModal({
             </p>
             {selectedItems.length ? (
               <ul className="flex flex-col divide-y divide-ink-100">
-                {selectedItems.map((it) => (
+                {selectedItems.map((it) => {
+                  // 직접 등록 일정은 여기서 바로 수정·옮기기·삭제할 수 있습니다
+                  if (it.kind === 'manual' && it.refId) {
+                    const row = (manuals || []).find((r) => r.id === it.refId)
+                    if (row) {
+                      return (
+                        <ManualRow
+                          key={it.key}
+                          row={row}
+                          editing={editingId === row.id}
+                          editText={editText}
+                          editDate={editDate}
+                          dateSupported={dateSupported}
+                          busy={busy}
+                          onEditText={setEditText}
+                          onEditDate={setEditDate}
+                          onStartEdit={() => startEdit(row)}
+                          onSaveEdit={saveEdit}
+                          onCancelEdit={() => setEditingId(null)}
+                          onToggle={() => toggleDone(row)}
+                          onDelete={() => setConfirmId(row.id)}
+                        />
+                      )
+                    }
+                  }
+                  return (
                   <li key={it.key} className="flex items-start gap-2 py-1.5 text-xs">
                     {it.kind === 'auto' ? (
                       <button
@@ -321,7 +346,8 @@ export default function ScheduleModal({
                       <span className="block text-[10px] text-ink-400">{it.source}</span>
                     </span>
                   </li>
-                ))}
+                  )
+                })}
               </ul>
             ) : (
               <p className="py-1 text-xs text-ink-400">잡힌 일정이 없습니다.</p>

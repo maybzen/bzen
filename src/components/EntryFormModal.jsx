@@ -78,6 +78,8 @@ export default function EntryFormModal({
 
   const [form, setForm] = useState(() => emptyForm(entryType, source, userId))
   const [totalDraft, setTotalDraft] = useState('')
+  /* 면세·영세: 합계를 그대로 공급가액으로 넣고 세액은 0으로 둡니다 (DB 컬럼이 아니라 화면 상태) */
+  const [taxFree, setTaxFree] = useState(false)
   const [files, setFiles] = useState([])
   const [existing, setExisting] = useState([])
   const [removed, setRemoved] = useState([])
@@ -106,6 +108,7 @@ export default function EntryFormModal({
     setFiles([])
     setRemoved([])
     setTotalDraft('')
+    setTaxFree(false)
     if (initial) {
       setForm({
         doc_no: initial.doc_no || '',
@@ -496,11 +499,31 @@ export default function EntryFormModal({
                   setTotalDraft(raw)
                   const t = toNumber(raw)
                   if (!t) return
+                  if (taxFree) {
+                    setFields((f) => ({ ...f, supply_amount: String(t), vat_amount: '0' }))
+                    return
+                  }
                   const supply = Math.round(t / 1.1)
                   setFields((f) => ({ ...f, supply_amount: String(supply), vat_amount: String(t - supply) }))
                 }}
                 onBlur={() => setTotalDraft('')}
               />
+              <p className="mt-1 text-xs tabular-nums text-ink-500">
+                공급 {formatKRW(supply)}원 + 세액 {formatKRW(vat)}원 = 합계 {formatKRW(total)}원
+              </p>
+              <label className="mt-1.5 flex cursor-pointer items-center gap-1.5 text-xs font-semibold text-ink-600">
+                <input
+                  type="checkbox"
+                  className="h-3.5 w-3.5 accent-brand-600"
+                  checked={taxFree}
+                  onChange={(e) => {
+                    const on = e.target.checked
+                    setTaxFree(on)
+                    if (on) setFields((f) => ({ ...f, vat_amount: '0' }))
+                  }}
+                />
+                면세·영세 (세액 없이 합계 그대로)
+              </label>
             </Field>
           </div>
         </div>

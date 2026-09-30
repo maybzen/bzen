@@ -103,6 +103,7 @@ export default function ProjectFormModal({ open, onClose, onSaved, initial, prof
       title={initial?.id ? '프로젝트 수정' : '프로젝트 등록'}
       subtitle="프로젝트를 지정한 매출·비용은 손익으로 자동 집계됩니다."
       size="lg"
+      overflowVisible
       footer={
         <>
           <button type="button" className="btn-ghost" onClick={onClose} disabled={saving}>

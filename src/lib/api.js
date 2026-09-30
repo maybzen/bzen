@@ -536,6 +536,55 @@ export async function deletePartner(partner) {
 }
 
 /* ------------------------------------------------------------------ */
+/* 거래처 담당자 여러 명 (migration_partner_contacts.sql 필요)             */
+/* ------------------------------------------------------------------ */
+
+/** partner_contacts 테이블이 있는지 확인 (마이그레이션 여부 감지용) */
+export async function contactsTableExists() {
+  const { error } = await supabase.from('partner_contacts').select('id').limit(1)
+  if (!error) return { available: true, missing: false }
+  const message = String(error.message || '')
+  const missing = error.code === '42P01' || /could not find the table|schema cache/i.test(message)
+  return { available: false, missing }
+}
+
+export function listPartnerContacts(partnerIds) {
+  if (!partnerIds || !partnerIds.length) return Promise.resolve([])
+  return unwrap(
+    supabase
+      .from('partner_contacts')
+      .select('*')
+      .in('partner_id', partnerIds)
+      .order('sort_order', { ascending: true })
+      .order('created_at', { ascending: true }),
+  )
+}
+
+function sanitizeContact(payload) {
+  const clean = { ...payload }
+  delete clean.id
+  delete clean.created_at
+  delete clean.updated_at
+  return clean
+}
+
+export function createPartnerContact(partnerId, payload, userId) {
+  const row = sanitizeContact({ ...payload, partner_id: partnerId, created_by: userId })
+  return unwrap(supabase.from('partner_contacts').insert(row).select().single())
+}
+
+export function updatePartnerContact(id, patch) {
+  const row = sanitizeContact(patch)
+  delete row.partner_id
+  row.updated_at = new Date().toISOString()
+  return unwrap(supabase.from('partner_contacts').update(row).eq('id', id).select().single())
+}
+
+export function deletePartnerContact(id) {
+  return unwrap(supabase.from('partner_contacts').delete().eq('id', id))
+}
+
+/* ------------------------------------------------------------------ */
 /* 거래처 서류 (사업자등록증 · 통장사본)                                  */
 /* ------------------------------------------------------------------ */
 

@@ -129,6 +129,16 @@ export function buildSchedule({ loans = [], manuals = [], fromISO, toISO, overri
   }
 
   // 구성원 생일·입사기념일 (매년 반복, 재직자만)
+  // birth_celebrate(챙기는 날)가 있으면 그 날짜로 챙기고, 다르면 실생일을 적어둡니다.
+  // (마이그레이션 전에는 컬럼이 없어 birth_date로만 동작합니다)
+  // 2/29는 평년에 2/28로 옮깁니다 (없는 날짜 생성 방지).
+  const clampDay = (y, md) => {
+    if (md === '02-29') {
+      const leap = (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0
+      if (!leap) return '02-28'
+    }
+    return md
+  }
   const fromY = Number(String(fromISO).slice(0, 4))
   const toY = Number(String(toISO).slice(0, 4))
   for (const p of profiles || []) {
@@ -136,11 +146,21 @@ export function buildSchedule({ loans = [], manuals = [], fromISO, toISO, overri
     const name = String(p.full_name || '').trim()
     if (!name) continue
     const bd = String(p.birth_date || '').slice(5)
-    if (/^\d{2}-\d{2}$/.test(bd)) {
+    const cd = String(p.birth_celebrate || '').slice(5)
+    const useCd = /^\d{2}-\d{2}$/.test(cd)
+    const md = useCd ? cd : bd
+    if (/^\d{2}-\d{2}$/.test(md)) {
       for (let y = fromY; y <= toY; y += 1) {
-        const date = `${y}-${bd}`
+        const date = `${y}-${clampDay(y, md)}`
         if (date >= fromISO && date <= toISO) {
-          out.push({ key: `bday-${p.id}-${date}`, date, title: `${name} 생일`, detail: '', kind: 'auto', source: '구성원' })
+          out.push({
+            key: `bday-${p.id}-${date}`,
+            date,
+            title: useCd && cd !== bd ? `${name} 생일 챙기기` : `${name} 생일`,
+            detail: useCd && cd !== bd && /^\d{2}-\d{2}$/.test(bd) ? `실생일 ${bd}` : '',
+            kind: 'auto',
+            source: '구성원',
+          })
         }
       }
     }
@@ -149,7 +169,7 @@ export function buildSchedule({ loans = [], manuals = [], fromISO, toISO, overri
     if (hm) {
       const hireY = Number(hm[1])
       for (let y = Math.max(hireY + 1, fromY); y <= toY; y += 1) {
-        const date = `${y}-${hm[2]}-${hm[3]}`
+        const date = `${y}-${clampDay(y, `${hm[2]}-${hm[3]}`)}`
         if (date >= fromISO && date <= toISO) {
           out.push({ key: `hire-${p.id}-${date}`, date, title: `${name} 입사 ${y - hireY}주년`, detail: '', kind: 'auto', source: '구성원' })
         }

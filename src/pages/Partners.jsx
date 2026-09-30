@@ -169,14 +169,21 @@ export default function Partners() {
         if (s.memo && !keepMemo.join('\n').includes(s.memo)) keepMemo.push(s.memo)
         keepMemo.push(`구 표기: ${s.name}`)
       }
+      /* 예전 이름 행을 한 번에 가져온 뒤 출처별로 나눠 처리합니다 (N+1 방지) */
+      const { data: allOlds, error: oerr } = await supabase
+        .from('entries')
+        .select('id,memo,counterparty')
+        .in('counterparty', sources.map((x) => x.name))
+      if (oerr) throw oerr
+      const oldsByName = new Map()
+      for (const row of allOlds || []) {
+        const key = row.counterparty
+        if (!oldsByName.has(key)) oldsByName.set(key, [])
+        oldsByName.get(key).push(row)
+      }
       for (const s of sources) {
         /* 예전 이름이 메모에 이미 있으면 넣지 않고, 거래처명만 통일합니다 (내역은 지우지 않음) */
-        const { data: olds, error: oerr } = await supabase
-          .from('entries')
-          .select('id,memo')
-          .eq('counterparty', s.name)
-        if (oerr) throw oerr
-        for (const row of olds || []) {
+        for (const row of oldsByName.get(s.name) || []) {
           if (row.memo && row.memo.includes('구 표기:')) continue
           const memo = [row.memo, `구 표기: ${s.name}`].filter(Boolean).join(' · ')
           const up = await supabase.from('entries').update({ counterparty: keep.name, memo }).eq('id', row.id)
@@ -504,7 +511,7 @@ export default function Partners() {
       </PageHeader>
 
       {isAdmin && tableState === 'missing' ? (
-        <InlineAlert tone="warning">
+        <InlineAlert tone="warn">
           거래처 등록·서류 기능을 쓰려면 Supabase 대시보드 → SQL Editor에서 저장소의
           <strong> supabase/migration_partners.sql </strong>
           파일을 실행해 주세요.

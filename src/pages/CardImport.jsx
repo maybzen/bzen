@@ -560,7 +560,9 @@ export default function CardImport({ embed = false } = {}) {
         const fxAmount = mapping.foreign >= 0 ? Number(String(r[mapping.foreign] ?? '').replace(/[^0-9.-]/g, '')) || 0 : 0
         const fxFee = mapping.fee >= 0 ? parseAmount(r[mapping.fee]) : 0
         const invalid = !date || !merchant || !Number.isFinite(total)
-        const { supply, vat } = splitVat(total || 0)
+        // 외화 결제는 국내 부가세가 없으니 쪼개지 않고 통째로 공급가액으로 둡니다
+        const isFx = Boolean(fxCurrency) && fxCurrency !== 'KRW'
+        const { supply, vat } = isFx ? { supply: total || 0, vat: 0 } : splitVat(total || 0)
         return {
           key: i,
           date,
@@ -570,7 +572,7 @@ export default function CardImport({ embed = false } = {}) {
           total: total || 0,
           supply,
           vat,
-          taxFree: false,
+          taxFree: isFx,
           type: 'opex',
           category: '',
           projectId: '',

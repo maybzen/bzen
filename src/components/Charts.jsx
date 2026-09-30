@@ -143,11 +143,15 @@ export function ProjectBarChart({ data, height = 300 }) {
 }
 
 /** 표 안에서 쓰는 인라인 진행 막대 */
-export function ProfitBar({ value, max, tone = 'profit' }) {
+export function ProfitBar({ value, max, tone = 'profit', label }) {
   const pct = max > 0 ? Math.min(100, (Math.abs(value) / max) * 100) : 0
   const color = tone === 'loss' ? 'bg-rose-400' : tone === 'sale' ? 'bg-brand-500' : 'bg-emerald-500'
   return (
-    <div className="h-1.5 w-full min-w-[64px] overflow-hidden rounded-full bg-ink-100">
+    <div
+      className="h-1.5 w-full min-w-[64px] overflow-hidden rounded-full bg-ink-100"
+      role="img"
+      aria-label={label || `비중 ${Math.round(pct)}%`}
+    >
       <div className={`h-full rounded-full ${color}`} style={{ width: `${pct}%` }} />
     </div>
   )

@@ -16,6 +16,7 @@ import {
   updateCollection,
 } from '../lib/api'
 import { formatDateHuman, formatKRW, formatPercent, normalizeVendorName, todayISO } from '../lib/format'
+import { isNonOperatingSale } from '../lib/constants'
 
 /* 법인격 표기 차이((주)·주식회사 등)를 무시하고 거래처명을 비교합니다 */
 const normVendor = normalizeVendorName
@@ -144,7 +145,7 @@ export default function Collections() {
     const canonByNorm = new Map()
     FOCUS_VENDORS.forEach((f) => f.names.forEach((n) => canonByNorm.set(normVendor(n), f.label)))
     const map = new Map(
-      FOCUS_VENDORS.map((f) => [f.label, { name: f.label, revenue: 0, collected: 0, purchase: 0, payable: 0 }]),
+      FOCUS_VENDORS.map((f) => [f.label, { name: f.label, revenue: 0, revenueVat: 0, collected: 0, purchase: 0, payable: 0 }]),
     )
     const rowFor = (name) => {
       const n = (name || '').trim()
@@ -155,8 +156,12 @@ export default function Collections() {
     for (const e of entries) {
       const row = rowFor(e.counterparty)
       if (!row) continue
-      if (e.entry_type === 'sale') row.revenue += Number(e.total_amount || 0)
-      else if (e.entry_type === 'purchase') row.purchase += Number(e.total_amount || 0)
+      // 프로젝트 탭과 같은 기준(공급가액)으로 집계하고 영업외수익은 뺍니다.
+      // 입금(수금)은 통장 기준 합계이므로 collected와 비교할 때만 합계를 씁니다.
+      if (e.entry_type === 'sale' && !isNonOperatingSale(e)) {
+        row.revenue += Number(e.supply_amount || 0)
+        row.revenueVat += Number(e.vat_amount || 0)
+      } else if (e.entry_type === 'purchase') row.purchase += Number(e.supply_amount || 0)
     }
     for (const c of collections) {
       const row = rowFor(c.counterparty)
@@ -169,7 +174,8 @@ export default function Collections() {
     }
     return FOCUS_VENDORS.map((f) => {
       const r = map.get(f.label)
-      return { ...r, due: r.revenue - r.collected }
+      // 잔금 = 받을 돈(공급가액+세액) − 받은 돈(통장 합계). 같은 합계끼리 비교합니다.
+      return { ...r, due: r.revenue + r.revenueVat - r.collected }
     })
   }, [entries, collections, partners])
   const vendorDue = vendorRows.reduce((a, r) => a + Math.max(0, r.due), 0)
@@ -186,11 +192,14 @@ export default function Collections() {
     const target = normVendor(name)
     const matches = (v) => normVendor(v) === target
     let revenue = 0
+    let revenueVat = 0
     let purchase = 0
     for (const e of entries) {
       if (!matches(e.counterparty)) continue
-      if (e.entry_type === 'sale') revenue += Number(e.total_amount || 0)
-      else if (e.entry_type === 'purchase') purchase += Number(e.total_amount || 0)
+      if (e.entry_type === 'sale' && !isNonOperatingSale(e)) {
+        revenue += Number(e.supply_amount || 0)
+        revenueVat += Number(e.vat_amount || 0)
+      } else if (e.entry_type === 'purchase') purchase += Number(e.supply_amount || 0)
     }
     let collected = 0
     const items = []
@@ -208,7 +217,7 @@ export default function Collections() {
       purchase,
       collected,
       payable,
-      due: revenue - collected,
+      due: revenue + revenueVat - collected,
       count: items.length,
       items,
     }
@@ -327,7 +336,7 @@ export default function Collections() {
                 </button>
               </header>
               <div className="grid grid-cols-2 gap-3 p-4 lg:grid-cols-5">
-                <StatCard label="매출(합계)" value={focusRow.revenue} tone="sale" icon="trending-up" />
+                <StatCard label="매출(공급가액)" value={focusRow.revenue} tone="sale" icon="trending-up" />
                 <StatCard label="수금" value={focusRow.collected} tone="profit" icon="check" hint={`${focusRow.count}건`} />
                 <StatCard
                   label="잔금"
@@ -336,7 +345,7 @@ export default function Collections() {
                   icon="coins"
                   hint={focusRow.due > 0 ? '미수금' : focusRow.due < 0 ? '반환 초과' : '정산 완료'}
                 />
-                <StatCard label="매입(합계)" value={focusRow.purchase} tone="opex" icon="cart" />
+                <StatCard label="매입(공급가액)" value={focusRow.purchase} tone="opex" icon="cart" />
                 <StatCard
                   label="미지급(확정)"
                   value={focusRow.payable}
@@ -429,10 +438,10 @@ export default function Collections() {
                   <thead className="bg-ink-50/70">
                     <tr>
                       <th className="th">거래처</th>
-                      <th className="th text-right">매출(합계)</th>
+                      <th className="th text-right">매출(공급가액)</th>
                       <th className="th text-right">수금</th>
                       <th className="th text-right">잔금</th>
-                      <th className="th text-right">매입(합계)</th>
+                      <th className="th text-right">매입(공급가액)</th>
                       <th className="th text-right">미지급(확정)</th>
                     </tr>
                   </thead>

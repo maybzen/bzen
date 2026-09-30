@@ -1,4 +1,5 @@
 import { monthKey, monthKeyOf } from './format'
+import { isNonOperatingSale } from './constants'
 
 const EMPTY = () => ({ supply: 0, vat: 0, total: 0, count: 0 })
 
@@ -37,31 +38,39 @@ export function buildPnl(sale, purchase, opex) {
 /**
  * 매출/매입/운영비 집계.
  * 영업이익은 부가세를 제외한 "공급가액" 기준으로 계산합니다.
+ * sale 중 지원금·보조금, 환급금·환입은 영업매출이 아니므로 revenue에서 제외하고
+ * nonOp(영업외수익)으로 따로 집계합니다. 부가세도 과세 매출만으로 계산합니다.
  */
 export function summarize(entries) {
   const sale = EMPTY()
   const purchase = EMPTY()
   const opex = EMPTY()
+  const nonOp = EMPTY()
 
   for (const e of entries || []) {
-    if (e.entry_type === 'sale') addTo(sale, e)
-    else if (e.entry_type === 'purchase') addTo(purchase, e)
+    if (e.entry_type === 'sale') {
+      if (isNonOperatingSale(e)) addTo(nonOp, e)
+      else addTo(sale, e)
+    } else if (e.entry_type === 'purchase') addTo(purchase, e)
     else if (e.entry_type === 'opex') addTo(opex, e)
   }
 
   const pnl = buildPnl(sale.supply, purchase.supply, opex.supply)
-  // 부가세 납부 예상액 (매출세액 - 매입세액)
+  // 부가세 납부 예상액 (매출세액 - 매입세액). 영업외(지원금·환입, VAT 0)는 제외.
   const vatPayable = sale.vat - purchase.vat - opex.vat
 
   return {
     sale,
     purchase,
     opex,
+    nonOp,
     ...pnl,
     revenue: pnl.revenue,
     cost: pnl.cogs + pnl.expense,
     profit: pnl.operating,
     margin: pnl.operatingMargin,
+    /** 영업외수익(지원금·환입) 공급가액. 영업이익에 포함되지 않습니다. */
+    otherIncome: nonOp.supply,
     vatPayable,
     count: (entries || []).length,
   }
@@ -69,14 +78,16 @@ export function summarize(entries) {
 
 export function groupByMonth(entries, monthKeys) {
   const map = new Map(
-    monthKeys.map((m) => [m, { month: m, sale: 0, purchase: 0, opex: 0, profit: 0 }]),
+    monthKeys.map((m) => [m, { month: m, sale: 0, purchase: 0, opex: 0, nonOp: 0, profit: 0 }]),
   )
   for (const e of entries || []) {
     const row = map.get(monthKeyOf(e.entry_date))
     if (!row) continue
     const supply = Number(e.supply_amount || 0)
-    if (e.entry_type === 'sale') row.sale += supply
-    else if (e.entry_type === 'purchase') row.purchase += supply
+    if (e.entry_type === 'sale') {
+      if (isNonOperatingSale(e)) row.nonOp += supply
+      else row.sale += supply
+    } else if (e.entry_type === 'purchase') row.purchase += supply
     else if (e.entry_type === 'opex') row.opex += supply
   }
   for (const row of map.values()) row.profit = row.sale - row.purchase - row.opex
@@ -86,13 +97,14 @@ export function groupByMonth(entries, monthKeys) {
 export function groupByProject(entries, projects) {
   const map = new Map()
   for (const p of projects || []) {
-    map.set(p.id, { project: p, sale: 0, purchase: 0, opex: 0, saleVat: 0, purchaseVat: 0, opexVat: 0, profit: 0, margin: null, count: 0 })
+    map.set(p.id, { project: p, sale: 0, purchase: 0, opex: 0, nonOp: 0, saleVat: 0, purchaseVat: 0, opexVat: 0, profit: 0, margin: null, count: 0 })
   }
   const unassigned = {
     project: null,
     sale: 0,
     purchase: 0,
     opex: 0,
+    nonOp: 0,
     saleVat: 0,
     purchaseVat: 0,
     opexVat: 0,
@@ -105,7 +117,10 @@ export function groupByProject(entries, projects) {
     const row = e.project_id && map.has(e.project_id) ? map.get(e.project_id) : unassigned
     const supply = Number(e.supply_amount || 0)
     const vat = Number(e.vat_amount || 0)
-    if (e.entry_type === 'sale') { row.sale += supply; row.saleVat += vat }
+    if (e.entry_type === 'sale') {
+      if (isNonOperatingSale(e)) { row.nonOp += supply }
+      else { row.sale += supply; row.saleVat += vat }
+    }
     else if (e.entry_type === 'purchase') { row.purchase += supply; row.purchaseVat += vat }
     else if (e.entry_type === 'opex') { row.opex += supply; row.opexVat += vat }
     row.count += 1

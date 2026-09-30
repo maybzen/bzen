@@ -54,8 +54,14 @@ export function attrMonth(e) {
   if (m) return `${m[1]}-${String(Number(m[2])).padStart(2, '0')}`
   m = text.match(/(\d{1,2})\s*월\s*급여/)
   if (m) {
-    const y = String(e.entry_date || '').slice(0, 4) || String(new Date().getFullYear())
-    return `${y}-${String(Number(m[1])).padStart(2, '0')}`
+    const entryY = Number(String(e.entry_date || '').slice(0, 4)) || new Date().getFullYear()
+    const entryM = Number(String(e.entry_date || '').slice(5, 7)) || 1
+    let y = entryY
+    // 연넘김 보정: 1월 지급인데 11·12월 급여면 전년, 12월 지급인데 1·2월 급여면 익년
+    const mm = Number(m[1])
+    if (entryM <= 2 && mm >= 11) y = entryY - 1
+    else if (entryM >= 11 && mm <= 2) y = entryY + 1
+    return `${y}-${String(mm).padStart(2, '0')}`
   }
   return String(e.entry_date || '').slice(0, 7)
 }
@@ -684,9 +690,14 @@ function SlipModal({ open, onClose, onSaved, entry, ym, initial, reportRows, pro
   // 장부 급여분은 실지급액에서 지출결의를 뺀 금액으로 맞춥니다 (중복 방지).
   const bookAmount = net - expensePay
   const projectNameOf = (id) => (projects || []).find((p) => p.id === id)?.name || ''
+  // 음수 저장(선결제 취소·정산)은 허용하되 확인을 거칩니다. 귀속월 이동도 경고합니다.
+  const negativeBook = bookAmount < 0
+  const bookYm = String(book.entry_date || entry?.entry_date || '').slice(0, 7)
+  const movedYm = bookYm && bookYm !== ym
 
   const submit = async (e) => {
     e.preventDefault()
+    if (negativeBook && !window.confirm(`장부 급여분이 음수(${formatKRW(bookAmount)}원)입니다. 선결제 취소·정산이 맞으면 확인을 눌러 저장하세요.`)) return
     setSaving(true)
     setError('')
     try {
@@ -908,6 +919,16 @@ function SlipModal({ open, onClose, onSaved, entry, ym, initial, reportRows, pro
           <span className="mt-0.5 block font-normal text-ink-500">
             장부 반영액 {formatKRW(bookAmount)}원 (실지급 − 지출결의, 지결 행과 중복 방지)
           </span>
+          {negativeBook ? (
+            <span className="mt-1 block font-bold text-loss">
+              음수입니다 — 선결제 취소·정산이 맞는지 확인하고 저장하세요.
+            </span>
+          ) : null}
+          {movedYm ? (
+            <span className="mt-1 block font-bold text-amber-700">
+              지급일이 {bookYm}로 바뀌어 귀속월({ym})과 다릅니다. 의도한 게 맞는지 확인하세요.
+            </span>
+          ) : null}
         </div>
 
         <div className="rounded-lg border border-ink-200 p-3.5">
