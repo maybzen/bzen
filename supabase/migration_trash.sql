@@ -42,6 +42,7 @@ create index if not exists projects_deleted_at_idx on public.projects (deleted_a
 create index if not exists entries_deleted_at_idx on public.entries (deleted_at);
 
 -- 2) 영구삭제는 관리자만 (UPDATE=휴지통 이동·복원은 로그인 전원 유지)
+drop policy if exists "entries_delete" on public.entries;
 drop policy if exists "entries_delete_all" on public.entries;
 drop policy if exists "entries_delete_own" on public.entries;
 drop policy if exists "entries_delete_admin" on public.entries;
