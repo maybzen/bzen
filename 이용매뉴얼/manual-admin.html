@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>비젠 회계관리 시스템 — 관리자 이용 매뉴얼</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Malgun Gothic','Apple SD Gothic Neo',sans-serif;background:#f1f3f9;color:#1e2433;line-height:1.7;font-size:15px}
+.cover{background:linear-gradient(135deg,#101736 0%,#1d3faa 70%,#0f9d58 130%);color:#fff;padding:56px 48px}
+.cover .tag{display:inline-block;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);border-radius:99px;padding:4px 14px;font-size:13px;font-weight:700}
+.cover h1{font-size:34px;margin:16px 0 8px}
+.cover p{opacity:.85;font-size:15px}
+.wrap{max-width:960px;margin:0 auto;padding:32px 20px 80px}
+.toc{background:#fff;border:1px solid #e2e6f0;border-radius:14px;padding:22px 26px;margin:24px 0}
+.toc h2{font-size:17px;margin-bottom:10px}
+.toc ol{margin-left:20px}
+.toc a{color:#1d3faa;text-decoration:none}
+.sec{background:#fff;border:1px solid #e2e6f0;border-radius:14px;padding:28px;margin:22px 0}
+.sec h2{font-size:21px;border-left:6px solid #1d3faa;padding-left:12px;margin-bottom:6px}
+.sec .sub{color:#667085;font-size:13.5px;margin-bottom:14px}
+.sec h3{font-size:16px;margin:20px 0 8px;color:#1d3faa}
+ol.step,ul.step{margin:8px 0 8px 22px}
+ol.step li,ul.step li{margin:6px 0}
+table{width:100%;border-collapse:collapse;font-size:13.5px;margin:10px 0}
+th,td{border:1px solid #e2e6f0;padding:8px 10px;text-align:left}
+th{background:#f4f6fb}
+.warn{background:#fff8e6;border:1px solid #f0c94a;border-radius:10px;padding:12px 14px;font-size:13.5px;margin:12px 0}
+.tip{background:#eef4ff;border:1px solid #b9cdf7;border-radius:10px;padding:12px 14px;font-size:13.5px;margin:12px 0}
+.shot{border:1px solid #d5dbe8;border-radius:12px;overflow:hidden;margin:14px 0;box-shadow:0 4px 18px rgba(20,30,70,.08)}
+.shot .bar{background:#101736;color:#fff;font-size:12px;padding:8px 14px;display:flex;gap:8px;align-items:center}
+.shot .bar i{width:10px;height:10px;border-radius:50%;background:#ff5f57;display:inline-block}
+.shot .bar i:nth-child(2){background:#febc2e}.shot .bar i:nth-child(3){background:#28c840}
+.shot .body{display:flex;min-height:220px}
+.shot .side{background:#171d38;color:#c6cdea;width:190px;padding:14px;font-size:12px;flex-shrink:0}
+.shot .side b{color:#fff;display:block;margin:10px 0 4px;font-size:11px;opacity:.7}
+.shot .side span{display:block;padding:5px 9px;border-radius:7px;margin:2px 0}
+.shot .side span.on{background:#2f62f0;color:#fff;font-weight:700}
+.shot .main{flex:1;padding:16px;background:#fff;font-size:12.5px}
+.btn{display:inline-block;border-radius:8px;padding:5px 12px;font-size:12px;font-weight:700;margin:2px}
+.b-pri{background:#2f62f0;color:#fff}.b-ghost{background:#eef1f7;color:#333}.b-danger{background:#e5484d;color:#fff}
+.card-row{display:flex;gap:10px;flex-wrap:wrap;margin:8px 0}
+.stat{flex:1;min-width:140px;border:1px solid #e2e6f0;border-radius:10px;padding:10px 12px;background:#f8faff}
+.stat b{font-size:16px}
+.num{display:inline-flex;width:20px;height:20px;background:#e5484d;color:#fff;border-radius:50%;font-size:12px;font-weight:800;align-items:center;justify-content:center;margin-right:6px}
+.tbl-mock{width:100%;border:1px solid #e2e6f0;border-radius:8px;overflow:hidden;font-size:12px}
+.tbl-mock div.r{display:flex;border-bottom:1px solid #eef1f7}
+.tbl-mock div.r:last-child{border-bottom:0}
+.tbl-mock div.c{flex:1;padding:7px 10px}.tbl-mock div.h{background:#f1f4fa;font-weight:800}
+.badge{display:inline-block;font-size:11px;font-weight:800;border-radius:99px;padding:2px 10px;background:#eef4ff;color:#1d3faa}
+.badge.red{background:#fdecec;color:#c62f2f}.badge.green{background:#e7f7ee;color:#0f7a3d}
+.footer{color:#888;font-size:12px;text-align:center;margin-top:30px}
+@media print{.cover{padding:30px}.wrap{padding:0}.sec{break-inside:avoid}}
+</style>
+</head>
+<body>
+<div class="cover">
+<span class="tag">관리자용 · ADMIN</span>
+<h1>비젠커뮤니케이션 회계관리 시스템<br>관리자 이용 매뉴얼</h1>
+<p>대상: 관리자 (아이디 기발송) &nbsp;|&nbsp; 버전 1.1 (2026-10-01)</p>
+</div>
+<div class="wrap">
+
+<div class="toc"><h2>목차</h2><ol>
+<li><a href="#s0">전체 지도 — 메뉴와 권한</a></li>
+<li><a href="#s1">1. 로그인 (아이디는 전달받음)</a></li>
+<li><a href="#s2">2. 계정관리 — 직원 승인·권한</a></li>
+<li><a href="#s3">3. 대시보드 — 회사 숫자 보기</a></li>
+<li><a href="#s4">4. 장부 입력 — 지결·운영비는 생길 때 바로</a></li>
+<li><a href="#s5">5. 프로젝트·수금·거래처</a></li>
+<li><a href="#s6">6. 자금관리·급여·구성원 (관리자 전용)</a></li>
+<li><a href="#s7">7. 세금·보고서</a></li>
+<li><a href="#s8">8. 배포 체크·FAQ</a></li>
+</ol></div>
+
+<div class="sec" id="s0"><h2>전체 지도 — 메뉴와 권한</h2>
+<div class="shot"><div class="bar"><i></i><i></i><i></i> 사이드바 — 관리자 vs 직원</div><div class="body">
+<div class="side"><b>장부</b><span class="on">대시보드</span><span class="on">매출</span><span class="on">매입</span><span class="on">수금관리</span><span class="on">운영비</span><span class="on">지출결의</span><b>사업</b><span class="on">프로젝트</span><span class="on">거래처</span><span class="on">고정비</span><b>인사관리</b><span class="on">★ 구성원</span><span class="on">★ 급여관리</span><span class="on">휴무대장</span><b>세금·정산</b><span class="on">세금관리</span><span class="on">보고서</span><b>관리</b><span class="on">★ 계정관리</span><span class="on">★ 자금관리</span><span class="on">설정</span></div>
+<div class="main"><span class="badge">관리자</span> 17개 전부 표시 (★ 4개는 관리자 전용)<br><br><span class="badge green">직원 기본</span> 대시보드 · 지출결의 · 프로젝트 · 거래처 · 설정<br>관리자가 <b>설정 → 직원 공통 권한</b>에서 매출·매입·운영비·보고서 등을 추가 허용 가능</div>
+</div></div>
+</div>
+
+<div class="sec" id="s1"><h2>1. 로그인</h2>
+<p class="sub">관리자 아이디는 이미 전달된 상태입니다. 회원가입이 필요 없습니다.</p>
+<ol class="step"><li>배포 주소 접속 → 전달받은 이메일·비밀번호로 <b>로그인</b>.</li><li>오른쪽 위 이름 → <b>설정</b>에서 비밀번호를 본인 것으로 변경.</li><li>직원 가입은 로그인 화면 <b>직원 가입하기</b> → <b>사용 승인 대기 중</b> → 관리자가 계정관리에서 승인.</li></ol>
+<div class="warn">마지막 관리자 1명은 권한을 내리거나 삭제할 수 없습니다.</div>
+</div>
+
+<div class="sec" id="s2"><h2>2. 계정관리 — 직원 승인·권한</h2><p class="sub">관리 → 계정관리 (/users)</p>
+<div class="shot"><div class="bar"><i></i><i></i><i></i> 계정관리</div><div class="body">
+<div class="side"><b>관리</b><span class="on">계정관리</span><span>자금관리</span><span>설정</span></div>
+<div class="main"><b><span class="num">1</span>계정 추가</b> <span class="btn b-pri">+ 계정 추가</span> — 이름·이메일·비밀번호·역할·부서<br><div class="tbl-mock"><div class="r h"><div class="c">이름</div><div class="c">역할</div><div class="c">상태</div></div><div class="r"><div class="c">김직원</div><div class="c"><span class="badge green">직원</span></div><div class="c"><span class="num">2</span>승인대기 → 수정에서 사용함 체크</div></div></div><br><b><span class="num">3</span>행 버튼:</b> <span class="btn b-ghost">수정</span> <span class="btn b-ghost">비밀번호 변경</span> <span class="btn b-danger">삭제</span></div>
+</div></div>
+<ol class="step"><li>가입 신청분은 <b>승인대기</b> → 수정에서 <b>사용함</b> 체크하면 승인 완료.</li><li>직원 메뉴: <b>설정 → 직원 공통 권한</b>(전원) + <b>계정관리 → 수정 → 개별권한</b>(특정인) 합집합.</li></ol>
+</div>
+
+<div class="sec" id="s3"><h2>3. 대시보드</h2><p class="sub">장부 → 대시보드 — 기간: 이번 달·지난 달·이번 분기·올해·작년·직접 선택</p>
+<div class="shot"><div class="bar"><i></i><i></i><i></i> 대시보드</div><div class="body"><div class="main">
+<div class="card-row"><div class="stat">순매출액<br><b>(예시) 5,000만원</b></div><div class="stat">매출총이익<br><b>(예시) 3,000만원</b></div><div class="stat">영업이익<br><b>(예시) 1,200만원</b></div><div class="stat">부가세 납부예상<br><b>(예시) 180만원</b></div></div>
+<b><span class="num">1</span>12개월 추이</b> · <b><span class="num">2</span>프로젝트별 수익</b> · <b><span class="num">3</span>최근 지출결의</b> · <b><span class="num">4</span>데이터점검</b>
+</div></div></div>
+<table><tr><th>지표</th><th>산식</th></tr>
+<tr><td>매출총이익</td><td>순매출액 − 매출원가(매입)</td></tr>
+<tr><td>영업이익</td><td>매출총이익 − 경비(운영비)</td></tr>
+<tr><td>부가세 납부 예상</td><td>매출세액 − 매입세액(매입+운영비)</td></tr></table>
+</div>
+
+<div class="sec" id="s4"><h2>4. 장부 입력 — 지결·운영비는 생길 때 바로</h2><p class="sub">매출·매입·운영비·지출결의 — 화면 구조 동일</p>
+<div class="warn"><b>입력 원칙:</b> 지출결의와 운영비는 <b>생길 때 바로 입력</b>합니다. 모아서 입력하면 누락·지연이 생깁니다.</div>
+<div class="shot"><div class="bar"><i></i><i></i><i></i> 장부 화면</div><div class="body"><div class="main">
+<span class="btn b-pri"><span class="num">1</span>등록</span> <span class="btn b-ghost">CSV 내보내기</span> <span class="btn b-ghost">CSV 일괄등록</span><br>
+<b><span class="num">2</span>공급가액 + 부가세 분리 입력</b> (합계 자동) → <b><span class="num">3</span>프로젝트 지정</b>(손익 자동집계) → 증빙 첨부(20MB) → 저장
+<div class="tbl-mock"><div class="r h"><div class="c">일자</div><div class="c">거래처(예시)</div><div class="c">공급가액(예시)</div><div class="c">합계(자동)</div></div><div class="r"><div class="c">2026-09-30</div><div class="c">○○기업</div><div class="c">1,000,000</div><div class="c"><b>1,100,000</b></div></div></div>
+</div></div></div>
+<ol class="step"><li>엑셀 정리는 <b>CSV 일괄등록 → 양식 다운로드</b> → 필수 <b>일자(YYYY-MM-DD)·공급가액</b> 작성 후 업로드. 프로젝트명은 등록명과 정확히 일치.</li><li>지출결의는 승인 절차 없는 <b>기록 전용</b>. 급여 정책: 장부 급여분은 <b>실지급액 − 지출결의</b>로 기록.</li></ol>
+</div>
+
+<div class="sec" id="s5"><h2>5. 프로젝트·수금·거래처</h2>
+<ol class="step"><li><b>프로젝트 등록</b>을 먼저 → 장부에서 지정하면 손익 자동 집계. 손익 직접 입력 없음. 등록·수정은 직원도 가능, 삭제는 관리자만.</li><li><b>수금관리:</b> [입금 등록] → 수금률·미수금 확인.</li><li><b>거래처:</b> 등록·서류첨부·중복은 합치기. 서류삭제는 관리자만.</li></ol>
+</div>
+
+<div class="sec" id="s6"><h2>6. 자금관리·급여·구성원 (관리자 전용 ★)</h2>
+<ol class="step"><li><b>자금관리:</b> 자금현황 [잔고 기록] / 법인카드 파일업로드 → 분류 → [일괄등록].</li><li><b>급여관리:</b> 급여대장 CSV 올리기 → <b>귀속월(근무한 달)</b> 집계. 인별 명세서 저장 시 장부금액 자동 보정.</li><li><b>구성원:</b> 인라인 편집 → 일괄저장.</li></ol>
+</div>
+
+<div class="sec" id="s7"><h2>7. 세금·보고서</h2>
+<ol class="step"><li><b>세금관리:</b> 연도 → 유형탭 → 체크·토글. 4대보험 고지서 업로드·CSV 지원.</li><li><b>보고서:</b> 기간 → [요약CSV/상세CSV]·<b>[인쇄/PDF]</b> — 임원 보고용.</li></ol>
+</div>
+
+<div class="sec" id="s8"><h2>8. 배포 체크·FAQ</h2>
+<table><tr><th>☐</th><th>점검 항목</th></tr>
+<tr><td>☐</td><td>전 직원 가입+승인 완료, 공통 권한 설정</td></tr>
+<tr><td>☐</td><td>프로젝트·거래처 등록, 테스트 1건 입력→확인→삭제</td></tr>
+<tr><td>☐</td><td>지결·운영비 즉시입력 교육 10분, 엑셀 2종 전달</td></tr></table>
+<table><tr><th style="width:32%">질문</th><th>답</th></tr>
+<tr><td>메뉴가 안 보여요(직원)</td><td>설정→직원공통권한 + 계정관리→개별권한 확인</td></tr>
+<tr><td>프로젝트 손익 0원</td><td>장부 입력 시 프로젝트 지정 확인</td></tr>
+<tr><td>CSV 실패</td><td>일자·공급가액 필수, 프로젝트명 정확히 일치</td></tr></table>
+<div class="footer">비젠커뮤니케이션 회계관리 시스템 · 관리자 매뉴얼 v1.1 · 예시 숫자는 실제 DB가 아닙니다</div>
+</div>
+</div>
+</body>
+</html>

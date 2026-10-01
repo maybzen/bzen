@@ -674,6 +674,17 @@ export default function Projects() {
                   </div>
 
                   <div className="flex shrink-0 items-center gap-1">
+                    <button
+                      type="button"
+                      className="rounded-md p-1.5 text-ink-500 transition hover:bg-ink-100 hover:text-ink-800"
+                      onClick={() => {
+                        setEditing(project)
+                        setFormOpen(true)
+                      }}
+                      aria-label="수정"
+                    >
+                      <Icon name="pencil" size={15} />
+                    </button>
                     {isAdmin ? (
                       <button
                         type="button"
@@ -1064,6 +1075,14 @@ function ProposalCard({ project, row, status, isAdmin, managerName, onEdit, onDe
         </div>
 
         <div className="flex shrink-0 items-center gap-1">
+          <button
+            type="button"
+            className="rounded-md p-1.5 text-ink-500 transition hover:bg-ink-100 hover:text-ink-800"
+            onClick={onEdit}
+            aria-label="수정"
+          >
+            <Icon name="pencil" size={15} />
+          </button>
           {isAdmin ? (
             <button
               type="button"

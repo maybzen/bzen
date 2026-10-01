@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>비젠 회계관리 시스템 — 직원 이용 매뉴얼</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Malgun Gothic','Apple SD Gothic Neo',sans-serif;background:#f1f3f9;color:#1e2433;line-height:1.7;font-size:15px}
+.cover{background:linear-gradient(135deg,#0b5c36 0%,#0f9d58 60%,#1d3faa 130%);color:#fff;padding:56px 48px}
+.cover .tag{display:inline-block;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);border-radius:99px;padding:4px 14px;font-size:13px;font-weight:700}
+.cover h1{font-size:32px;margin:16px 0 8px}
+.cover p{opacity:.9;font-size:15px}
+.wrap{max-width:960px;margin:0 auto;padding:32px 20px 80px}
+.toc{background:#fff;border:1px solid #e2e6f0;border-radius:14px;padding:22px 26px;margin:24px 0}
+.toc h2{font-size:17px;margin-bottom:10px}
+.toc ol{margin-left:20px}.toc a{color:#0f7a3d;text-decoration:none}
+.sec{background:#fff;border:1px solid #e2e6f0;border-radius:14px;padding:28px;margin:22px 0}
+.sec h2{font-size:21px;border-left:6px solid #0f9d58;padding-left:12px;margin-bottom:6px}
+.sec .sub{color:#667085;font-size:13.5px;margin-bottom:14px}
+.sec h3{font-size:16px;margin:20px 0 8px;color:#0f7a3d}
+ol.step,ul.step{margin:8px 0 8px 22px}
+ol.step li,ul.step li{margin:6px 0}
+table{width:100%;border-collapse:collapse;font-size:13.5px;margin:10px 0}
+th,td{border:1px solid #e2e6f0;padding:8px 10px;text-align:left}
+th{background:#f0f7f2}
+.warn{background:#fff8e6;border:1px solid #f0c94a;border-radius:10px;padding:12px 14px;font-size:13.5px;margin:12px 0}
+.tip{background:#e9f7ef;border:1px solid #9ed9b5;border-radius:10px;padding:12px 14px;font-size:13.5px;margin:12px 0}
+.shot{border:1px solid #d5dbe8;border-radius:12px;overflow:hidden;margin:14px 0;box-shadow:0 4px 18px rgba(20,30,70,.08)}
+.shot .bar{background:#0b3d26;color:#fff;font-size:12px;padding:8px 14px;display:flex;gap:8px;align-items:center}
+.shot .bar i{width:10px;height:10px;border-radius:50%;background:#ff5f57;display:inline-block}
+.shot .bar i:nth-child(2){background:#febc2e}.shot .bar i:nth-child(3){background:#28c840}
+.shot .body{display:flex;min-height:200px}
+.shot .side{background:#122b1f;color:#c6d4cb;width:180px;padding:14px;font-size:12px;flex-shrink:0}
+.shot .side b{color:#fff;display:block;margin:10px 0 4px;font-size:11px;opacity:.7}
+.shot .side span{display:block;padding:5px 9px;border-radius:7px;margin:2px 0}
+.shot .side span.on{background:#0f9d58;color:#fff;font-weight:700}
+.shot .main{flex:1;padding:16px;background:#fff;font-size:12.5px}
+.btn{display:inline-block;border-radius:8px;padding:5px 12px;font-size:12px;font-weight:700;margin:2px}
+.b-pri{background:#0f9d58;color:#fff}.b-ghost{background:#eef1f7;color:#333}
+.num{display:inline-flex;width:20px;height:20px;background:#0f9d58;color:#fff;border-radius:50%;font-size:12px;font-weight:800;align-items:center;justify-content:center;margin-right:6px}
+.tbl-mock{width:100%;border:1px solid #e2e6f0;border-radius:8px;overflow:hidden;font-size:12px}
+.tbl-mock div.r{display:flex;border-bottom:1px solid #eef1f7}
+.tbl-mock div.r:last-child{border-bottom:0}
+.tbl-mock div.c{flex:1;padding:7px 10px}.tbl-mock div.h{background:#f0f7f2;font-weight:800}
+.badge{display:inline-block;font-size:11px;font-weight:800;border-radius:99px;padding:2px 10px;background:#e7f7ee;color:#0f7a3d}
+.badge.gray{background:#eef1f7;color:#555}
+.footer{color:#888;font-size:12px;text-align:center;margin-top:30px}
+@media print{.cover{padding:30px}.wrap{padding:0}.sec{break-inside:avoid}}
+</style>
+</head>
+<body>
+<div class="cover">
+<span class="tag">직원용 · STAFF</span>
+<h1>비젠 회계관리 시스템<br>직원 이용 매뉴얼</h1>
+<p>처음 쓰는 분도 10분이면 끝나는 그림 설명서 &nbsp;|&nbsp; 버전 1.1 (2026-10-01)</p>
+</div>
+<div class="wrap">
+
+<div class="toc"><h2>목차</h2><ol>
+<li><a href="#s1">1. 로그인 (아이디 전달받음)</a></li>
+<li><a href="#s2">2. 내 메뉴 구성</a></li>
+<li><a href="#s3">3. 지출결의 — 생길 때 바로 입력</a></li>
+<li><a href="#s4">4. 운영비·장부 보기</a></li>
+<li><a href="#s5">5. 프로젝트·거래처·휴무·내 정보</a></li>
+<li><a href="#s6">6. 할 일 / 없는 일·FAQ</a></li>
+</ol></div>
+
+<div class="sec" id="s1"><h2>1. 로그인</h2>
+<ol class="step"><li>배포 주소 접속 → 전달받은 아이디·초기 비밀번호로 <b>로그인</b>.</li><li>오른쪽 위 이름 → <b>설정</b>에서 비밀번호를 본인 것으로 변경.</li><li>비번을 잊으면 본인이 찾을 수 없습니다. 관리자에게 재설정 요청.</li></ol>
+</div>
+
+<div class="sec" id="s2"><h2>2. 내 메뉴 구성</h2>
+<div class="shot"><div class="bar"><i></i><i></i><i></i> 직원 사이드바</div><div class="body">
+<div class="side"><b>장부</b><span class="on">대시보드</span><span class="on">지출결의</span><b>사업</b><span class="on">프로젝트</span><span class="on">거래처</span><b>관리</b><span class="on">설정</span></div>
+<div class="main"><b>기본 5개:</b> <span class="badge">대시보드</span> <span class="badge">지출결의</span> <span class="badge">프로젝트</span> <span class="badge">거래처</span> <span class="badge">설정</span><br><br>회사 설정에 따라 <span class="badge gray">매출</span> <span class="badge gray">운영비</span> <span class="badge gray">보고서</span> <span class="badge gray">휴무대장</span> 등이 추가될 수 있습니다.<br>기간 고르기: 이번 달·지난 달·이번 분기·올해·작년·직접 선택. 모바일은 ☰ 버튼.</div>
+</div></div>
+</div>
+
+<div class="sec" id="s3"><h2>3. 지출결의 — 생길 때 바로 입력 ★</h2>
+<div class="warn"><b>원칙: 생길 때 바로 입력.</b> 모아서 입력하면 누락됩니다. 승인 절차 없이 기록하면 끝입니다.</div>
+<div class="shot"><div class="bar"><i></i><i></i><i></i> 지출결의 등록 흐름</div><div class="body"><div class="main">
+<b><span class="num">1</span>[등록]</b> → <b><span class="num">2</span>일자·적요·공급가액+부가세</b>(합계 자동) → <b><span class="num">3</span>영수증 사진 첨부 → [저장], 끝!</b>
+<div class="tbl-mock"><div class="r h"><div class="c">일자(예시)</div><div class="c">적요(예시)</div><div class="c">합계(예시)</div></div><div class="r"><div class="c">2026-09-28</div><div class="c">고객사 미팅 교통비</div><div class="c">53,000원</div></div></div>
+내 글만 수정·삭제 가능. 프로젝트 있으면 고르고, 없으면 비워두기. 지출결의는 급여에 포함해서 받습니다.
+</div></div></div>
+<div class="tip">영수증은 금액·날짜·상호가 보이게 찍어 첨부 (파일당 20MB까지).</div>
+</div>
+
+<div class="sec" id="s4"><h2>4. 운영비·장부 보기</h2>
+<div class="warn"><b>운영비도 생길 때 바로 입력</b>합니다 (허용된 메뉴가 보일 때).</div>
+<ul class="step"><li><b>대시보드:</b> 기간 고르기 → 숫자·추이 확인.</li><li><b>장부:</b> 기간·검색·프로젝트 필터 → 조회. 남의 글은 보기만, CSV 내보내기 가능.</li><li><b>보고서(허용 시):</b> 기간 → 인쇄/PDF 저장.</li></ul>
+</div>
+
+<div class="sec" id="s5"><h2>5. 프로젝트·거래처·휴무·내 정보</h2>
+<ul class="step"><li><b>프로젝트:</b> 카드 클릭 → 내역 확인 (비용만 보일 수 있음, 정상). <b>[프로젝트 등록]</b>·카드 연필(수정)로 등록·수정은 직접 가능. 삭제는 관리자에게 요청.</li><li><b>거래처:</b> 검색 → 등록·수정 가능. 삭제는 관리자에게 요청.</li><li><b>휴무(허용 시):</b> [휴무 등록] → 종류·날짜·사유 → 저장 → 승인/반려 확인.</li><li><b>설정:</b> 이름·부서·전화 수정, 비밀번호 변경·로그아웃.</li></ul>
+</div>
+
+<div class="sec" id="s6"><h2>6. 할 일 / 없는 일·FAQ</h2>
+<table><tr><th>구분</th><th>내용</th></tr>
+<tr><td><span class="badge">할 수 있어요</span></td><td>지출결의·운영비 즉시 입력(본인분), 거래처 등록·수정, 허용 장부 조회, 휴무 등록, 내 정보 변경</td></tr>
+<tr><td><span class="badge gray">요청하세요</span></td><td>남의 글 수정·삭제, 프로젝트 삭제, 비밀번호 재설정</td></tr></table>
+<div class="warn"><b>문제가 생기면:</b> ①어떤 메뉴 ②뭐 하다가 ③뭔 메시지인지 캡처해서 관리자에게 보내주세요.</div>
+<div class="footer">비젠커뮤니케이션 회계관리 시스템 · 직원 매뉴얼 v1.1 · 예시 숫자는 실제 DB가 아닙니다</div>
+</div>
+</div>
+</body>
+</html>
