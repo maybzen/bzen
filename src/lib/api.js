@@ -67,10 +67,27 @@ export function updateProfile(id, patch) {
 
 /* ------------------------------------------------------------------ */
 /* 프로젝트                                                            */
+/* 휴지통: 삭제는 휴지통 이동(UPDATE)입니다. 영구삭제·복원은 휴지통 메뉴에서. */
 /* ------------------------------------------------------------------ */
 
-export function listProjects() {
-  return unwrap(supabase.from('projects').select('*').order('created_at', { ascending: true }))
+/** 휴지통 컬럼이 아직 없는 DB(마이그레이션 전)와 호환하기 위한 감지 */
+function isMissingTrashColumn(error) {
+  const msg = String(error?.message || '')
+  return /deleted_at|column .* does not exist|42703|schema cache/i.test(msg)
+}
+
+export async function listProjects({ includeDeleted = false } = {}) {
+  const run = (hideDeleted) => {
+    let q = supabase.from('projects').select('*').order('created_at', { ascending: true })
+    if (hideDeleted) q = q.is('deleted_at', null)
+    return unwrap(q)
+  }
+  try {
+    return await run(!includeDeleted)
+  } catch (error) {
+    if (!includeDeleted && isMissingTrashColumn(error)) return run(false)
+    throw error
+  }
 }
 
 export function createProject(payload) {
@@ -81,8 +98,41 @@ export function updateProject(id, patch) {
   return unwrap(supabase.from('projects').update(patch).eq('id', id).select().single())
 }
 
-export function deleteProject(id) {
+export function deleteProject(id, userId) {
+  return trashProject(id, userId)
+}
+
+/** 휴지통으로 이동 (삭제 버튼의 실제 동작) */
+export function trashProject(id, userId) {
+  return unwrap(
+    supabase
+      .from('projects')
+      .update({ deleted_at: new Date().toISOString(), deleted_by: userId || null })
+      .eq('id', id)
+      .select()
+      .single(),
+  )
+}
+
+/** 휴지통에서 복원 */
+export function restoreProject(id) {
+  return unwrap(
+    supabase.from('projects').update({ deleted_at: null, deleted_by: null }).eq('id', id).select().single(),
+  )
+}
+
+/** 영구삭제: 연결 장부는 유지(project_id 비움) 후 삭제. 관리자 전용 */
+export async function purgeProject(id) {
+  await unwrap(supabase.from('entries').update({ project_id: null }).eq('project_id', id))
   return unwrap(supabase.from('projects').delete().eq('id', id))
+}
+
+/** 휴지통에 있는 프로젝트만 (최신 삭제순) */
+export async function listTrashedProjects() {
+  const rows = await listProjects({ includeDeleted: true }).catch(() => [])
+  return rows
+    .filter((r) => r && r.deleted_at)
+    .sort((a, b) => String(b.deleted_at || '').localeCompare(String(a.deleted_at || '')))
 }
 
 /** 계약금액 분리 컬럼(contract_supply/vat)이 있는지 확인 (마이그레이션 여부 감지용) */
@@ -284,6 +334,27 @@ export async function listEntries({
   excludeSource,
   search,
   maxRows = 20000,
+  includeDeleted = false,
+} = {}) {
+  const params = { from, to, types, projectId, source, excludeSource, search, maxRows }
+  try {
+    return await fetchEntries({ ...params, hideDeleted: !includeDeleted })
+  } catch (error) {
+    if (!includeDeleted && isMissingTrashColumn(error)) return fetchEntries({ ...params, hideDeleted: false })
+    throw error
+  }
+}
+
+async function fetchEntries({
+  from,
+  to,
+  types,
+  projectId,
+  source,
+  excludeSource,
+  search,
+  maxRows = 20000,
+  hideDeleted = true,
 } = {}) {
   const rows = []
   let start = 0
@@ -295,6 +366,8 @@ export async function listEntries({
       .order('entry_date', { ascending: false })
       .order('created_at', { ascending: false })
       .range(start, start + PAGE - 1)
+
+    if (hideDeleted) q = q.is('deleted_at', null)
 
     if (from) q = q.gte('entry_date', from)
     if (to) q = q.lte('entry_date', to)
@@ -397,11 +470,62 @@ export function updateEntry(id, patch) {
   )
 }
 
-export function deleteEntry(id) {
+export function deleteEntry(id, userId) {
+  return trashEntry(id, userId)
+}
+
+/** 휴지통으로 이동 (삭제 버튼의 실제 동작) */
+export function trashEntry(id, userId) {
+  return unwrap(
+    supabase
+      .from('entries')
+      .update({ deleted_at: new Date().toISOString(), deleted_by: userId || null })
+      .eq('id', id)
+      .select()
+      .single(),
+  ).then((r) => {
+    invalidateLedgerIndex()
+    return r
+  })
+}
+
+/** 휴지통에서 복원 */
+export function restoreEntry(id) {
+  return unwrap(
+    supabase.from('entries').update({ deleted_at: null, deleted_by: null }).eq('id', id).select().single(),
+  ).then((r) => {
+    invalidateLedgerIndex()
+    return r
+  })
+}
+
+/** 영구삭제: 증빙 첨부도 함께 정리. 관리자 전용 */
+export async function purgeEntry(id) {
+  try {
+    const atts = await unwrap(supabase.from('attachments').select('id').eq('entry_id', id))
+    for (const a of atts || []) {
+      try {
+        // eslint-disable-next-line no-await-in-loop
+        await unwrap(supabase.from('attachments').delete().eq('id', a.id))
+      } catch {
+        /* 첨부 정리 실패해도 본문 삭제는 계속 */
+      }
+    }
+  } catch {
+    /* 첨부 테이블이 없으면 무시 */
+  }
   return unwrap(supabase.from('entries').delete().eq('id', id)).then((r) => {
     invalidateLedgerIndex()
     return r
   })
+}
+
+/** 휴지통에 있는 장부만 (최신 삭제순) */
+export async function listTrashedEntries() {
+  const rows = await listEntries({ includeDeleted: true, maxRows: 20000 }).catch(() => [])
+  return rows
+    .filter((r) => r && r.deleted_at)
+    .sort((a, b) => String(b.deleted_at || '').localeCompare(String(a.deleted_at || '')))
 }
 
 /* ------------------------------------------------------------------ */

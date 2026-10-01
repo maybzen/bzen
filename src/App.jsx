@@ -56,6 +56,7 @@ const Tax = lazyWithRetry(() => import('./pages/Tax'))
 const Collections = lazyWithRetry(() => import('./pages/Collections'))
 const Users = lazyWithRetry(() => import('./pages/Users'))
 const Settings = lazyWithRetry(() => import('./pages/Settings'))
+const Trash = lazyWithRetry(() => import('./pages/Trash'))
 const Leaves = lazyWithRetry(() => import('./pages/Leaves'))
 const Payroll = lazyWithRetry(() => import('./pages/Payroll'))
 const Funds = lazyWithRetry(() => import('./pages/Funds'))
@@ -285,6 +286,14 @@ export default function App() {
               element={
                 <Guard adminOnly>
                   <Funds />
+                </Guard>
+              }
+            />
+            <Route
+              path="/trash"
+              element={
+                <Guard adminOnly>
+                  <Trash />
                 </Guard>
               }
             />

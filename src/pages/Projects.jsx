@@ -342,8 +342,8 @@ export default function Projects() {
     if (!removing) return
     setBusy(true)
     try {
-      await deleteProject(removing.id)
-      toast.success('프로젝트가 삭제되었습니다. 연결된 장부는 유지됩니다.')
+      await deleteProject(removing.id, user?.id)
+      toast.success('휴지통으로 이동했습니다. 휴지통에서 복원할 수 있습니다.')
       setRemoving(null)
       setReloadKey((k) => k + 1)
     } catch (error) {
@@ -813,10 +813,10 @@ export default function Projects() {
       <ConfirmDialog
         open={Boolean(removing)}
         busy={busy}
-        title="프로젝트를 삭제하시겠습니까?"
+        title="프로젝트를 휴지통으로 이동하시겠습니까?"
         message={
           removing
-            ? `"${removing.name}" 을(를) 삭제합니다.\n장부에 입력된 매출·비용은 삭제되지 않고 '프로젝트 미지정'으로 남습니다.`
+            ? `"${removing.name}" 을(를) 휴지통으로 이동합니다.\n장부에 입력된 매출·비용은 그대로 유지됩니다.\n휴지통에서 복원하거나 영구삭제할 수 있습니다.`
             : ''
         }
         onClose={() => setRemoving(null)}

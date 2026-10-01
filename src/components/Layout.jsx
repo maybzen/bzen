@@ -24,6 +24,7 @@ export const NAV = [
   { to: '/reports', label: '보고서', icon: 'chart', perm: 'reports' },
   { to: '/users', label: '계정관리', icon: 'users', adminOnly: true },
   { to: '/funds', label: '자금관리', icon: 'coins', adminOnly: true },
+  { to: '/trash', label: '휴지통', icon: 'trash', adminOnly: true },
   { to: '/settings', label: '설정', icon: 'settings', base: true },
 ]
 
@@ -32,7 +33,7 @@ const NAV_GROUPS = [
   { title: '사업', items: ['/projects', '/partners', '/fixed-costs'] },
   { title: '인사관리', items: ['/members', '/payroll', '/leaves'] },
   { title: '세금·정산', items: ['/tax', '/reports'] },
-  { title: '관리', items: ['/users', '/funds', '/settings'] },
+  { title: '관리', items: ['/users', '/funds', '/trash', '/settings'] },
 ]
 
 function Brand({ company, compact = false, onHome }) {

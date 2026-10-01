@@ -238,8 +238,8 @@ export default function ProjectDetail() {
     if (!removing) return
     setBusy(true)
     try {
-      await deleteEntry(removing.id)
-      toast.success('삭제되었습니다.')
+      await deleteEntry(removing.id, user?.id)
+      toast.success('휴지통으로 이동했습니다.')
       setRemoving(null)
       setReloadKey((k) => k + 1)
     } catch (error) {

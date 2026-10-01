@@ -239,8 +239,8 @@ export default function LedgerPage({ type, source = 'manual', title, description
     if (!removing) return
     setBusy(true)
     try {
-      await deleteEntry(removing.id)
-      toast.success('삭제되었습니다.')
+      await deleteEntry(removing.id, user?.id)
+      toast.success('휴지통으로 이동했습니다.')
       clearHighlightFor(removing.id)
       setRemoving(null)
       setReloadKey((k) => k + 1)
@@ -289,13 +289,13 @@ export default function LedgerPage({ type, source = 'manual', title, description
       for (const id of removingMany) {
         // eslint-disable-next-line no-await-in-loop
         try {
-          await deleteEntry(id)
+          await deleteEntry(id, user?.id)
           ok += 1
         } catch {
           /* 개별 실패는 합계에 반영 */
         }
       }
-      toast.success(`${removingMany.length}건 중 ${ok}건을 삭제했습니다.`)
+      toast.success(`${removingMany.length}건 중 ${ok}건을 휴지통으로 이동했습니다.`)
       for (const id of removingMany) clearHighlightFor(id)
       setRemovingMany(null)
       setReloadKey((k) => k + 1)
