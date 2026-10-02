@@ -42,7 +42,7 @@ function rangeMonthKeys(from, to, entries) {
 export default function Reports() {
   const { profile } = useAuth()
   const toast = useToast()
-  const period = usePeriod('quarter')
+  const period = usePeriod('quarter', 'bzen.period.reports')
 
   const [loading, setLoading] = useState(true)
   const [entries, setEntries] = useState([])

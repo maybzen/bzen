@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { PERIOD_PRESETS, quarterRange } from '../lib/constants'
 import { getPeriodRange } from '../lib/format'
+import { useLedgerIndex } from '../lib/ledgerIndex'
 import { SegmentedControl } from './ui'
 
 const ALL_KEY = 'custom'
@@ -94,10 +95,16 @@ export default function PeriodPicker({ period, className = '' }) {
     return { year: now.getFullYear(), quarter: Math.floor(now.getMonth() / 3) + 1 }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [preset === QUARTER_PICK_KEY ? custom.from : null])
+  /* 연도는 목록으로: 자료가 있는 연도만. 아직 모르면 올해만 보여줍니다 */
+  const { years: dataYears } = useLedgerIndex()
   const yearOptions = useMemo(() => {
-    const y = new Date().getFullYear()
-    return [y - 3, y - 2, y - 1, y, y + 1].map((v) => ({ key: String(v), label: `${v}년` }))
-  }, [])
+    const list = [...new Set([...(dataYears || []), picked.year])]
+      .filter((y) => Number.isFinite(Number(y)))
+      .map(Number)
+      .sort((a, b) => b - a)
+    return (list.length ? list : [now.getFullYear()]).map((v) => ({ key: String(v), label: `${v}년` }))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dataYears, picked.year])
   const quarterOptions = useMemo(
     () => [1, 2, 3, 4].map((q) => ({ key: String(q), label: `${q}분기` })),
     [],
@@ -113,12 +120,18 @@ export default function PeriodPicker({ period, className = '' }) {
 
       {preset === QUARTER_PICK_KEY ? (
         <div className="flex items-center gap-1.5">
-          <SegmentedControl
-            size="sm"
-            options={yearOptions}
+          <select
+            className="input w-auto py-1.5 text-xs"
             value={String(picked.year)}
-            onChange={(v) => pickQuarter(Number(v), picked.quarter)}
-          />
+            onChange={(e) => pickQuarter(Number(e.target.value), picked.quarter)}
+            aria-label="연도 선택"
+          >
+            {yearOptions.map((o) => (
+              <option key={o.key} value={o.key}>
+                {o.label}
+              </option>
+            ))}
+          </select>
           <SegmentedControl
             size="sm"
             options={quarterOptions}

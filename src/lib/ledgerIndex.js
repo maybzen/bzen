@@ -15,8 +15,18 @@ const listeners = new Set()
 
 function build(entries) {
   const opts = { aliasRoot }
+  const years = [
+    ...new Set(
+      (entries || [])
+        .map((e) => String(e?.entry_date || '').slice(0, 4))
+        .filter((y) => /^\d{4}$/.test(y)),
+    ),
+  ]
+    .sort((a, b) => (a < b ? 1 : -1))
+    .map(Number)
   return {
     entries,
+    years,
     partyIndex: partyVariants(entries, aliasRoot),
     issues: auditEntries(entries, opts),
     netted: findNettedGroups(entries, opts),
@@ -99,6 +109,8 @@ export function useLedgerIndex({ enabled = true } = {}) {
 
   return {
     entries: index?.entries || [],
+    /** 자료가 있는 연도 (내림차순). 분기 선택의 연도 목록용 */
+    years: index?.years || [],
     issues: index?.issues || [],
     netted: index?.netted || [],
     partyIndex: index?.partyIndex || null,

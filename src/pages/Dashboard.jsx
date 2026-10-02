@@ -202,7 +202,7 @@ export default function Dashboard() {
   const { perms } = useStaffPermissions(profile)
   const toast = useToast()
   const navigate = useNavigate()
-  const period = usePeriod('thisMonth')
+  const period = usePeriod('thisMonth', 'bzen.period.dashboard')
 
   const [loading, setLoading] = useState(true)
   const [current, setCurrent] = useState([])

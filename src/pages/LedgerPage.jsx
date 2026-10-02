@@ -31,7 +31,7 @@ export default function LedgerPage({ type, source = 'manual', title, description
   const meta = ENTRY_META[type]
   const { profile, isAdmin, user } = useAuth()
   const toast = useToast()
-  const period = usePeriod('quarter')
+  const period = usePeriod('quarter', `bzen.period.ledger.${source === 'expense_report' ? 'expense-reports' : type}`)
   const [searchParams, setSearchParams] = useSearchParams()
 
   const [entries, setEntries] = useState([])
