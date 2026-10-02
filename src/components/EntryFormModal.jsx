@@ -98,14 +98,38 @@ export default function EntryFormModal({
     [projects],
   )
 
-  /** 프로젝트 목록: 비젠공통 최상단, 나머지는 최신순 */
+  /**
+   * 프로젝트 목록: 비젠공통 최상단, 나머지는 입력 일자(행사 시점)에 가까운 순.
+   * 행사 기간에 입력일이 들어있으면 최우선, 그 외는 시작·종료일 중 가까운 순.
+   * 날짜가 없는 프로젝트는 뒤로 보냅니다.
+   */
   const sortedProjects = useMemo(() => {
     const top = []
     const rest = []
     ;(projects || []).forEach((p) => ((p?.name === INTERNAL_PROJECT_NAME ? top : rest).push(p)))
-    rest.sort((a, b) => String(b?.created_at || '').localeCompare(String(a?.created_at || '')))
+    const ref = String(form.entry_date || '').slice(0, 10)
+    const dist = (p) => {
+      const s = String(p?.start_date || '').slice(0, 10)
+      const e = String(p?.end_date || '').slice(0, 10)
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(ref) || (!s && !e)) return null
+      if (s && e && ref >= s && ref <= e) return 0
+      if (s && !e && ref >= s) return 0
+      const diffs = [s, e]
+        .filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d))
+        .map((d) => Math.abs(new Date(`${d}T00:00:00`) - new Date(`${ref}T00:00:00`)))
+      return diffs.length ? Math.min(...diffs) : null
+    }
+    const newer = (a, b) => String(b?.created_at || '').localeCompare(String(a?.created_at || ''))
+    rest.sort((a, b) => {
+      const da = dist(a)
+      const db = dist(b)
+      if (da == null && db == null) return newer(a, b)
+      if (da == null) return 1
+      if (db == null) return -1
+      return da - db || newer(a, b)
+    })
     return [...top, ...rest]
-  }, [projects])
+  }, [projects, form.entry_date])
 
   /* 비목 콤보박스: 타이핑 뒤에도 목록에서 고를 수 있습니다 */
   const [catOpen, setCatOpen] = useState(false)
