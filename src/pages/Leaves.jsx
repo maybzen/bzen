@@ -688,7 +688,8 @@ function LeaveFormModal({ open, onClose, onSaved, personOptions, userId, isAdmin
     direction: '사용',
     days: '1',
     memo: '',
-    weekendHours: '',
+    weekendStart: '',
+    weekendEnd: '',
   })
 
   useEffect(() => {
@@ -698,7 +699,8 @@ function LeaveFormModal({ open, onClose, onSaved, personOptions, userId, isAdmin
         entry_date: todayKST(),
         end_date: todayKST(),
         person: defaultPerson || f.person || '',
-        weekendHours: '',
+        weekendStart: '',
+        weekendEnd: '',
       }))
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -719,19 +721,31 @@ function LeaveFormModal({ open, onClose, onSaved, personOptions, userId, isAdmin
   }, [rows, form.person, form.leave_type])
   const projected = currentRemain + (form.direction === '발생' ? Number(form.days || 0) : -Number(form.days || 0))
 
-  /* 주말출근 → 대휴 자동 계산 (4시간 이상 1일, 미만 0.5일) */
+  /* 주말출근 → 대휴 자동 계산 (출근~퇴근 시간으로 계산, 4시간 이상 1일 · 미만 0.5일) */
   const applyWeekend = () => {
-    const h = Number(form.weekendHours)
-    if (!h || h <= 0) {
-      toast.error('주말 근무 시간을 입력해 주세요.')
+    const toMin = (t) => {
+      const m = /^(\d{1,2}):(\d{2})$/.exec(String(t || ''))
+      if (!m) return null
+      return Number(m[1]) * 60 + Number(m[2])
+    }
+    const s = toMin(form.weekendStart)
+    const e = toMin(form.weekendEnd)
+    if (s == null || e == null) {
+      toast.error('출근·퇴근 시간을 입력해 주세요.')
       return
     }
+    const mins = e - s
+    if (mins <= 0) {
+      toast.error('퇴근 시간은 출근 시간보다 늦어야 합니다.')
+      return
+    }
+    const h = Math.round((mins / 60) * 10) / 10
     setForm((f) => ({
       ...f,
       leave_type: '대휴',
       direction: '발생',
       days: String(h >= 4 ? 1 : 0.5),
-      memo: `주말출근 ${h}시간`,
+      memo: `주말출근 ${form.weekendStart}~${form.weekendEnd} (${h}시간)`,
     }))
     toast.success(h >= 4 ? '대휴 1일이 계산되었습니다.' : '대휴 0.5일이 계산되었습니다.')
   }
@@ -837,7 +851,7 @@ function LeaveFormModal({ open, onClose, onSaved, personOptions, userId, isAdmin
         <Field label="사유">
           <input
             className="input"
-            placeholder="예: 하계휴가, 주말출근 5시간"
+            placeholder="예: 하계휴가, 주말출근 09:00~14:00"
             value={form.memo}
             onChange={(e) => set('memo', e.target.value)}
           />
@@ -859,19 +873,25 @@ function LeaveFormModal({ open, onClose, onSaved, personOptions, userId, isAdmin
 
         <div className="rounded-lg border border-ink-200 bg-ink-50/60 p-3.5">
           <p className="text-xs font-bold text-ink-700">주말출근 대휴 계산</p>
-          <p className="mt-0.5 text-[11px] text-ink-500">4시간 이상 1일 · 4시간 미만 0.5일</p>
-          <div className="mt-2 flex gap-2">
+          <p className="mt-0.5 text-[11px] text-ink-500">출근~퇴근 입력 → 4시간 이상 1일 · 미만 0.5일</p>
+          <div className="mt-2 flex items-center gap-2">
             <input
-              type="number"
-              min="0"
-              step="0.5"
+              type="time"
               className="input"
-              placeholder="근무 시간 (예: 5)"
-              value={form.weekendHours}
-              onChange={(e) => set('weekendHours', e.target.value)}
+              aria-label="출근 시간"
+              value={form.weekendStart}
+              onChange={(e) => set('weekendStart', e.target.value)}
+            />
+            <span className="text-xs text-ink-400">~</span>
+            <input
+              type="time"
+              className="input"
+              aria-label="퇴근 시간"
+              value={form.weekendEnd}
+              onChange={(e) => set('weekendEnd', e.target.value)}
             />
             <button type="button" className="btn-ghost shrink-0" onClick={applyWeekend}>
-              계산해서 입력
+              자동 입력
             </button>
           </div>
         </div>
