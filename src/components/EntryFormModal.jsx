@@ -106,7 +106,11 @@ export default function EntryFormModal({
   const sortedProjects = useMemo(() => {
     const top = []
     const rest = []
-    ;(projects || []).forEach((p) => ((p?.name === INTERNAL_PROJECT_NAME ? top : rest).push(p)))
+    ;(projects || []).forEach((p) => {
+      if (p?.name === INTERNAL_PROJECT_NAME) top.push(p)
+      /* 완료된 프로젝트는 숨김. 단, 이미 연결된 건(수정 화면)은 보여줍니다 */
+      else if (p?.status !== 'done' || p?.id === form.project_id) rest.push(p)
+    })
     const ref = String(form.entry_date || '').slice(0, 10)
     const dist = (p) => {
       const s = String(p?.start_date || '').slice(0, 10)
@@ -129,7 +133,7 @@ export default function EntryFormModal({
       return da - db || newer(a, b)
     })
     return [...top, ...rest]
-  }, [projects, form.entry_date])
+  }, [projects, form.entry_date, form.project_id])
 
   /* 비목 콤보박스: 타이핑 뒤에도 목록에서 고를 수 있습니다 */
   const [catOpen, setCatOpen] = useState(false)
