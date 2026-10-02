@@ -98,6 +98,27 @@ export default function EntryFormModal({
     [projects],
   )
 
+  /** 프로젝트 목록: 비젠공통 최상단, 나머지는 최신순 */
+  const sortedProjects = useMemo(() => {
+    const top = []
+    const rest = []
+    ;(projects || []).forEach((p) => ((p?.name === INTERNAL_PROJECT_NAME ? top : rest).push(p)))
+    rest.sort((a, b) => String(b?.created_at || '').localeCompare(String(a?.created_at || '')))
+    return [...top, ...rest]
+  }, [projects])
+
+  /* 비목 콤보박스: 타이핑 뒤에도 목록에서 고를 수 있습니다 */
+  const [catOpen, setCatOpen] = useState(false)
+  useEffect(() => {
+    if (open) setCatOpen(false)
+  }, [open ])
+  const catQuery = String(form.category || '').trim()
+  const catFiltered = useMemo(() => {
+    const base = CATEGORIES[entryType] || []
+    if (!catQuery) return base
+    return base.filter((c) => c.includes(catQuery))
+  }, [entryType, catQuery])
+
   useEffect(() => {
     if (!open) return
     listFundRows('fund_cards')
@@ -139,12 +160,6 @@ export default function EntryFormModal({
   const supply = toNumber(form.supply_amount)
   const vat = toNumber(form.vat_amount)
   const total = supply + vat
-
-  const categoryOptions = useMemo(() => {
-    const base = CATEGORIES[entryType] || []
-    if (form.category && !base.includes(form.category)) return [form.category, ...base]
-    return base
-  }, [entryType, form.category])
 
   const set = (key) => (e) => {
     // 값이 바뀌면 경고 확인 상태는 다시 비운다 (그래도 저장 → 재확인)
@@ -384,7 +399,7 @@ export default function EntryFormModal({
             <Field label="프로젝트" hint="프로젝트별 손익에 반영됩니다.">
               <select className="input" value={form.project_id} onChange={set('project_id')}>
                 <option value="">선택 없음</option>
-                {projects.map((p) => (
+                {sortedProjects.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.name}
                     {p.code ? ` (${p.code})` : ''}
@@ -396,7 +411,7 @@ export default function EntryFormModal({
             <Field label="프로젝트" hint="비우면 공통비용으로 잡힙니다.">
               <select className="input" value={form.project_id} onChange={set('project_id')}>
                 <option value="">선택 없음 (공통)</option>
-                {projects.map((p) => (
+                {sortedProjects.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.name}
                     {p.code ? ` (${p.code})` : ''}
@@ -418,18 +433,54 @@ export default function EntryFormModal({
           </Field>
 
           <Field label={labels.category}>
-            <input
-              className="input"
-              list={`cat-${entryType}`}
-              placeholder="목록에서 선택하거나 직접 입력"
-              value={form.category}
-              onChange={set('category')}
-            />
-            <datalist id={`cat-${entryType}`}>
-              {categoryOptions.map((c) => (
-                <option key={c} value={c} />
-              ))}
-            </datalist>
+            <div className="relative">
+              <input
+                className="input pr-9"
+                placeholder="목록에서 선택하거나 직접 입력 (비워도 됨)"
+                value={form.category}
+                onChange={set('category')}
+                onFocus={() => setCatOpen(true)}
+              />
+              <button
+                type="button"
+                aria-label="비목 목록 보기"
+                onClick={() => setCatOpen((v) => !v)}
+                className="absolute right-1 top-1/2 -translate-y-1/2 rounded-md px-2 py-1 text-sm text-ink-400 transition hover:bg-ink-100 hover:text-ink-700"
+              >
+                ▾
+              </button>
+              {catOpen ? (
+                <>
+                  <button
+                    type="button"
+                    aria-label="목록 닫기"
+                    className="fixed inset-0 z-[80] cursor-default"
+                    onClick={() => setCatOpen(false)}
+                  />
+                  <ul className="absolute z-[81] mt-1 max-h-52 w-full overflow-auto rounded-lg border border-ink-200 bg-white py-1 shadow-pop">
+                    {catFiltered.map((c) => (
+                      <li key={c}>
+                        <button
+                          type="button"
+                          className="block w-full truncate px-3 py-2 text-left text-sm transition hover:bg-ink-50"
+                          onClick={() => {
+                            setFields((f) => ({ ...f, category: c }))
+                            setCatOpen(false)
+                          }}
+                        >
+                          {c}
+                        </button>
+                      </li>
+                    ))}
+                    {catFiltered.length ? null : (
+                      <li className="px-3 py-2 text-xs text-ink-400">
+                        일치하는 비목 없음 — 입력한 그대로 저장됩니다
+                      </li>
+                    )}
+                  </ul>
+                </>
+              ) : null}
+            </div>
             {categoryHint(form.category) ? (
               <p className="mt-1 text-xs text-ink-500">💡 {categoryHint(form.category)}</p>
             ) : null}
