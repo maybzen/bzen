@@ -749,7 +749,7 @@ function emptyForm(entryType, source, userId) {
     memo: '',
     card_user: '',
     card_label: '',
-    requester_id: source === 'expense_report' ? userId || '' : '',
+    requester_id: source === 'expense_report' || entryType === 'opex' ? userId || '' : '',
     author_id: userId || '',
   }
 }
