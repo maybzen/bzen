@@ -1096,7 +1096,7 @@ export default function CardImport({ embed = false } = {}) {
                       </select>
                     </td>
                     <td className="td">
-                      <CardUserSelect value={r.cardUser} onChange={(v) => setRow(r.key, { cardUser: v })} />
+                      <CardUserSelect value={r.cardUser} onChange={(v) => setRow(r.key, { cardUser: v })} allowCustom />
                     </td>
                     <td className="td">
                       <select
@@ -1542,6 +1542,7 @@ export default function CardImport({ embed = false } = {}) {
                           <CardUserSelect
                             value={cardUser}
                             onChange={(v) => setCell(entry.id, { cardUser: v })}
+                            allowCustom
                           />
                         </td>
                         <td className="td max-w-[110px] truncate text-xs text-ink-500">

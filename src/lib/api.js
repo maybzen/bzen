@@ -65,6 +65,20 @@ export function updateProfile(id, patch) {
   return unwrap(supabase.from('profiles').update(patch).eq('id', id).select().single())
 }
 
+/**
+ * 구성원 직접 추가 (로그인 계정 없는 외부인력·손선욱형용, 관리자 전용).
+ * id를 비우면 UUID를 만들어 profiles에 바로 넣습니다.
+ * RLS(migration_rls_hardening.sql)상 관리자만 insert 가능합니다.
+ */
+export function createProfile(payload) {
+  const row = { ...payload }
+  delete row.created_at
+  if (!row.id && typeof crypto !== 'undefined' && crypto.randomUUID) row.id = crypto.randomUUID()
+  if (!row.role) row.role = 'staff'
+  if (row.active === undefined) row.active = true
+  return unwrap(supabase.from('profiles').insert(row).select().single())
+}
+
 /* ------------------------------------------------------------------ */
 /* 프로젝트                                                            */
 /* 휴지통: 삭제는 휴지통 이동(UPDATE)입니다. 영구삭제·복원은 휴지통 메뉴에서. */

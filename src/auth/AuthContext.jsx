@@ -2,7 +2,8 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import { supabase } from '../lib/supabase'
 import { getProfile } from '../lib/api'
 
-const AuthContext = createContext(null)
+/* 테스트(scripts/smoke-render)에서 로그인 상태를 주입하려고 외부로 노출합니다. */
+export const AuthContext = createContext(null)
 
 export function useAuth() {
   return useContext(AuthContext)

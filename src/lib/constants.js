@@ -261,10 +261,45 @@ export const CARD_USERS = [
   { code: 'H', name: '김혜린' },
   { code: 'J', name: '박은영' },
   { code: 'M', name: '이정현' },
+  { code: 'C', name: '허수정 과장' },
+  { code: 'BE', name: '장정아 과장' },
 ]
 
 export function cardUserName(code) {
   return CARD_USERS.find((u) => u.code === code)?.name || ''
+}
+
+/**
+ * 사무형 외부인력 (행사 알바 아님 · 3.3% 사업소득 원천징수).
+ * 손선욱님처럼 로그인 계정 없이 근무하지만, 세무상 내부직원이 아니라
+ * 급여관리의 단기·외부 섹션에서 관리합니다.
+ */
+export const EXTERNAL_OFFICE_STAFF = [
+  { name: '허수정', code: 'C' },
+  { name: '장정아', code: 'BE' },
+]
+
+/** 로그인 계정 없이 내부 직원처럼 근무하는 분 (명세서 대상, 3.3% 아님) */
+export const INTERNAL_EXTRA_STAFF = ['손선욱']
+
+export function cardCodeForName(name) {
+  const n = String(name || '').trim()
+  if (!n) return ''
+  const hit = CARD_USERS.find((u) => String(u.name || '').replace(/\s+/g, '').startsWith(n) || n.startsWith(String(u.name || '').split(' ')[0]))
+  if (hit && hit.code !== 'ALL') return hit.code
+  const ext = EXTERNAL_OFFICE_STAFF.find((e) => e.name === n)
+  return ext ? ext.code : ''
+}
+
+export function employmentKindOf(name, staffNames, employmentType) {
+  const n = String(name || '').trim()
+  if (!n) return '외부·단기'
+  // DB에 구분이 저장돼 있으면 그 선택을 우선합니다 (3.3% 여부 직접 선택용)
+  if (employmentType === 'external') return '외부·단기'
+  if (employmentType === 'internal') return '내부'
+  if (EXTERNAL_OFFICE_STAFF.some((e) => e.name === n)) return '외부·단기'
+  if ((staffNames && staffNames.has && staffNames.has(n)) || INTERNAL_EXTRA_STAFF.includes(n)) return '내부'
+  return '외부·단기'
 }
 
 export function suggestCategory(merchant, memo, entryType = null) {
