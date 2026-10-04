@@ -7,7 +7,7 @@ import { useToast } from '../components/Toast'
 import { AmountInput, ConfirmDialog, EmptyState, InlineAlert, LoadingBlock, Modal, PageHeader, StatCard } from '../components/ui'
 import { useAuth } from '../auth/AuthContext'
 import { formatKRW, monthEnd, todayISO } from '../lib/format'
-import { INTERNAL_PROJECT_NAME, INTERNAL_EXTRA_STAFF, employmentKindOf, sortManagers } from '../lib/constants'
+import { INTERNAL_PROJECT_NAME, employmentKindOf, sortManagers } from '../lib/constants'
 import { downloadTextFile, parseCSV, toCSV } from '../lib/csv'
 import {
   createEntries,
@@ -204,8 +204,6 @@ export default function Payroll() {
     () => new Set((profiles || []).map((p) => String(p.full_name || '').trim()).filter(Boolean)),
     [profiles],
   )
-  /* 로그인 계정 없이 사무형으로 근무하는 분 (기본 내부·명세서 대상. 3.3%면 구성원에서 외부로 변경) */
-  const INTERNAL_EXTRA = useMemo(() => new Set(INTERNAL_EXTRA_STAFF), [])
   const profileByName = useMemo(() => {
     const m = new Map()
     for (const p of profiles || []) {
@@ -217,11 +215,12 @@ export default function Payroll() {
   const personKind = (name) => {
     const n = String(name || '').trim()
     if (!n) return '외부·단기'
-    // 구성원에서 고른 구분(내부/외부·3.3%)이 있으면 그 선택을 우선합니다
+    // 구성원에서 고른 구분(내부/사무형외부/단기외부)이 있으면 그 선택을 우선합니다
     const emp = profileByName.get(n)?.employment_type
-    if (emp === 'external' || emp === 'internal') return employmentKindOf(n, staffNames, emp)
-    if (INTERNAL_EXTRA.has(n)) return '내부'
-    return employmentKindOf(n, staffNames) === '내부' ? '내부' : '외부·단기'
+    if (emp === 'external_office' || emp === 'external' || emp === 'internal') {
+      return employmentKindOf(n, staffNames, emp)
+    }
+    return employmentKindOf(n, staffNames)
   }
 
   /* 향란 → 보람 → 혜민 순서 (계정관리 담당자 순서와 동일), 나머지는 이름순 */
@@ -249,13 +248,27 @@ export default function Payroll() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [salaryRows, staffNames, byStaffOrder],
   )
-  const tempSalaryRows = useMemo(
+  /* 사무형 외부 (상주·3.3%. 허수정·장정아님형 — 행사 알바와 분리 표시) */
+  const officeSalaryRows = useMemo(
     () =>
       salaryRows
-        .filter((e) => personKind(e.counterparty) !== '내부')
+        .filter((e) => personKind(e.counterparty) === '사무형외부')
         .sort((a, b) => String(a.counterparty || '').localeCompare(String(b.counterparty || ''), 'ko')),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [salaryRows, staffNames],
+  )
+  const tempSalaryRows = useMemo(
+    () =>
+      salaryRows
+        .filter((e) => personKind(e.counterparty) === '외부·단기')
+        .sort((a, b) => String(a.counterparty || '').localeCompare(String(b.counterparty || ''), 'ko')),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [salaryRows, staffNames],
+  )
+  const officeTotal = useMemo(() => sumTotal(officeSalaryRows), [officeSalaryRows])
+  const officeHeads = useMemo(
+    () => new Set(officeSalaryRows.map((e) => String(e.counterparty || '').trim())).size,
+    [officeSalaryRows],
   )
   const tempTotal = useMemo(() => sumTotal(tempSalaryRows), [tempSalaryRows])
   const tempHeads = useMemo(
@@ -291,7 +304,12 @@ export default function Payroll() {
     () => [...new Set(tempSalaryRows.map((e) => String(e.counterparty || '').trim()))].sort((a, b) => a.localeCompare(b, 'ko')),
     [tempSalaryRows],
   )
+  const rosterOffice = useMemo(
+    () => [...new Set(officeSalaryRows.map((e) => String(e.counterparty || '').trim()))].sort((a, b) => a.localeCompare(b, 'ko')),
+    [officeSalaryRows],
+  )
   const staffShown = useMemo(() => staffSalaryRows.filter(matchName), [staffSalaryRows, matchName])
+  const officeShown = useMemo(() => officeSalaryRows.filter(matchName), [officeSalaryRows, matchName])
   const tempShown = useMemo(() => tempSalaryRows.filter(matchName), [tempSalaryRows, matchName])
   const taxShown = useMemo(
     () => [...insuranceRows, ...taxRows].filter(matchName),
@@ -315,6 +333,7 @@ export default function Payroll() {
     return { sal, rep, total: sal + rep }
   }
   const staffPayout = useMemo(() => payoutOf(staffShown), [staffShown, reportByPerson]) // eslint-disable-line react-hooks/exhaustive-deps
+  const officePayout = useMemo(() => payoutOf(officeShown), [officeShown, reportByPerson]) // eslint-disable-line react-hooks/exhaustive-deps
   const tempPayout = useMemo(() => payoutOf(tempShown), [tempShown, reportByPerson]) // eslint-disable-line react-hooks/exhaustive-deps
   const unattributedReport = useMemo(() => reportByPerson.get('') || 0, [reportByPerson])
 
@@ -398,7 +417,7 @@ export default function Payroll() {
         ) : null}
       </PageHeader>
 
-      {(rosterStaff.length + rosterTemp.length) > 0 ? (
+      {(rosterStaff.length + rosterOffice.length + rosterTemp.length) > 0 ? (
         <div className="card flex flex-wrap items-center gap-1.5 px-4 py-3">
           <span className="mr-1 text-xs font-semibold text-ink-500">사람</span>
           <button
@@ -417,6 +436,18 @@ export default function Payroll() {
               onClick={() => setSelName((s) => (s === n ? '' : n))}
               className={`rounded-md px-2.5 py-1 text-xs font-semibold transition ${
                 selName === n ? 'bg-brand-600 text-white' : 'bg-ink-100 text-ink-600 hover:bg-ink-200'
+              }`}
+            >
+              {n}
+            </button>
+          ))}
+          {rosterOffice.map((n) => (
+            <button
+              key={`o:${n}`}
+              type="button"
+              onClick={() => setSelName((s) => (s === n ? '' : n))}
+              className={`rounded-md px-2.5 py-1 text-xs font-semibold transition ${
+                selName === n ? 'bg-sky-600 text-white' : 'bg-sky-50 text-sky-700 hover:bg-sky-100'
               }`}
             >
               {n}
@@ -474,7 +505,7 @@ export default function Payroll() {
               unit="명"
               tone="neutral"
               icon="users"
-              hint={`내부 ${internalCount}명 · 외부·단기 ${tempHeads}명(${formatKRW(tempTotal)}원)`}
+              hint={`내부 ${internalCount}명 · 사무형외부 ${officeHeads}명(${formatKRW(officeTotal)}원) · 단기외부 ${tempHeads}명(${formatKRW(tempTotal)}원)`}
             />
             <StatCard label="4대보험 회사부담" value={insuranceTotal} tone="opex" icon="receipt" hint="건보·산재" />
             <StatCard label="세금·원천징수" value={taxTotal} tone={taxTotal > 0 ? 'loss' : 'neutral'} icon="file" hint="원천세 등" />
@@ -515,10 +546,41 @@ export default function Payroll() {
           <section className="card overflow-hidden">
             <header className="border-b border-ink-200 px-4 py-3.5">
               <h2 className="text-sm font-bold text-ink-900">
+                사무형 외부 인력 ({officeShown.length}건)
+              </h2>
+              <p className="mt-0.5 text-xs text-ink-500">
+                사무실 상주지만 세무상 외부(3.3%)인 분입니다. 행사 알바와 분리해서 관리합니다. 합계 {formatKRW(sumTotal(officeShown))}원
+                {officePayout.rep ? (
+                  <> · 지출결의 포함 실지급 <strong className="text-ink-800">{formatKRW(officePayout.total)}원</strong></>
+                ) : null}
+                <span className="mt-0.5 block">사업소득 3.3% 원천징수 대상 · 명세서 없이 지급액 기준 관리합니다. 구분 변경은 구성원 화면에서.</span>
+              </p>
+            </header>
+            {officeShown.length ? (
+              <EntryTable
+                entries={officeShown}
+                projects={projects}
+                profiles={profiles}
+                attachmentsByEntry={attachmentsByEntry}
+                canEdit={isAdmin}
+                onEdit={openEdit}
+                onDelete={isAdmin ? setRemoving : undefined}
+                onOpenAttachments={setViewerFiles}
+                canChangeAuthor={isAdmin}
+                extraPayMap={Object.fromEntries(reportByPerson)}
+              />
+            ) : (
+              <EmptyState icon="users" title="사무형 외부 인력 급여가 없습니다" />
+            )}
+          </section>
+
+          <section className="card overflow-hidden">
+            <header className="border-b border-ink-200 px-4 py-3.5">
+              <h2 className="text-sm font-bold text-ink-900">
                 단기·외부 인력 ({tempShown.length}건)
               </h2>
               <p className="mt-0.5 text-xs text-ink-500">
-                행사 알바 등 외부 인력은 여기서 따로 관리됩니다. 3.3% 여부는 구성원 화면의 구분(내부/외부)에서 인별로 바꿀 수 있습니다. 합계 {formatKRW(sumTotal(tempShown))}원
+                행사 알바 등 단기 외부 인력입니다. 합계 {formatKRW(sumTotal(tempShown))}원
                 {tempPayout.rep ? (
                   <> · 지출결의 포함 실지급 <strong className="text-ink-800">{formatKRW(tempPayout.total)}원</strong></>
                 ) : null}
@@ -615,6 +677,7 @@ export default function Payroll() {
         defaultProjectId={internalProjectId}
         existingNames={existingSalaryNames}
         staffNames={staffNames}
+        kindOf={personKind}
         userId={user?.id}
       />
 
@@ -1042,7 +1105,7 @@ export function buildPayrollRows(parsed, { existingNames = new Set(), defaultPro
   return { rows: out, skipped }
 }
 
-function PayrollImportModal({ open, onClose, onDone, ym, defaultProjectId, existingNames, staffNames, userId }) {
+function PayrollImportModal({ open, onClose, onDone, ym, defaultProjectId, existingNames, staffNames, kindOf, userId }) {
   const toast = useToast()
   const [rows, setRows] = useState([])
   const [skipped, setSkipped] = useState([])
@@ -1174,11 +1237,12 @@ function PayrollImportModal({ open, onClose, onDone, ym, defaultProjectId, exist
                       <td className="td py-2 text-xs">{row.entry_date}</td>
                       <td className="td py-2 text-xs">{row.counterparty}</td>
                       <td className="td py-2 text-xs">
-                        {staffNames.has(row.counterparty) ? (
-                          <span className="chip bg-brand-50 text-brand-700">내부</span>
-                        ) : (
-                          <span className="chip bg-amber-50 text-amber-700">단기·외부</span>
-                        )}
+                        {(() => {
+                          const kind = kindOf ? kindOf(row.counterparty) : (staffNames.has(row.counterparty) ? '내부' : '외부·단기')
+                          if (kind === '사무형외부') return <span className="chip bg-sky-50 text-sky-700">사무형외부</span>
+                          if (kind === '내부') return <span className="chip bg-brand-50 text-brand-700">내부</span>
+                          return <span className="chip bg-amber-50 text-amber-700">단기·외부</span>
+                        })()}
                       </td>
                       <td className="td num py-2 text-xs">{formatKRW(row.supply_amount)}</td>
                     </tr>

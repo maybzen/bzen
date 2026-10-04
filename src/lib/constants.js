@@ -269,14 +269,24 @@ export function cardUserName(code) {
 }
 
 /**
- * 로그인 계정 없이 근무하는 사무형 인력 (기본은 내부).
- * 손선욱·허수정·장정아님처럼 사무직처럼 근무하면 내부(명세서 대상)로 집계하고,
- * 3.3% 사업소득으로 떼게 되면 구성원 화면에서 해당 인원만 외부로 바꾸면 됩니다.
+ * 로그인 계정 없이 내부 직원처럼 근무하는 분 (명세서 대상, 3.3% 아님).
+ * 예: 손선욱님
  */
-export const INTERNAL_EXTRA_STAFF = ['손선욱', '허수정', '장정아']
+export const INTERNAL_EXTRA_STAFF = ['손선욱']
 
-/** 구성원 빠른등록용 사무형 인력 목록 (카드코드는 기타 직접입력으로 적으면 됩니다) */
-export const OFFICE_STAFF = [{ name: '손선욱' }, { name: '허수정' }, { name: '장정아' }]
+/**
+ * 사무형 외부 인력 (사무실 상주지만 세무상 외부·3.3% 사업소득).
+ * 예: 허수정·장정아님 — 내부는 아니고 외부에 두되, 행사 알바와는 다르게 표시합니다.
+ * 구성원 화면에서 인별로 내부/사무형외부/단기외부로 바꿀 수 있고, 정하지 않았을 때의 기본값입니다.
+ */
+export const OFFICE_EXTERNAL_DEFAULT = ['허수정', '장정아']
+
+/** 구성원 빠른등록용 사무형 인력 목록 */
+export const OFFICE_STAFF = [
+  { name: '손선욱', kind: 'internal' },
+  { name: '허수정', kind: 'external_office' },
+  { name: '장정아', kind: 'external_office' },
+]
 
 export function cardCodeForName(name) {
   const n = String(name || '').trim()
@@ -286,13 +296,20 @@ export function cardCodeForName(name) {
   return ''
 }
 
+/**
+ * 인원 구분 3단계.
+ * - '내부': 4대보험·명세서 대상 (구성원 + 손선욱님형)
+ * - '사무형외부': 사무실 상주지만 세무상 외부·3.3% (허수정·장정아님형). 행사 알바와 다르게 표시합니다.
+ * - '외부·단기': 행사 알바 등 단기 외부 인력. 3.3% · 명세서 없이 지급액 기준.
+ * employmentType(DB 저장값)이 있으면 그 선택을 우선합니다.
+ */
 export function employmentKindOf(name, staffNames, employmentType) {
   const n = String(name || '').trim()
   if (!n) return '외부·단기'
-  // DB에 구분이 저장돼 있으면 그 선택을 우선합니다 (3.3% 여부 직접 선택용)
+  if (employmentType === 'external_office') return '사무형외부'
   if (employmentType === 'external') return '외부·단기'
   if (employmentType === 'internal') return '내부'
-  // 사무형 인력(손선욱·허수정·장정아)은 기본 내부
+  if (OFFICE_EXTERNAL_DEFAULT.includes(n)) return '사무형외부'
   if (INTERNAL_EXTRA_STAFF.includes(n)) return '내부'
   if (staffNames && staffNames.has && staffNames.has(n)) return '내부'
   return '외부·단기'

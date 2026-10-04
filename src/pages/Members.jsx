@@ -4,7 +4,7 @@ import { useToast } from '../components/Toast'
 import { EmptyState, Field, InlineAlert, LoadingBlock, Modal, PageHeader, Spinner, StatCard } from '../components/ui'
 import { useAuth } from '../auth/AuthContext'
 import { formatKRW } from '../lib/format'
-import { OFFICE_STAFF, cardCodeForName } from '../lib/constants'
+import { OFFICE_EXTERNAL_DEFAULT, OFFICE_STAFF, cardCodeForName } from '../lib/constants'
 import { createProfile, listEntries, listProfiles, updateProfile } from '../lib/api'
 
 /**
@@ -29,11 +29,20 @@ function tenure(hireDate) {
   return m ? `${y}년 ${m}개월` : `${y}년`
 }
 
-function isExternalProfile(p) {
-  if (!p) return false
-  // 구성원에서 직접 고른 구분만 따릅니다. 정하지 않았으면 내부로 봅니다.
-  // (손선욱·허수정·장정아님은 사무형 내부가 기본. 3.3%로 떼게 되면 외부로 바꾸면 됩니다)
-  return p.employment_type === 'external'
+function kindOfProfile(p) {
+  if (!p) return 'internal'
+  // 구성원에서 직접 고른 구분을 우선합니다
+  if (p.employment_type === 'external_office' || p.employment_type === 'external') return p.employment_type
+  if (p.employment_type === 'internal') return 'internal'
+  // 아직 구분을 안 고른 사무형 인력(허수정·장정아)은 사무형외부가 기본
+  if (OFFICE_EXTERNAL_DEFAULT.includes(String(p.full_name || '').trim())) return 'external_office'
+  return 'internal'
+}
+
+const KIND_META = {
+  internal: { label: '내부', chip: 'bg-ink-100 text-ink-600', title: '내부 직원 (4대보험·명세서)' },
+  external_office: { label: '사무형외부', chip: 'bg-sky-50 text-sky-700', title: '사무실 상주지만 세무상 외부 · 3.3% 원천징수' },
+  external: { label: '단기외부', chip: 'bg-amber-50 text-amber-700', title: '행사 알바 등 단기 외부 · 3.3% 원천징수' },
 }
 
 function cardCodeOf(p) {
@@ -240,7 +249,8 @@ export default function Members() {
 
   const dirtyCount = Object.keys(rowEdits).length
   const activeList = useMemo(() => profiles.filter((p) => p.active !== false), [profiles])
-  const externalList = useMemo(() => profiles.filter(isExternalProfile), [profiles])
+  const officeExternalList = useMemo(() => profiles.filter((p) => kindOfProfile(p) === 'external_office'), [profiles])
+  const tempExternalList = useMemo(() => profiles.filter((p) => kindOfProfile(p) === 'external'), [profiles])
   /* 챙기는 생일 컬럼(migration_profiles_celebrate.sql) 적용 전에는 숨깁니다 */
   const celebrateSupported = useMemo(() => profiles.some((p) => p && 'birth_celebrate' in p), [profiles])
   const externalSupported = useMemo(() => profiles.some((p) => p && 'employment_type' in p), [profiles])
@@ -262,9 +272,9 @@ export default function Members() {
 
       {!loading && !externalSupported ? (
         <InlineAlert tone="info">
-          사무형 외부인력 구분(내부/외부·카드코드)을 쓰려면 Supabase SQL Editor에서{' '}
-          <strong>supabase/migration_profiles_external.sql</strong>을 1회 실행하세요. 실행 전에도 이름 기준(허수정·장정아
-          → 외부)으로 동작합니다.
+          인별 구분(내부/사무형외부/단기외부·카드코드)을 저장하려면 Supabase SQL Editor에서{' '}
+          <strong>supabase/migration_profiles_external.sql</strong>을 1회 실행하세요. 실행 전에도 허수정·장정아님은
+          사무형외부로 표시됩니다.
         </InlineAlert>
       ) : null}
 
@@ -276,11 +286,14 @@ export default function Members() {
             <StatCard label="재직" value={String(activeList.length)} unit="명" tone="neutral" icon="users" />
             <StatCard
               label="외부인력"
-              value={String(externalList.filter((p) => p.active !== false).length)}
+              value={String(
+                officeExternalList.filter((p) => p.active !== false).length +
+                  tempExternalList.filter((p) => p.active !== false).length,
+              )}
               unit="명"
               tone="neutral"
               icon="users"
-              hint="구성원에서 외부로 지정한 인원"
+              hint={`사무형 ${officeExternalList.filter((p) => p.active !== false).length}명 · 단기 ${tempExternalList.filter((p) => p.active !== false).length}명`}
             />
             <StatCard label="인건비 누적" value={totalPay} tone="opex" icon="coins" hint="장부 인건비 합계" />
           </div>
@@ -289,14 +302,14 @@ export default function Members() {
             (s) => !profiles.some((p) => String(p.full_name || '').trim() === s.name),
           ).length ? (
             <div className="card flex flex-wrap items-center gap-2 border-amber-200 bg-amber-50/60 px-4 py-2.5 text-xs">
-              <span className="font-semibold text-ink-800">아직 구성원에 없는 사무형 인력 (내부로 등록됩니다)</span>
+              <span className="font-semibold text-ink-800">아직 구성원에 없는 사무형 인력</span>
               {OFFICE_STAFF.filter(
                 (s) => !profiles.some((p) => String(p.full_name || '').trim() === s.name),
               ).map((s) => (
                 <button
                   key={s.name}
                   type="button"
-                  onClick={() => openAdd({ full_name: s.name, employment_type: 'internal' })}
+                  onClick={() => openAdd({ full_name: s.name, employment_type: s.kind || 'internal' })}
                   className="chip bg-white font-bold text-amber-700 hover:underline"
                 >
                   + {s.name}
@@ -343,7 +356,8 @@ export default function Members() {
                       const work = { ...p, ...edit }
                       const dirty = Object.keys(edit).length > 0
                       const saving = savingId === p.id
-                      const external = isExternalProfile(work)
+                      const kind = kindOfProfile(work)
+                      const kindMeta = KIND_META[kind] || KIND_META.internal
                       return (
                         <tr key={p.id} className={dirty ? 'bg-brand-50/40' : undefined}>
                           <td className="td">
@@ -357,19 +371,20 @@ export default function Members() {
                           <td className="td">
                             {externalSupported ? (
                               <select
-                                className="input w-24 py-1 text-xs"
-                                value={work.employment_type || (external ? 'external' : 'internal')}
+                                className="input w-28 py-1 text-xs"
+                                value={['internal', 'external_office', 'external'].includes(work.employment_type) ? work.employment_type : kind}
                                 onChange={(e) => setCell(p.id, { employment_type: e.target.value })}
                               >
                                 <option value="internal">내부</option>
-                                <option value="external">외부·3.3%</option>
+                                <option value="external_office">사무형외부·3.3%</option>
+                                <option value="external">단기외부·3.3%</option>
                               </select>
                             ) : (
                               <span
-                                className={`chip ${external ? 'bg-amber-50 text-amber-700' : 'bg-ink-100 text-ink-600'}`}
-                                title={external ? '사무형 외부인력 · 3.3% 원천징수' : '내부 직원'}
+                                className={`chip ${kindMeta.chip}`}
+                                title={kindMeta.title}
                               >
-                                {external ? '외부·3.3%' : '내부'}
+                                {kindMeta.label}
                               </span>
                             )}
                           </td>
@@ -453,8 +468,8 @@ export default function Members() {
               </div>
               <p className="border-t border-ink-100 px-4 py-3 text-xs leading-relaxed text-ink-500">
                 <Icon name="info" size={13} className="mr-1 inline text-ink-400" />
-                휴무대장 입사일과 함께 씁니다. 퇴사로 바꾸면 목록·집계에서 빠집니다. 외부는 급여관리 단기·외부 섹션으로
-                집계되고, 카드코드는 카드내역·운영비 작성 시 기타 직접입력과 같은 값으로 씁니다.
+                휴무대장 입사일과 함께 씁니다. 퇴사로 바꾸면 목록·집계에서 빠집니다. 사무형외부·단기외부는 급여관리에서
+                분리 표시되고(3.3%), 카드코드는 카드내역·운영비 작성 시 기타 직접입력과 같은 값으로 씁니다.
                 {user ? '' : ''}
               </p>
             </div>
@@ -502,14 +517,15 @@ export default function Members() {
               required
             />
           </Field>
-          <Field label="구분" hint="외부는 3.3% · 급여 단기·외부로 집계">
+          <Field label="구분" hint="외부는 3.3% · 사무형은 급여에서 따로 표시">
             <select
               className="input"
               value={addForm.employment_type}
               onChange={(e) => setAddForm((f) => ({ ...f, employment_type: e.target.value }))}
             >
               <option value="internal">내부 (4대보험·명세서)</option>
-              <option value="external">외부·3.3% (사무형·알바)</option>
+              <option value="external_office">사무형외부·3.3% (상주)</option>
+              <option value="external">단기외부·3.3% (행사 알바)</option>
             </select>
           </Field>
           <Field label="카드코드" hint="영어 대문자 (카드 화면의 기타 직접입력과 같은 값)">
