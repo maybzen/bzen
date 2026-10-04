@@ -4,12 +4,12 @@ import { useToast } from '../components/Toast'
 import { EmptyState, Field, InlineAlert, LoadingBlock, Modal, PageHeader, Spinner, StatCard } from '../components/ui'
 import { useAuth } from '../auth/AuthContext'
 import { formatKRW } from '../lib/format'
-import { EXTERNAL_OFFICE_STAFF, cardCodeForName } from '../lib/constants'
+import { OFFICE_STAFF, cardCodeForName } from '../lib/constants'
 import { createProfile, listEntries, listProfiles, updateProfile } from '../lib/api'
 
 /**
  * 구성원 (인사관리 · 대표 전용).
- * 내부 직원 + 로그인 없는 사무형 외부인력(허수정 C · 장정아 BE, 3.3%)을 함께 관리합니다.
+ * 내부 직원 + 로그인 없이 근무하는 사무형 인력(손선욱·허수정·장정아)을 함께 관리합니다.
  * 이름·부서·연락처·입사일·재직·구분(내부/외부)·카드코드를 이 화면에서 직접 추가·수정합니다.
  * 로그인 계정이 필요한 경우(출근·장부 작성용)는 계정관리에서 만듭니다.
  */
@@ -29,14 +29,11 @@ function tenure(hireDate) {
   return m ? `${y}년 ${m}개월` : `${y}년`
 }
 
-const EXTERNAL_NAMES = new Set(EXTERNAL_OFFICE_STAFF.map((e) => e.name))
-
 function isExternalProfile(p) {
   if (!p) return false
-  // 구성원에서 직접 고른 구분을 우선합니다 (3.3% 아닐 수도 있음)
-  if (p.employment_type === 'external') return true
-  if (p.employment_type === 'internal') return false
-  return EXTERNAL_NAMES.has(String(p.full_name || '').trim())
+  // 구성원에서 직접 고른 구분만 따릅니다. 정하지 않았으면 내부로 봅니다.
+  // (손선욱·허수정·장정아님은 사무형 내부가 기본. 3.3%로 떼게 되면 외부로 바꾸면 됩니다)
+  return p.employment_type === 'external'
 }
 
 function cardCodeOf(p) {
@@ -64,7 +61,7 @@ export default function Members() {
   const [addError, setAddError] = useState('')
   const [addForm, setAddForm] = useState({
     full_name: '',
-    employment_type: 'external',
+    employment_type: 'internal',
     card_code: '',
     department: '',
     phone: '',
@@ -185,7 +182,7 @@ export default function Members() {
   const openAdd = (preset = {}) => {
     setAddForm({
       full_name: preset.full_name || '',
-      employment_type: preset.employment_type || 'external',
+      employment_type: preset.employment_type || 'internal',
       card_code: preset.card_code || cardCodeForName(preset.full_name) || '',
       department: preset.department || '',
       phone: preset.phone || '',
@@ -255,7 +252,7 @@ export default function Members() {
     <div className="flex flex-col gap-5">
       <PageHeader
         title="구성원"
-        description="인사관리 · 내부 직원과 사무형 외부인력(3.3%)을 함께 관리합니다. 이름·구분·카드코드까지 이 화면에서 추가·수정합니다."
+        description="인사관리 · 내부 직원과 사무형 인력(손선욱·허수정·장정아)을 함께 관리합니다. 이름·구분·카드코드까지 이 화면에서 추가·수정합니다."
       >
         <button type="button" className="btn-primary" onClick={() => openAdd()}>
           <Icon name="plus" size={16} />
@@ -283,26 +280,26 @@ export default function Members() {
               unit="명"
               tone="neutral"
               icon="users"
-              hint="3.3% 사무형 (허수정 C · 장정아 BE)"
+              hint="구성원에서 외부로 지정한 인원"
             />
             <StatCard label="인건비 누적" value={totalPay} tone="opex" icon="coins" hint="장부 인건비 합계" />
           </div>
 
-          {EXTERNAL_OFFICE_STAFF.filter(
+          {OFFICE_STAFF.filter(
             (s) => !profiles.some((p) => String(p.full_name || '').trim() === s.name),
           ).length ? (
             <div className="card flex flex-wrap items-center gap-2 border-amber-200 bg-amber-50/60 px-4 py-2.5 text-xs">
-              <span className="font-semibold text-ink-800">아직 구성원에 없는 사무형 외부인력</span>
-              {EXTERNAL_OFFICE_STAFF.filter(
+              <span className="font-semibold text-ink-800">아직 구성원에 없는 사무형 인력 (내부로 등록됩니다)</span>
+              {OFFICE_STAFF.filter(
                 (s) => !profiles.some((p) => String(p.full_name || '').trim() === s.name),
               ).map((s) => (
                 <button
                   key={s.name}
                   type="button"
-                  onClick={() => openAdd({ full_name: s.name, employment_type: 'external', card_code: s.code })}
+                  onClick={() => openAdd({ full_name: s.name, employment_type: 'internal' })}
                   className="chip bg-white font-bold text-amber-700 hover:underline"
                 >
-                  + {s.name} ({s.code})
+                  + {s.name}
                 </button>
               ))}
             </div>
@@ -456,8 +453,8 @@ export default function Members() {
               </div>
               <p className="border-t border-ink-100 px-4 py-3 text-xs leading-relaxed text-ink-500">
                 <Icon name="info" size={13} className="mr-1 inline text-ink-400" />
-                휴무대장 입사일과 함께 씁니다. 퇴사로 바꾸면 목록·집계에서 빠집니다. 외부는 급여관리 단기·외부 섹션(3.3%)으로
-                집계되고, 카드 이용자 코드(C·BE 등)는 카드내역·운영비 작성에 그대로 씁니다.
+                휴무대장 입사일과 함께 씁니다. 퇴사로 바꾸면 목록·집계에서 빠집니다. 외부는 급여관리 단기·외부 섹션으로
+                집계되고, 카드코드는 카드내역·운영비 작성 시 기타 직접입력과 같은 값으로 씁니다.
                 {user ? '' : ''}
               </p>
             </div>
@@ -515,7 +512,7 @@ export default function Members() {
               <option value="external">외부·3.3% (사무형·알바)</option>
             </select>
           </Field>
-          <Field label="카드코드" hint="영어 대문자 (예: C · BE)">
+          <Field label="카드코드" hint="영어 대문자 (카드 화면의 기타 직접입력과 같은 값)">
             <input
               className="input uppercase"
               value={addForm.card_code}
@@ -549,8 +546,7 @@ export default function Members() {
           </Field>
           {!externalSupported ? (
             <p className="text-xs leading-relaxed text-ink-500 sm:col-span-2">
-              구분·카드코드 칸은 supabase/migration_profiles_external.sql 실행 뒤 DB에 저장됩니다. 실행 전에도 허수정·장정아는
-              외부(3.3%)와 카드코드(C·BE)로 자동 인식됩니다.
+              구분·카드코드 칸은 supabase/migration_profiles_external.sql 실행 뒤 DB에 저장됩니다. 실행 전에도 구분 변경·카드코드 입력은 화면에 바로 반영됩니다.
             </p>
           ) : null}
         </form>

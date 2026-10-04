@@ -250,7 +250,8 @@ export function suggestPartnerGroup(name, memo) {
   return null
 }
 
-/** 법인카드 이용자 코드 (표시 순서대로) */
+/** 법인카드 이용자 코드 (표시 순서대로 · 자주 쓰는 분만 둡니다.
+ *  목록에 없는 분은 각 화면의 "기타 (직접 입력)" 칸에 영어 대문자로 적으면 됩니다.) */
 export const CARD_USERS = [
   { code: 'ALL', name: '전체' },
   { code: 'Z', name: '이향란' },
@@ -261,8 +262,6 @@ export const CARD_USERS = [
   { code: 'H', name: '김혜린' },
   { code: 'J', name: '박은영' },
   { code: 'M', name: '이정현' },
-  { code: 'C', name: '허수정 과장' },
-  { code: 'BE', name: '장정아 과장' },
 ]
 
 export function cardUserName(code) {
@@ -270,25 +269,21 @@ export function cardUserName(code) {
 }
 
 /**
- * 사무형 외부인력 (행사 알바 아님 · 3.3% 사업소득 원천징수).
- * 손선욱님처럼 로그인 계정 없이 근무하지만, 세무상 내부직원이 아니라
- * 급여관리의 단기·외부 섹션에서 관리합니다.
+ * 로그인 계정 없이 근무하는 사무형 인력 (기본은 내부).
+ * 손선욱·허수정·장정아님처럼 사무직처럼 근무하면 내부(명세서 대상)로 집계하고,
+ * 3.3% 사업소득으로 떼게 되면 구성원 화면에서 해당 인원만 외부로 바꾸면 됩니다.
  */
-export const EXTERNAL_OFFICE_STAFF = [
-  { name: '허수정', code: 'C' },
-  { name: '장정아', code: 'BE' },
-]
+export const INTERNAL_EXTRA_STAFF = ['손선욱', '허수정', '장정아']
 
-/** 로그인 계정 없이 내부 직원처럼 근무하는 분 (명세서 대상, 3.3% 아님) */
-export const INTERNAL_EXTRA_STAFF = ['손선욱']
+/** 구성원 빠른등록용 사무형 인력 목록 (카드코드는 기타 직접입력으로 적으면 됩니다) */
+export const OFFICE_STAFF = [{ name: '손선욱' }, { name: '허수정' }, { name: '장정아' }]
 
 export function cardCodeForName(name) {
   const n = String(name || '').trim()
   if (!n) return ''
   const hit = CARD_USERS.find((u) => String(u.name || '').replace(/\s+/g, '').startsWith(n) || n.startsWith(String(u.name || '').split(' ')[0]))
   if (hit && hit.code !== 'ALL') return hit.code
-  const ext = EXTERNAL_OFFICE_STAFF.find((e) => e.name === n)
-  return ext ? ext.code : ''
+  return ''
 }
 
 export function employmentKindOf(name, staffNames, employmentType) {
@@ -297,8 +292,9 @@ export function employmentKindOf(name, staffNames, employmentType) {
   // DB에 구분이 저장돼 있으면 그 선택을 우선합니다 (3.3% 여부 직접 선택용)
   if (employmentType === 'external') return '외부·단기'
   if (employmentType === 'internal') return '내부'
-  if (EXTERNAL_OFFICE_STAFF.some((e) => e.name === n)) return '외부·단기'
-  if ((staffNames && staffNames.has && staffNames.has(n)) || INTERNAL_EXTRA_STAFF.includes(n)) return '내부'
+  // 사무형 인력(손선욱·허수정·장정아)은 기본 내부
+  if (INTERNAL_EXTRA_STAFF.includes(n)) return '내부'
+  if (staffNames && staffNames.has && staffNames.has(n)) return '내부'
   return '외부·단기'
 }
 

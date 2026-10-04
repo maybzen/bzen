@@ -7,7 +7,7 @@ import { useToast } from '../components/Toast'
 import { AmountInput, ConfirmDialog, EmptyState, InlineAlert, LoadingBlock, Modal, PageHeader, StatCard } from '../components/ui'
 import { useAuth } from '../auth/AuthContext'
 import { formatKRW, monthEnd, todayISO } from '../lib/format'
-import { INTERNAL_PROJECT_NAME, EXTERNAL_OFFICE_STAFF, INTERNAL_EXTRA_STAFF, employmentKindOf, sortManagers } from '../lib/constants'
+import { INTERNAL_PROJECT_NAME, INTERNAL_EXTRA_STAFF, employmentKindOf, sortManagers } from '../lib/constants'
 import { downloadTextFile, parseCSV, toCSV } from '../lib/csv'
 import {
   createEntries,
@@ -204,9 +204,8 @@ export default function Payroll() {
     () => new Set((profiles || []).map((p) => String(p.full_name || '').trim()).filter(Boolean)),
     [profiles],
   )
-  /* 계정 없이 내부 직원으로 근무하는 분 (명세서 대상, 3.3% 아님) */
+  /* 로그인 계정 없이 사무형으로 근무하는 분 (기본 내부·명세서 대상. 3.3%면 구성원에서 외부로 변경) */
   const INTERNAL_EXTRA = useMemo(() => new Set(INTERNAL_EXTRA_STAFF), [])
-  const EXTERNAL_OFFICE = useMemo(() => new Set(EXTERNAL_OFFICE_STAFF.map((e) => e.name)), [])
   const profileByName = useMemo(() => {
     const m = new Map()
     for (const p of profiles || []) {
@@ -221,9 +220,8 @@ export default function Payroll() {
     // 구성원에서 고른 구분(내부/외부·3.3%)이 있으면 그 선택을 우선합니다
     const emp = profileByName.get(n)?.employment_type
     if (emp === 'external' || emp === 'internal') return employmentKindOf(n, staffNames, emp)
-    // 아직 구분을 안 고른 사무형 외부인력(허수정·장정아)은 기본 외부
-    if (EXTERNAL_OFFICE.has(n)) return '외부·단기'
-    return employmentKindOf(n, staffNames) === '내부' || INTERNAL_EXTRA.has(n) ? '내부' : '외부·단기'
+    if (INTERNAL_EXTRA.has(n)) return '내부'
+    return employmentKindOf(n, staffNames) === '내부' ? '내부' : '외부·단기'
   }
 
   /* 향란 → 보람 → 혜민 순서 (계정관리 담당자 순서와 동일), 나머지는 이름순 */
@@ -520,7 +518,7 @@ export default function Payroll() {
                 단기·외부 인력 ({tempShown.length}건)
               </h2>
               <p className="mt-0.5 text-xs text-ink-500">
-                행사 알바뿐 아니라 사무형 외부인력(허수정 C · 장정아 BE)도 여기서 관리됩니다. 3.3% 여부는 구성원 화면의 구분(내부/외부)에서 인별로 바꿀 수 있습니다. 합계 {formatKRW(sumTotal(tempShown))}원
+                행사 알바 등 외부 인력은 여기서 따로 관리됩니다. 3.3% 여부는 구성원 화면의 구분(내부/외부)에서 인별로 바꿀 수 있습니다. 합계 {formatKRW(sumTotal(tempShown))}원
                 {tempPayout.rep ? (
                   <> · 지출결의 포함 실지급 <strong className="text-ink-800">{formatKRW(tempPayout.total)}원</strong></>
                 ) : null}
