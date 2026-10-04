@@ -215,9 +215,9 @@ export default function Payroll() {
   const personKind = (name) => {
     const n = String(name || '').trim()
     if (!n) return '외부·단기'
-    // 구성원에서 고른 구분(내부/사무형외부/단기외부)이 있으면 그 선택을 우선합니다
+    // 구성원에서 고른 구분(내부/외부협력/단기외부)이 있으면 그 선택을 우선합니다
     const emp = profileByName.get(n)?.employment_type
-    if (emp === 'external_office' || emp === 'external' || emp === 'internal') {
+    if (emp === 'external_partner' || emp === 'external_office' || emp === 'external' || emp === 'internal') {
       return employmentKindOf(n, staffNames, emp)
     }
     return employmentKindOf(n, staffNames)
@@ -242,17 +242,17 @@ export default function Payroll() {
     [rankOf],
   )
 
-  /* 단기·외부 인력은 별도 섹션에서 관리합니다 (손선욱·행사 단기인력 등) */
+  /* 직원 급여: 내부 (손선욱님형 포함 · 명세서 대상) */
   const staffSalaryRows = useMemo(
     () => salaryRows.filter((e) => personKind(e.counterparty) === '내부').sort(byStaffOrder),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [salaryRows, staffNames, byStaffOrder],
   )
-  /* 사무형 외부 (상주·3.3%. 허수정·장정아님형 — 행사 알바와 분리 표시) */
+  /* 외부협력 (상주·3.3%. 허수정·장정아님형 — 행사 알바와 분리 표시) */
   const officeSalaryRows = useMemo(
     () =>
       salaryRows
-        .filter((e) => personKind(e.counterparty) === '사무형외부')
+        .filter((e) => personKind(e.counterparty) === '외부협력')
         .sort((a, b) => String(a.counterparty || '').localeCompare(String(b.counterparty || ''), 'ko')),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [salaryRows, staffNames],
@@ -505,7 +505,7 @@ export default function Payroll() {
               unit="명"
               tone="neutral"
               icon="users"
-              hint={`내부 ${internalCount}명 · 사무형외부 ${officeHeads}명(${formatKRW(officeTotal)}원) · 단기외부 ${tempHeads}명(${formatKRW(tempTotal)}원)`}
+              hint={`내부 ${internalCount}명 · 외부협력 ${officeHeads}명(${formatKRW(officeTotal)}원) · 단기외부 ${tempHeads}명(${formatKRW(tempTotal)}원)`}
             />
             <StatCard label="4대보험 회사부담" value={insuranceTotal} tone="opex" icon="receipt" hint="건보·산재" />
             <StatCard label="세금·원천징수" value={taxTotal} tone={taxTotal > 0 ? 'loss' : 'neutral'} icon="file" hint="원천세 등" />
@@ -546,7 +546,7 @@ export default function Payroll() {
           <section className="card overflow-hidden">
             <header className="border-b border-ink-200 px-4 py-3.5">
               <h2 className="text-sm font-bold text-ink-900">
-                사무형 외부 인력 ({officeShown.length}건)
+                외부협력 인력 ({officeShown.length}건)
               </h2>
               <p className="mt-0.5 text-xs text-ink-500">
                 사무실 상주지만 세무상 외부(3.3%)인 분입니다. 행사 알바와 분리해서 관리합니다. 합계 {formatKRW(sumTotal(officeShown))}원
@@ -570,7 +570,7 @@ export default function Payroll() {
                 extraPayMap={Object.fromEntries(reportByPerson)}
               />
             ) : (
-              <EmptyState icon="users" title="사무형 외부 인력 급여가 없습니다" />
+              <EmptyState icon="users" title="외부협력 인력 급여가 없습니다" />
             )}
           </section>
 
@@ -1239,7 +1239,7 @@ function PayrollImportModal({ open, onClose, onDone, ym, defaultProjectId, exist
                       <td className="td py-2 text-xs">
                         {(() => {
                           const kind = kindOf ? kindOf(row.counterparty) : (staffNames.has(row.counterparty) ? '내부' : '외부·단기')
-                          if (kind === '사무형외부') return <span className="chip bg-sky-50 text-sky-700">사무형외부</span>
+                          if (kind === '외부협력') return <span className="chip bg-sky-50 text-sky-700">외부협력</span>
                           if (kind === '내부') return <span className="chip bg-brand-50 text-brand-700">내부</span>
                           return <span className="chip bg-amber-50 text-amber-700">단기·외부</span>
                         })()}
