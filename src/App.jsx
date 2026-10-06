@@ -11,6 +11,17 @@ import { useStaffPermissions } from './lib/permissions'
  * 배포 직후 낡은 index.html이 이미 지워진 청크를 요청하면(404)
  * 한 번만 새로고침해서 새 파일을 받습니다.
  */
+/* 새로고침해도 같은 낡은 파일이 나오면 쿼리를 바꿔 캐시를 우회합니다 */
+function bustReload() {
+  try {
+    const url = new URL(window.location.href)
+    url.searchParams.set('v', Date.now().toString(36))
+    window.location.href = url.toString()
+  } catch {
+    window.location.reload()
+  }
+}
+
 function lazyWithRetry(factory) {
   const KEY = 'bzen.chunk-retry'
   return lazy(async () => {
@@ -23,19 +34,19 @@ function lazyWithRetry(factory) {
       }
       return mod
     } catch (error) {
-      let retried = ''
+      let count = 0
       try {
-        retried = window.sessionStorage.getItem(KEY) || ''
+        count = Number(window.sessionStorage.getItem(KEY) || 0)
       } catch {
         /* 무시 */
       }
-      if (!retried) {
+      if (count < 2) {
         try {
-          window.sessionStorage.setItem(KEY, '1')
+          window.sessionStorage.setItem(KEY, String(count + 1))
         } catch {
           /* 무시 */
         }
-        window.location.reload()
+        bustReload()
       }
       throw error
     }
@@ -102,7 +113,7 @@ class ChunkErrorBoundary extends Component {
             } catch {
               /* 무시 */
             }
-            window.location.reload()
+            bustReload()
           }}
         >
           새로고침
