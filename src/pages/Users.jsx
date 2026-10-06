@@ -49,7 +49,8 @@ export default function Users() {
         listProfiles(),
         getSettings().catch(() => null),
       ])
-      setProfiles(rows)
+      /* 외부인력(role=external)은 구성원 메뉴에서 관리하고, 계정 목록에서는 뺍니다 */
+      setProfiles((rows || []).filter((p) => p?.role !== 'external'))
       if (settings && settings.staff_overrides && typeof settings.staff_overrides === 'object') {
         setOverrides(settings.staff_overrides)
         setHasOverridesColumn(true)

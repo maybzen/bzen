@@ -40,6 +40,7 @@ export default function ScheduleModal({
   projects = [],
   syncBundle = null,
   onLocate = null,
+  spanSupported = false,
 }) {
   const toast = useToast()
   const today = todayISO()
@@ -50,6 +51,8 @@ export default function ScheduleModal({
   const [editingId, setEditingId] = useState(null)
   const [editText, setEditText] = useState('')
   const [editDate, setEditDate] = useState('')
+  const [editEndDate, setEditEndDate] = useState('')
+  const [editRemind, setEditRemind] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [confirmId, setConfirmId] = useState(null)
@@ -160,6 +163,8 @@ export default function ScheduleModal({
     setEditingId(row.id)
     setEditText(row.text)
     setEditDate(row.due_date || '')
+    setEditEndDate(row.due_end_date || '')
+    setEditRemind(row.remind_before ? String(row.remind_before) : '')
   }
 
   const saveEdit = async () => {
@@ -170,6 +175,10 @@ export default function ScheduleModal({
     try {
       const patch = { text: v }
       if (dateSupported) patch.due_date = editDate || null
+      if (spanSupported) {
+        patch.due_end_date = editDate && editEndDate && editEndDate >= editDate ? editEndDate : null
+        patch.remind_before = Number(editRemind) > 0 ? Number(editRemind) : 0
+      }
       await updateChecklistItem(editingId, patch)
       setEditingId(null)
       await reload()
@@ -303,10 +312,15 @@ export default function ScheduleModal({
                           editing={editingId === row.id}
                           editText={editText}
                           editDate={editDate}
+                          editEndDate={editEndDate}
+                          editRemind={editRemind}
                           dateSupported={dateSupported}
+                          spanSupported={spanSupported}
                           busy={busy}
                           onEditText={setEditText}
                           onEditDate={setEditDate}
+                          onEditEndDate={setEditEndDate}
+                          onEditRemind={setEditRemind}
                           onStartEdit={() => startEdit(row)}
                           onSaveEdit={saveEdit}
                           onCancelEdit={() => setEditingId(null)}
@@ -376,10 +390,15 @@ export default function ScheduleModal({
                     editing={editingId === r.id}
                     editText={editText}
                     editDate={editDate}
+                    editEndDate={editEndDate}
+                    editRemind={editRemind}
                     dateSupported={dateSupported}
+                    spanSupported={spanSupported}
                     busy={busy}
                     onEditText={setEditText}
                     onEditDate={setEditDate}
+                    onEditEndDate={setEditEndDate}
+                    onEditRemind={setEditRemind}
                     onStartEdit={() => startEdit(r)}
                     onSaveEdit={saveEdit}
                     onCancelEdit={() => setEditingId(null)}
@@ -450,10 +469,15 @@ export default function ScheduleModal({
                       editing={editingId === r.id}
                       editText={editText}
                       editDate={editDate}
+                      editEndDate={editEndDate}
+                      editRemind={editRemind}
                       dateSupported={dateSupported}
+                      spanSupported={spanSupported}
                       busy={busy}
                       onEditText={setEditText}
                       onEditDate={setEditDate}
+                      onEditEndDate={setEditEndDate}
+                      onEditRemind={setEditRemind}
                       onStartEdit={() => startEdit(r)}
                       onSaveEdit={saveEdit}
                       onCancelEdit={() => setEditingId(null)}
@@ -751,10 +775,15 @@ function ManualRow({
   editing,
   editText,
   editDate,
+  editEndDate,
+  editRemind,
   dateSupported,
+  spanSupported,
   busy,
   onEditText,
   onEditDate,
+  onEditEndDate,
+  onEditRemind,
   onStartEdit,
   onSaveEdit,
   onCancelEdit,
@@ -765,14 +794,38 @@ function ManualRow({
     return (
       <li className="flex flex-col gap-1.5 rounded-lg bg-white px-2.5 py-2">
         <input className="input !py-1.5 text-xs" value={editText} onChange={(e) => onEditText(e.target.value)} />
-        <div className="flex items-center gap-1.5">
+        <div className="flex flex-wrap items-center gap-1.5">
           {dateSupported ? (
             <input
               type="date"
               className="input !w-36 !py-1.5 text-xs"
               value={editDate}
               onChange={(e) => onEditDate(e.target.value)}
+              title="시작일"
             />
+          ) : null}
+          {spanSupported && dateSupported ? (
+            <>
+              <span className="text-[11px] text-ink-400">~</span>
+              <input
+                type="date"
+                className="input !w-36 !py-1.5 text-xs"
+                value={editEndDate}
+                onChange={(e) => onEditEndDate(e.target.value)}
+                title="종료일 (비우면 당일)"
+              />
+              <input
+                type="number"
+                min="0"
+                max="60"
+                step="1"
+                className="input !w-24 !py-1.5 text-xs"
+                value={editRemind}
+                onChange={(e) => onEditRemind(e.target.value)}
+                title="며칠 전에 미리 보여줄지 (0 = 없음)"
+                placeholder="알림 N일 전"
+              />
+            </>
           ) : null}
           <span className="flex-1" />
           <button type="button" className="btn-ghost !px-2 !py-1 text-xs" onClick={onCancelEdit}>
@@ -785,6 +838,7 @@ function ManualRow({
       </li>
     )
   }
+  const endDate = row.due_end_date && row.due_end_date > (row.due_date || '') ? row.due_end_date : ''
   return (
     <li className="flex items-center gap-2 rounded-lg bg-white/70 px-2.5 py-1.5 text-xs">
       <button
@@ -802,7 +856,11 @@ function ManualRow({
           {row.text}
         </span>
         {row.due_date ? (
-          <span className="ml-1.5 text-[11px] tabular-nums text-ink-400">{formatDateHuman(row.due_date)}</span>
+          <span className="ml-1.5 text-[11px] tabular-nums text-ink-400">
+            {formatDateHuman(row.due_date)}
+            {endDate ? ` ~ ${formatDateHuman(endDate)}` : ''}
+            {Number(row.remind_before) > 0 ? ` · ${row.remind_before}일 전 알림` : ''}
+          </span>
         ) : null}
       </span>
       <button type="button" className="shrink-0 p-1 text-ink-400 hover:text-ink-700" onClick={onStartEdit} aria-label="수정">

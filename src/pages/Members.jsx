@@ -27,8 +27,21 @@ function tenure(hireDate) {
   return m ? `${y}년 ${m}개월` : `${y}년`
 }
 
-/* 생일 칸은 구성원 화면에서 숨겼습니다 (박현정님 외에는 비어 있음).
-   생일 데이터는 DB에 그대로 두어 대시보드 챙길 일 안내가 계속 뜹니다. */
+/* 생일: 만나이 · D-day */
+function birthday(birthDate) {
+  if (!birthDate) return ''
+  const b = new Date(`${birthDate}T00:00:00`)
+  if (Number.isNaN(b.getTime())) return ''
+  const now = new Date()
+  let age = now.getFullYear() - b.getFullYear()
+  if (now.getMonth() < b.getMonth() || (now.getMonth() === b.getMonth() && now.getDate() < b.getDate())) age -= 1
+  const thisYear = new Date(now.getFullYear(), b.getMonth(), b.getDate())
+  const next = thisYear >= new Date(now.getFullYear(), now.getMonth(), now.getDate())
+    ? thisYear
+    : new Date(now.getFullYear() + 1, b.getMonth(), b.getDate())
+  const dday = Math.round((next - new Date(now.getFullYear(), now.getMonth(), now.getDate())) / 86400000)
+  return `만 ${age}세 · D-${dday}`
+}
 export default function Members() {
   const { user } = useAuth()
   const toast = useToast()
@@ -132,8 +145,13 @@ export default function Members() {
     <div className="flex flex-col gap-5">
       <PageHeader
         title="구성원"
-        description="인사관리 · 부서·연락처·입사일·재직을 관리합니다. 이름·계정은 계정관리에서 바꿉니다."
-      />
+        description="인사관리 · 부서·연락처·입사일·생일·재직을 관리합니다. 이름·계정은 계정관리에서 바꿉니다. 외부인력은 여기서 추가하세요."
+      >
+        <button type="button" className="btn-primary" onClick={() => setAddOpen(true)}>
+          <Icon name="plus" size={16} />
+          구성원 추가
+        </button>
+      </PageHeader>
 
       {loading ? (
         <LoadingBlock />
@@ -169,6 +187,7 @@ export default function Members() {
                       <th className="th">연락처</th>
                       <th className="th">입사일</th>
                       <th className="th">근속</th>
+                      <th className="th">생일</th>
                       <th className="th text-right">인건비 누적</th>
                       <th className="th">상태</th>
                       <th className="th text-right">저장</th>
@@ -208,6 +227,29 @@ export default function Members() {
                             />
                           </td>
                           <td className="td whitespace-nowrap text-ink-600">{tenure(work.hire_date)}</td>
+                          <td className="td whitespace-nowrap">
+                            <input
+                              type="date"
+                              className="input w-auto py-1 text-xs"
+                              value={work.birth_date || ''}
+                              onChange={(e) => setCell(p.id, { birth_date: e.target.value || null })}
+                            />
+                            <span className="mt-0.5 block text-[11px] text-ink-500">{birthday(work.birth_date)}</span>
+                            {celebrateSupported ? (
+                              <>
+                                <input
+                                  type="date"
+                                  className="input mt-1 w-auto py-1 text-xs"
+                                  value={work.birth_celebrate || ''}
+                                  onChange={(e) => setCell(p.id, { birth_celebrate: e.target.value || null })}
+                                  title="실제로 챙기는 날 (비우면 실생일)"
+                                />
+                                <span className="mt-0.5 block text-[11px] text-ink-500">
+                                  {work.birth_celebrate ? `챙기는 날 ${String(work.birth_celebrate).slice(5)}` : '챙기는 날: 실생일과 같음'}
+                                </span>
+                              </>
+                            ) : null}
+                          </td>
                           <td className="td num">{formatKRW(payByName[String(p.full_name || '').trim()] || 0)}</td>
                           <td className="td">
                             <button

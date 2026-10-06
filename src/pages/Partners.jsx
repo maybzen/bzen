@@ -621,7 +621,7 @@ export default function Partners() {
           <LoadingBlock />
         ) : rows.length ? (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[1080px] border-collapse text-xs">
+            <table className="w-full min-w-[920px] border-collapse text-xs">
               <thead className="bg-ink-50/70">
                 <tr>
                   <th className="th w-10 text-center">
@@ -645,15 +645,14 @@ export default function Partners() {
                   <th className="th">거래처명</th>
                   <th className="th">담당자</th>
                   <th className="th">직함</th>
-                  <th className="th">대표번호</th>
-                  <th className="th">휴대폰</th>
+                  <th className="th">연락처</th>
                   <th className="th">이메일</th>
                   <th className="th">사업자번호</th>
                   <th className="th">계좌</th>
                   <th className="th text-right">서류</th>
                   <th className="th text-right">수금</th>
                   <th className="th">등록자</th>
-                  <th className="th text-right">관리</th>
+                  <th className="th sticky right-0 bg-ink-50 text-right shadow-[-8px_0_12px_-8px_rgba(16,24,64,0.25)]">관리</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-ink-100">
@@ -768,8 +767,16 @@ export default function Partners() {
                       </td>
                       <td className="td whitespace-nowrap">{p.contact_person || <span className="text-ink-300">—</span>}</td>
                       <td className="td whitespace-nowrap">{p.job_title || <span className="text-ink-300">—</span>}</td>
-                      <td className="td whitespace-nowrap">{p.phone_main || <span className="text-ink-300">—</span>}</td>
-                      <td className="td whitespace-nowrap">{p.phone || <span className="text-ink-300">—</span>}</td>
+                      <td className="td whitespace-nowrap text-xs leading-relaxed">
+                        {p.phone_main && p.phone && p.phone_main !== p.phone ? (
+                          <>
+                            <span className="block tabular-nums">{p.phone_main}</span>
+                            <span className="block tabular-nums text-ink-500">{p.phone}</span>
+                          </>
+                        ) : (
+                          p.phone_main || p.phone || <span className="text-ink-300">—</span>
+                        )}
+                      </td>
                       <td className="td max-w-[200px] truncate">{p.email || <span className="text-ink-300">—</span>}</td>
                       <td className="td whitespace-nowrap font-num tabular-nums">{bizNo || <span className="text-ink-300">—</span>}</td>
                       <td className="td max-w-[220px] truncate" title={accounts.join('\n')}>
@@ -806,7 +813,7 @@ export default function Partners() {
                       <td className="td max-w-[110px] truncate text-xs text-ink-500">
                         {profileName(p.created_by) || <span className="text-ink-300">—</span>}
                       </td>
-                      <td className="td num whitespace-nowrap">
+                      <td className="td sticky right-0 whitespace-nowrap bg-white text-right shadow-[-8px_0_12px_-8px_rgba(16,24,64,0.25)]">
                         <button
                           type="button"
                           onClick={() => {

@@ -65,6 +65,16 @@ export function updateProfile(id, patch) {
   return unwrap(supabase.from('profiles').update(patch).eq('id', id).select().single())
 }
 
+/** 구성원 추가 (외부인력 포함, 로그인 계정 없음). 관리자 전용 */
+export function createProfile(payload) {
+  return unwrap(supabase.from('profiles').insert(payload).select().single())
+}
+
+/** 외부인력 행 삭제 (로그인 계정이 없는 행만 화면에서 허용) */
+export function deleteProfile(id) {
+  return unwrap(supabase.from('profiles').delete().eq('id', id))
+}
+
 /* ------------------------------------------------------------------ */
 /* 프로젝트                                                            */
 /* 휴지통: 삭제는 휴지통 이동(UPDATE)입니다. 영구삭제·복원은 휴지통 메뉴에서. */
@@ -245,6 +255,8 @@ export function addChecklistItem(list, text, userId, extra = {}) {
   const row = { list, text, created_by: userId }
   // due_date는 migration_schedules.sql 실행 전이면 컬럼이 없어 실패하므로 있을 때만 보냅니다
   if (extra && extra.due_date) row.due_date = extra.due_date
+  if (extra && extra.due_end_date) row.due_end_date = extra.due_end_date
+  if (extra && Number(extra.remind_before) > 0) row.remind_before = Number(extra.remind_before)
   return unwrap(supabase.from('checklist_items').insert(row).select().single())
 }
 

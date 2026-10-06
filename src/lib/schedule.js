@@ -2,6 +2,7 @@
  * "이번 달 챙길 일" — 자동(대출 상환일·세금 캘린더) + 수동(날짜 체크리스트).
  *
  * 수동 항목의 due_date 컬럼은 supabase/migration_schedules.sql 로 추가합니다.
+ * 기간(due_end_date)·미리 알림(remind_before)은 migration_schedule_span.sql 로 추가합니다.
  * 실행 전에는 날짜 없이도 동작합니다 (날짜 미지정 그룹으로 표시).
  */
 import { supabase } from './supabase'
@@ -114,18 +115,63 @@ export function buildSchedule({ loans = [], manuals = [], fromISO, toISO, overri
 
   for (const row of manuals || []) {
     if (row.done) continue
-    const date = row.due_date || ''
-    if (date && (date < fromISO || date > toISO)) continue
-    out.push({
-      key: `manual-${row.id}`,
-      date,
-      title: row.text,
-      detail: '',
-      kind: 'manual',
-      source: '직접 등록',
-      done: !!row.done,
-      refId: row.id,
-    })
+    const start = row.due_date || ''
+    let end = row.due_end_date || ''
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(start)) {
+      out.push({
+        key: `manual-${row.id}`,
+        date: '',
+        title: row.text,
+        detail: '',
+        kind: 'manual',
+        source: '직접 등록',
+        done: !!row.done,
+        refId: row.id,
+      })
+      continue
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(end) || end < start) end = start
+    const span = end > start
+    // 기간: 시작~종료 각 날짜에 표시 (최대 93일)
+    const d = parseISO(start)
+    const last = parseISO(end)
+    let n = 0
+    while (d.getTime() <= last.getTime() && n < 93) {
+      const date = toISODate(d)
+      if (date >= fromISO && date <= toISO) {
+        out.push({
+          key: `manual-${row.id}-${date}`,
+          date,
+          title: row.text,
+          detail: span ? `${start.slice(5)}~${end.slice(5)}` : '',
+          kind: 'manual',
+          source: '직접 등록',
+          done: !!row.done,
+          refId: row.id,
+        })
+      }
+      d.setDate(d.getDate() + 1)
+      n += 1
+    }
+    // 미리 알림: 종료일(또는 당일) N일 전에 한 번 더 표시
+    const rb = Number(row.remind_before || 0)
+    if (rb > 0 && rb < 365) {
+      const rd = new Date(last.getTime())
+      rd.setDate(rd.getDate() - rb)
+      const rdate = toISODate(rd)
+      if (rdate >= fromISO && rdate <= toISO && rdate !== start && rdate !== end) {
+        out.push({
+          key: `manual-${row.id}-remind`,
+          date: rdate,
+          title: `[미리 알림] ${row.text}`,
+          detail: `본 일정 ${end.slice(5)}`,
+          kind: 'manual',
+          source: '직접 등록',
+          done: !!row.done,
+          refId: row.id,
+        })
+      }
+    }
   }
 
   // 구성원 생일·입사기념일 (매년 반복, 재직자만)
@@ -250,4 +296,18 @@ export async function dueDateSupported() {
     dueDateCache = false
   }
   return dueDateCache
+}
+
+let spanCache = null
+
+/** 기간·미리 알림 컬럼 유무 (migration_schedule_span.sql) */
+export async function spanSupported() {
+  if (spanCache !== null) return spanCache
+  try {
+    const { error } = await supabase.from('checklist_items').select('due_end_date').limit(1)
+    spanCache = !error
+  } catch {
+    spanCache = false
+  }
+  return spanCache
 }

@@ -24,7 +24,7 @@ import {
 import { refreshLedgerIndex, useLedgerIndex } from '../lib/ledgerIndex'
 import { ISSUE_META, normalizeParty, summarizeAudit } from '../lib/validate'
 import ScheduleModal from '../components/ScheduleModal'
-import { SCHEDULE_DONE_LIST, SCHEDULE_LIST, buildSchedule, dday, ddayLabel, dueDateSupported, doneKeysFrom } from '../lib/schedule'
+import { SCHEDULE_DONE_LIST, SCHEDULE_LIST, buildSchedule, dday, ddayLabel, dueDateSupported, spanSupported, doneKeysFrom } from '../lib/schedule'
 import { isStaffVisible, staffIdsFromProfiles } from '../lib/permissions'
 import {
   changeRate,
