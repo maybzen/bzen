@@ -202,7 +202,6 @@ export default function Leaves() {
   useEffect(() => {
     if (!isAdmin && ownName) setPersonFilter(ownName)
   }, [isAdmin, ownName])
-  const [weekendOpen, setWeekendOpen] = useState(false)
 
   useEffect(() => {
     let mounted = true
@@ -371,12 +370,6 @@ export default function Leaves() {
         ) : (
           <span className="chip bg-brand-50 text-brand-700">내 휴무만 표시됩니다</span>
         )}
-        {!isAdmin ? (
-          <button type="button" className="btn-ghost" onClick={() => setWeekendOpen(true)}>
-            <Icon name="calendar" size={16} />
-            주말출근 신청
-          </button>
-        ) : null}
         <button type="button" className="btn-primary" onClick={() => { setPresetPerson(isAdmin ? '' : ownName); setFormOpen(true) }}>
           <Icon name="plus" size={16} />
           휴무 등록
@@ -572,17 +565,6 @@ export default function Leaves() {
         lockPerson={isAdmin ? '' : ownName}
         rows={rows}
       />
-      <WeekendModal
-        open={weekendOpen}
-        onClose={() => setWeekendOpen(false)}
-        onSaved={() => {
-          setWeekendOpen(false)
-          setReloadKey((k) => k + 1)
-        }}
-        person={ownName}
-        userId={user?.id}
-      />
-
       <PersonModal
         person={detailPerson}
         onClose={() => setDetailPerson(null)}
@@ -778,112 +760,6 @@ function InfoBox({ label, value }) {
   )
 }
 
-/* ------------------------- 주말출근 신청 (직원용) ------------------------- */
-
-function WeekendModal({ open, onClose, onSaved, person, userId }) {
-  const toast = useToast()
-  const [saving, setSaving] = useState(false)
-  const [date, setDate] = useState(todayKST())
-  const [start, setStart] = useState('')
-  const [end, setEnd] = useState('')
-
-  useEffect(() => {
-    if (open) {
-      setDate(todayKST())
-      setStart('')
-      setEnd('')
-    }
-  }, [open ])
-
-  const calc = useMemo(() => {
-    const toMin = (t) => {
-      const m = /^(\d{1,2}):(\d{2})$/.exec(String(t || ''))
-      if (!m) return null
-      return Number(m[1]) * 60 + Number(m[2])
-    }
-    const s = toMin(start)
-    const e = toMin(end)
-    if (s == null || e == null || e - s <= 0) return null
-    const h = Math.round(((e - s) / 60) * 10) / 10
-    return { h, days: h >= 4 ? 1 : 0.5 }
-  }, [start, end])
-
-  const submit = async () => {
-    if (!person) {
-      toast.error('본인 정보를 찾지 못했습니다. 다시 로그인해 주세요.')
-      return
-    }
-    if (!calc) {
-      toast.error('출근·퇴근 시간을 입력해 주세요. (퇴근이 출근보다 늦어야 합니다)')
-      return
-    }
-    setSaving(true)
-    try {
-      await createLeaveEntry(
-        {
-          entry_date: date,
-          end_date: null,
-          person,
-          leave_type: '대휴',
-          direction: '발생',
-          days: calc.days,
-          memo: `주말출근 ${start}~${end} (${calc.h}시간)`,
-          status: '요청',
-        },
-        userId,
-      )
-      toast.success('주말출근을 신청했습니다. 대표 승인 후 대휴에 반영됩니다.')
-      onSaved()
-    } catch (e) {
-      toast.error(e.message)
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  return (
-    <Modal
-      open={open}
-      onClose={saving ? undefined : onClose}
-      title="주말출근 신청"
-      subtitle="근무한 시간이 대휴로 계산되어 대표에게 승인 요청됩니다. (4시간 이상 1일 · 미만 0.5일)"
-      footer={
-        <>
-          <button type="button" className="btn-ghost" onClick={onClose} disabled={saving}>
-            취소
-          </button>
-          <button type="button" className="btn-primary" onClick={submit} disabled={saving || !calc}>
-            {saving ? '신청 중…' : '승인 요청'}
-          </button>
-        </>
-      }
-    >
-      <div className="flex flex-col gap-4">
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="출근일" required>
-            <input type="date" className="input" value={date} onChange={(e) => setDate(e.target.value)} />
-          </Field>
-          <Field label="신청자" required>
-            <input className="input bg-ink-100" value={person || ''} readOnly />
-          </Field>
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="출근 시간" required>
-            <input type="time" className="input" value={start} onChange={(e) => setStart(e.target.value)} />
-          </Field>
-          <Field label="퇴근 시간" required>
-            <input type="time" className="input" value={end} onChange={(e) => setEnd(e.target.value)} />
-          </Field>
-        </div>
-        {calc ? (
-          <div className="rounded-lg border border-brand-100 bg-brand-50/60 px-3.5 py-2.5 text-xs text-ink-700">
-            {calc.h}시간 근무 → <strong>대휴 {calc.days}일</strong>로 신청됩니다.
-          </div>
-        ) : null}
-      </div>
-    </Modal>
-  )
-}
 
 /* --------------------------- 휴무 등록 --------------------------- */
 

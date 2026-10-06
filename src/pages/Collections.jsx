@@ -223,11 +223,14 @@ export default function Collections() {
     }
   }, [focusVendor, entries, collections, partners])
 
-  /* 거래처를 지정한 동안에는 그 거래처 입금 내역만 아래에 보여줍니다. */
+  /* 거래처를 지정한 동안에는 그 거래처 입금 내역만 아래에 보여줍니다. (최신순) */
   const listedCollections = useMemo(() => {
-    if (!focusRow) return collections
-    const ids = new Set(focusRow.items.map((c) => c.id))
-    return collections.filter((c) => ids.has(c.id))
+    const list = !focusRow ? collections.slice() : collections.filter((c) => new Set(focusRow.items.map((x) => x.id)).has(c.id))
+    return list.sort(
+      (a, b) =>
+        String(b.collected_on || '').localeCompare(String(a.collected_on || '')) ||
+        String(b.created_at || '').localeCompare(String(a.created_at || '')),
+    )
   }, [collections, focusRow])
 
   const openNew = () => {
