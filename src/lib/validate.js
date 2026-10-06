@@ -149,8 +149,11 @@ const CARD_ISSUERS = [
   '우리카드',
   '씨티카드',
 ]
-// 적요·메모·비목에 있으면 대금 결제 성격으로 봅니다
-const SETTLE_KEYWORDS = ['카드대금', '청구대금', '결제대금', '대금결제', '이용대금', '카드결제대금']
+// 적요·메모·비목에 있으면 대금 결제 성격으로 봅니다.
+// '이용대금'은 카드파일명(○○_이용대금.xls)에도 들어있어 파일명 제외하고 봅니다.
+// '비씨결제'는 통장에서 빠져나간 부산비씨카드 대금(은행전수 대조입력분)입니다.
+const SETTLE_KEYWORDS = ['카드대금', '청구대금', '결제대금', '대금결제', '카드결제대금', '비씨결제']
+const SETTLE_FILE_RE = /[\w가-힣_.-]*이용대금\.xlsx?/gi
 
 /**
  * 카드대금 출금을 비용으로 잘못 넣은 행인지. { why } | null
@@ -161,16 +164,22 @@ export function findCardSettlement(entry) {
   const type = entry?.entry_type || ''
   if (type !== 'purchase' && type !== 'opex') return null
   const party = String(entry?.counterparty || '')
-  const text = `${entry?.description || ''} ${entry?.memo || ''} ${entry?.category || ''}`
-  if (/연회비/.test(text)) return null
+  const rawText = `${entry?.description || ''} ${entry?.memo || ''} ${entry?.category || ''}`
+  if (/연회비/.test(rawText)) return null
+  /* 카드파일명(○○_이용대금.xls)의 '이용대금'은 출금이 아니라 사용내역이라 뺍니다 */
+  const text = rawText.replace(SETTLE_FILE_RE, '')
   const normParty = normalizeParty(party)
   const hitIssuer = CARD_ISSUERS.some((c) => normParty.includes(normalizeParty(c)))
   const hitKeyword = SETTLE_KEYWORDS.some((k) => text.includes(k))
-  if (!hitIssuer && !hitKeyword) return null
+  /* 파일명을 뺀 뒤에도 '이용대금 결제·출금·납부'처럼 쓰였으면 출금으로 봅니다 */
+  const hitUsagePay = /이용대금\s*(결제|출금|납부|이체|상환)/.test(text)
+  if (!hitIssuer && !hitKeyword && !hitUsagePay) return null
   return {
     why: hitIssuer
       ? `거래처가 카드사(“${party.trim()}”)입니다`
-      : `“${SETTLE_KEYWORDS.find((k) => text.includes(k))}” 표현이 있습니다`,
+      : hitKeyword
+        ? `“${SETTLE_KEYWORDS.find((k) => text.includes(k))}” 표현이 있습니다`
+        : '“이용대금 결제·출금” 표현이 있습니다',
   }
 }
 
