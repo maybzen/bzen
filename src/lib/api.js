@@ -186,6 +186,24 @@ export function deleteCollection(id) {
   return unwrap(supabase.from('collections').delete().eq('id', id))
 }
 
+/* ------------------------------------------------------------------ */
+/* 카드 청구서 대조 (월별 청구액 기록. 자금관리 법인카드 월별합계에서 입력) */
+/* ------------------------------------------------------------------ */
+
+export function listCardBills() {
+  return unwrap(supabase.from('card_bills').select('*').order('bill_month', { ascending: false }).limit(24))
+}
+
+export function saveCardBill(billMonth, amount, userId) {
+  const row = {
+    bill_month: billMonth,
+    billed_amount: Math.round(Number(amount) || 0),
+    updated_at: new Date().toISOString(),
+  }
+  if (userId) row.created_by = userId
+  return unwrap(supabase.from('card_bills').upsert(row, { onConflict: 'bill_month' }).select().single())
+}
+
 export function updateCollection(id, patch) {
   return unwrap(supabase.from('collections').update(patch).eq('id', id).select().single())
 }

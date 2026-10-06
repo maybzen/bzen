@@ -15,9 +15,11 @@ import {
   createEntries,
   deleteEntry,
   listAttachments,
+  listCardBills,
   listEntries,
   listProfiles,
   listProjects,
+  saveCardBill,
   updateEntry,
 } from '../lib/api'
 
@@ -201,6 +203,9 @@ export default function CardImport({ embed = false } = {}) {
   const [monthlyLoading, setMonthlyLoading] = useState(false)
   const [showMonthly, setShowMonthly] = useState(false)
   const [monthlyCard, setMonthlyCard] = useState('all')
+  /* 청구서 대조: 월(YYYY-MM) → 청구액 입력값 */
+  const [bills, setBills] = useState({})
+  const [savedBills, setSavedBills] = useState({})
 
   const openMonthly = () => {
     setShowMonthly(true)
@@ -216,6 +221,35 @@ export default function CardImport({ embed = false } = {}) {
   }, [monthlyTotals])
 
   /* 월별 합계 (최근 12개월, 조회기간과 무관) */
+  useEffect(() => {
+    let alive = true
+    listCardBills()
+      .then((rows) => {
+        if (!alive) return
+        const m = {}
+        for (const r of rows || []) {
+          if (r?.bill_month) m[r.bill_month] = String(r.billed_amount ?? '')
+        }
+        setBills(m)
+        setSavedBills(m)
+      })
+      .catch(() => {})
+    return () => {
+      alive = false
+    }
+  }, [reloadKey])
+
+  const saveBill = async (mk) => {
+    const v = (bills[mk] ?? '').trim()
+    if (v === (savedBills[mk] ?? '')) return
+    try {
+      await saveCardBill(mk, v === '' ? 0 : Number(v.replace(/[^0-9-]/g, '')) || 0, user?.id)
+      setSavedBills((m) => ({ ...m, [mk]: v }))
+    } catch (err) {
+      toast.error(err.message)
+    }
+  }
+
   useEffect(() => {
     let alive = true
     setMonthlyLoading(true)
@@ -1277,6 +1311,71 @@ export default function CardImport({ embed = false } = {}) {
                   </button>
                 )
               })}
+            </div>
+            <div className="mt-3 rounded-xl border border-ink-200 bg-white px-3.5 py-3">
+              <p className="text-xs font-bold text-ink-700">
+                청구서 대조
+                <span className="ml-1.5 font-medium text-ink-400">
+                  카드사 청구액 입력 → 차액 확인 (포커스를 옮기면 저장)
+                </span>
+              </p>
+              <div className="mt-2 overflow-x-auto">
+                <table className="w-full min-w-[560px] border-collapse text-xs">
+                  <thead>
+                    <tr className="border-b border-ink-100 text-left text-ink-500">
+                      <th className="py-1.5 pr-2 font-semibold">월</th>
+                      <th className="py-1.5 pr-2 text-right font-semibold">등록합계</th>
+                      <th className="py-1.5 pr-2 text-right font-semibold">청구액</th>
+                      <th className="py-1.5 text-right font-semibold">차액(청구−등록)</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-ink-100">
+                    {monthlyTotals.map((g) => {
+                      const billed = Math.round(Number((bills[g.mk] ?? '').replace(/[^0-9-]/g, '')) || 0)
+                      const hasBill = (bills[g.mk] ?? '').trim() !== ''
+                      const diff = billed - Math.round(g.total || 0)
+                      return (
+                        <tr key={g.mk}>
+                          <td className="whitespace-nowrap py-1.5 pr-2 font-semibold">
+                            {g.mk.slice(0, 4)}년 {Number(g.mk.slice(5))}월
+                          </td>
+                          <td className="whitespace-nowrap py-1.5 pr-2 text-right font-num tabular-nums">
+                            {formatKRW(g.total)}원 <span className="text-ink-400">({g.n}건)</span>
+                          </td>
+                          <td className="py-1.5 pr-2 text-right">
+                            <input
+                              className="input !w-36 !py-1 text-right font-num text-xs"
+                              inputMode="numeric"
+                              placeholder="청구액 입력"
+                              value={bills[g.mk] ?? ''}
+                              onChange={(e) => setBills((m) => ({ ...m, [g.mk]: e.target.value }))}
+                              onBlur={() => saveBill(g.mk)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') e.currentTarget.blur()
+                              }}
+                            />
+                          </td>
+                          <td className="whitespace-nowrap py-1.5 text-right font-num font-bold tabular-nums">
+                            {!hasBill ? (
+                              <span className="font-medium text-ink-300">—</span>
+                            ) : diff === 0 ? (
+                              <span className="text-emerald-700">일치</span>
+                            ) : (
+                              <span className={diff > 0 ? 'text-loss' : 'text-brand-700'}>
+                                {diff > 0 ? '+' : ''}{formatKRW(diff)}원
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <p className="mt-1.5 text-[11px] leading-relaxed text-ink-400">
+                차액이 수수료·연회비·할부·포인트 수준이면 정상입니다. 크게 벌어지면 이용내역 누락을 의심하세요.
+                이용기간과 청구월이 다를 수 있으니 카드사 청구서의 이용기간 기준으로 비교하세요.
+              </p>
             </div>
           </div>
         ) : null}
