@@ -20,6 +20,7 @@ export const ISSUE = {
   VARIANT: 'variant',
   VAT: 'vat',
   FIELD: 'field',
+  CARDSETTLE: 'cardsettle',
 }
 
 export const ISSUE_META = {
@@ -28,6 +29,7 @@ export const ISSUE_META = {
   [ISSUE.VARIANT]: { label: '표기 흔들림', tone: 'warn', hint: '같은 거래처가 여러 이름으로 들어 있습니다' },
   [ISSUE.VAT]: { label: '부가세 확인', tone: 'warn', hint: '공급가액 대비 세액이 10%가 아닙니다' },
   [ISSUE.FIELD]: { label: '입력 누락', tone: 'info', hint: '비목·프로젝트를 확인해 주세요' },
+  [ISSUE.CARDSETTLE]: { label: '카드대금 의심', tone: 'warn', hint: '카드대금 출금은 비용이 아닙니다' },
 }
 
 /* ------------------------------------------------------------------ */
@@ -126,6 +128,50 @@ export function findSimilarParties(entries, raw, { excludeId = '', aliasRoot = n
     found.set(n, (found.get(n) || 0) + 1)
   }
   return [...found.entries()]
+}
+
+/* ------------------------------------------------------------------ */
+/* 카드대금 출금 (비용 이중집계 방지)                                      */
+/* ------------------------------------------------------------------ */
+
+// 카드사: 거래처가 여기면 카드대금 출금일 가능성이 큽니다 (연회비는 정상 비용)
+const CARD_ISSUERS = [
+  '삼성카드',
+  '신한카드',
+  '현대카드',
+  '국민카드',
+  'KB국민카드',
+  '롯데카드',
+  '하나카드',
+  '비씨카드',
+  'BC카드',
+  '농협카드',
+  '우리카드',
+  '씨티카드',
+]
+// 적요·메모·비목에 있으면 대금 결제 성격으로 봅니다
+const SETTLE_KEYWORDS = ['카드대금', '청구대금', '결제대금', '대금결제', '이용대금', '카드결제대금']
+
+/**
+ * 카드대금 출금을 비용으로 잘못 넣은 행인지. { why } | null
+ * 카드 사용분은 쓸 때 이미 비용으로 잡히므로, 통장에서 빠져나간 대금은
+ * 비용이 아닙니다 (통장내역으로만 자동 반영). 연회비는 정상 비용이라 뺍니다.
+ */
+export function findCardSettlement(entry) {
+  const type = entry?.entry_type || ''
+  if (type !== 'purchase' && type !== 'opex') return null
+  const party = String(entry?.counterparty || '')
+  const text = `${entry?.description || ''} ${entry?.memo || ''} ${entry?.category || ''}`
+  if (/연회비/.test(text)) return null
+  const normParty = normalizeParty(party)
+  const hitIssuer = CARD_ISSUERS.some((c) => normParty.includes(normalizeParty(c)))
+  const hitKeyword = SETTLE_KEYWORDS.some((k) => text.includes(k))
+  if (!hitIssuer && !hitKeyword) return null
+  return {
+    why: hitIssuer
+      ? `거래처가 카드사(“${party.trim()}”)입니다`
+      : `“${SETTLE_KEYWORDS.find((k) => text.includes(k))}” 표현이 있습니다`,
+  }
 }
 
 /* ------------------------------------------------------------------ */
@@ -374,6 +420,19 @@ export function checkEntryDraft(draft, { entries = [], excludeId = '', aliasRoot
     }
   }
 
+  /* 7) 카드대금 출금: 비용으로 넣으면 카드 사용분과 이중집계됩니다 */
+  if (type === 'purchase' || type === 'opex') {
+    const cs = findCardSettlement({ ...draft, entry_type: type })
+    if (cs) {
+      out.push({
+        code: ISSUE.CARDSETTLE,
+        level: 'warn',
+        title: '카드대금 출금으로 보입니다 — 비용이 아닙니다',
+        detail: `${cs.why}. 카드 사용분은 쓸 때 이미 비용으로 잡혔으므로, 통장에서 빠져나간 대금은 입력하지 마세요 (통장내역으로 자동 반영됩니다). 연회비 등 실제 비용이면 그대로 저장하세요.`,
+      })
+    }
+  }
+
   return out
 }
 
@@ -529,6 +588,23 @@ export function auditEntries(entries, opts = {}) {
       amount: Math.round(Number(e.total_amount) || 0),
       title: '영업외수익 의심 — 비목 확인 필요',
       detail: `${Math.round(Number(e.total_amount) || 0).toLocaleString()}원 · “${e.category || ''}”로 들어 있지만 이자·환입·지원금·환급 성격으로 보입니다. 집계에서는 영업이익에서 제외됩니다.`,
+    })
+  }
+
+  /* 카드대금 출금 의심 — 비용으로 들어 있으면 사용분과 이중집계됩니다 */
+  for (const e of entries) {
+    const cs = findCardSettlement(e)
+    if (!cs) continue
+    issues.push({
+      id: `cardsettle-${e.id}`,
+      code: ISSUE.CARDSETTLE,
+      level: 'warn',
+      entryId: e.id,
+      date: e.entry_date,
+      party: e.counterparty,
+      amount: Math.round(Number(e.total_amount) || 0),
+      title: '카드대금 출금 의심 — 비용이 아닙니다',
+      detail: `${cs.why}. 카드 사용분은 쓸 때 이미 비용으로 잡혔으므로 이 행은 휴지통으로 옮기세요 (통장 출금내역으로 자동 반영됩니다). 연회비 등 실제 비용이면 그대로 두세요.`,
     })
   }
 
