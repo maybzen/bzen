@@ -5,7 +5,7 @@ import Icon from './components/Icon'
 import { Spinner } from './components/ui'
 import { ToastProvider } from './components/Toast'
 import { AuthProvider, useAuth } from './auth/AuthContext'
-import { useStaffPermissions } from './lib/permissions'
+import { useStaffPermissions, STAFF_LANDING } from './lib/permissions'
 
 /**
  * 배포 직후 낡은 index.html이 이미 지워진 청크를 요청하면(404)
