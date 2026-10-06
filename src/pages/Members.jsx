@@ -479,27 +479,41 @@ export default function Members() {
                           </td>
                           <td className="td">
                             {nicknameSupported || cardCodeSupported ? (
-                              <>
-                                <input
-                                  className="input w-28 py-1 text-xs"
-                                  value={work.nickname || ''}
-                                  onChange={(e) => setCell(p.id, { nickname: e.target.value })}
-                                  placeholder="닉네임 (예: Shine)"
-                                  title="보이는 이름. 코드는 아래 칸에서 직접 정합니다"
-                                />
-                                <span className="mt-1 flex items-center gap-1">
+                              p._external ? (
+                                <>
                                   <input
-                                    className="input w-20 py-1 text-xs font-bold uppercase"
-                                    value={String(work.card_code ?? p.card_code ?? '')}
-                                    onChange={(e) => setCell(p.id, { card_code: e.target.value.toUpperCase() })}
-                                    placeholder="코드"
-                                    title="카드 이용자 코드 직접 입력 (예: SH). 비우면 닉네임에서 자동"
+                                    className="input w-28 py-1 text-xs"
+                                    value={work.nickname || ''}
+                                    onChange={(e) => setCell(p.id, { nickname: e.target.value })}
+                                    placeholder="닉네임 (예: Shine)"
+                                    title="보이는 이름. 코드는 아래 칸에서 직접 정합니다"
                                   />
-                                  <span className="text-[11px] font-bold text-ink-500">
-                                    {nickCodeOf({ ...p, ...work }) ? `→ ${nickCodeOf({ ...p, ...work })}` : '코드 없음'}
+                                  <span className="mt-1 flex items-center gap-1">
+                                    <input
+                                      className="input w-20 py-1 text-xs font-bold uppercase"
+                                      value={String(work.card_code ?? p.card_code ?? '')}
+                                      onChange={(e) => setCell(p.id, { card_code: e.target.value.toUpperCase() })}
+                                      placeholder="코드"
+                                      title="카드 이용자 코드 직접 입력 (예: SH). 비우면 닉네임에서 자동"
+                                    />
+                                    <span className="text-[11px] font-bold text-ink-500">
+                                      {nickCodeOf({ ...p, ...work }) ? `→ ${nickCodeOf({ ...p, ...work })}` : '코드 없음'}
+                                    </span>
                                   </span>
-                                </span>
-                              </>
+                                </>
+                              ) : (
+                                <>
+                                  <input
+                                    className="input w-28 py-1 text-xs"
+                                    value={work.nickname || ''}
+                                    onChange={(e) => setCell(p.id, { nickname: e.target.value })}
+                                    placeholder="닉네임 (예: Gianna)"
+                                  />
+                                  <span className="mt-0.5 block text-[11px] font-bold text-ink-500">
+                                    {nickCodeOf({ ...p, ...work }) ? `코드 ${nickCodeOf({ ...p, ...work })} 고정` : '코드 없음'}
+                                  </span>
+                                </>
+                              )
                             ) : (
                               <span className="font-bold text-ink-700">{nickCodeOf(work) || '—'}</span>
                             )}
@@ -626,8 +640,8 @@ export default function Members() {
               <p className="border-t border-ink-100 px-4 py-3 text-xs leading-relaxed text-ink-500">
                 <Icon name="info" size={13} className="mr-1 inline text-ink-400" />
                 휴무대장 입사일과 함께 씁니다. 퇴사로 바꾸면 목록·집계에서 빠집니다. 외부협력·외부단기는 급여관리에서
-                분리 표시되고(3.3%), 코드는 직접 정한 값이 우선이고 비우면 닉네임에서 자동(짧으면 그대로·길면 첫 글자)으로 뜹니다
-                (손선욱 Shine→코드 SH, 장정아→BE). 인건비 누적(요약·인별 금액)을 누르면 장부 내역이 뜹니다.
+                분리 표시되고(3.3%), 코드는 내부 고정·외부(Shine→SH·BE 등)만 직접 정합니다.
+                인건비 누적(요약·인별 금액)을 누르면 장부 내역이 뜹니다.
                 계정을 지워도 구성원은 남습니다 (로그인만 없어짐).
               </p>
             </div>
