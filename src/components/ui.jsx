@@ -274,14 +274,21 @@ export function Field({ label, hint, required, error, children, className = '' }
       const props = child.props || {}
       const target = LABELABLE.has(child.type) ? child : findOnlyFormControl(props.children)
       if (target) {
-        const origId = target.props.id
-        linked = cloneElement(child, {
-          id: origId || inputId,
-          children:
-            child === target
-              ? undefined
-              : cloneElement(target, { id: target.props.id || inputId }),
-        })
+        const controlId = target.props.id || inputId
+        if (child === target) {
+          // 직접 자식이 입력칸이면 id만 붙이고 자식(option 등)은 그대로 둡니다
+          linked = cloneElement(child, { id: controlId })
+        } else {
+          // 래퍼 속 입력칸에만 id를 붙이고 나머지 자식(드롭다운 버튼·목록)은 그대로 둡니다
+          const patch = (node) => {
+            if (!isValidElement(node)) return node
+            if (node === target) return cloneElement(node, { id: controlId })
+            if (node.props?.children == null) return node
+            return cloneElement(node, {}, ...[].concat(Children.map(node.props.children, patch) ?? []))
+          }
+          linked = patch(child)
+          if (!linked.props.id) linked = cloneElement(linked, { id: inputId })
+        }
       }
     }
   } catch {

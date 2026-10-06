@@ -14,37 +14,11 @@ import { createEntry, createProject, deleteProject, isMissingTableError, linkPro
 
 /**
  * 카드에 쓰는 손익 표기. 세무·회계 표현을 그대로 씁니다.
- * 직원 화면(bare)에서는 매출·이익을 숨기고 비용만 보여줍니다.
+ * 직원 화면(bare)에서는 금액(매출·비용·이익)을 모두 숨깁니다.
  */
 function PnlGrid({ pnl, achieved, contractAmount, showContract, bare = false }) {
   if (bare) {
-    return (
-      <>
-        <dl className="mt-4 grid grid-cols-3 gap-2 rounded-lg bg-ink-50/80 p-3 text-center">
-          <div>
-            <dt className="text-[11px] font-semibold text-ink-500">매출원가</dt>
-            <dd className="mt-0.5 font-num text-sm font-bold tabular-nums text-ink-900">
-              {formatKRW(pnl.cogs)}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-[11px] font-semibold text-ink-500">경비</dt>
-            <dd className="mt-0.5 font-num text-sm font-bold tabular-nums text-ink-900">
-              {formatKRW(pnl.expense)}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-[11px] font-semibold text-ink-500">비용 합계</dt>
-            <dd className="mt-0.5 font-num text-sm font-extrabold tabular-nums text-ink-900">
-              {formatKRW(pnl.cogs + pnl.expense)}
-            </dd>
-          </div>
-        </dl>
-        <p className="mt-1.5 text-[11px] leading-relaxed text-ink-400">
-          매출원가 = 이 일에 외부로 나간 돈(외주·매입) · 경비 = 운영비(교통·식대·수수료 등)
-        </p>
-      </>
-    )
+    return null
   }
   const neg = (v) => v < 0
   return (
@@ -294,8 +268,6 @@ export default function Projects() {
   /* 표시용 금액(부가세포함 모드에서는 계약서 대조용으로 세액 합산).
      이익·이익률은 세무 기준(공급가액)으로 항상 고정합니다. */
   const totalsSale = totals.revenue + (incl ? totals.sale.vat : 0)
-  const totalsCogs = totals.cogs + (incl ? totals.purchase.vat : 0)
-  const totalsExpense = totals.expense + (incl ? totals.opex.vat : 0)
   const totalsGross = totals.gross
   const totalsProfit = totals.profit
   const basisHint = incl ? '금액은 부가세포함(계약서 대조용) · 이익은 공급가액 기준' : '공급가액 기준'
@@ -395,7 +367,6 @@ export default function Projects() {
           </>
         ) : (
           <>
-            <StatCard label="전체 비용" value={totalsCogs + totalsExpense} tone="opex" icon="cart" hint={`매입 + 운영비 · ${basisHint}`} />
             <StatCard label="진행중" value={String(statusCounts.active || 0)} unit="개" tone="neutral" icon="folder" />
             <StatCard label="완료" value={String(statusCounts.done || 0)} unit="개" tone="neutral" icon="check" />
           </>

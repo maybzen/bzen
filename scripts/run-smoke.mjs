@@ -75,10 +75,22 @@ window.ResizeObserver = RO
 const NET = []
 function jsonResponse(body, status = 200) {
   const text = JSON.stringify(body)
-  return new window.Response(text, {
+  const range = Array.isArray(body) ? `0-${Math.max(0, body.length - 1)}/${body.length}` : '0-0/1'
+  return {
+    ok: status >= 200 && status < 300,
     status,
-    headers: { 'content-type': 'application/json', 'content-range': `0-${Math.max(0, text.length - 1)}/200` },
-  })
+    headers: {
+      get: (k) => {
+        const key = String(k || '').toLowerCase()
+        if (key === 'content-type') return 'application/json'
+        if (key === 'content-range') return range
+        return null
+      },
+    },
+    json: async () => body,
+    text: async () => text,
+    clone() { return this },
+  }
 }
 globalThis.fetch = async (input, init = {}) => {
   const url = typeof input === 'string' ? input : input?.url || String(input)
