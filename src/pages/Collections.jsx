@@ -50,7 +50,7 @@ export default function Collections() {
   }
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState(null)
-  const [viewTab, setViewTab] = useState('project')
+  const [viewTab, setViewTab] = useState('vendor')
   const [form, setForm] = useState({ project_id: '', counterparty: '', collected_on: todayISO(), amount: '', memo: '' })
   const [saving, setSaving] = useState(false)
   const [removing, setRemoving] = useState(null)
@@ -495,8 +495,10 @@ export default function Collections() {
                       {formatDateHuman(c.collected_on)}
                     </span>
                     <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink-800">
-                      {projects.find((p) => p.id === c.project_id)?.name || '미지정'}
-                      {c.counterparty ? <span className="ml-1.5 font-normal text-ink-500">{c.counterparty}</span> : null}
+                      {c.counterparty || '미지정'}
+                      <span className="ml-1.5 font-normal text-ink-500">
+                        · {projects.find((p) => p.id === c.project_id)?.name || '프로젝트 미지정'}
+                      </span>
                       {c.memo ? <span className="ml-1.5 font-normal text-ink-400">· {c.memo}</span> : null}
                       {profileName(c.created_by) ? <span className="ml-1.5 font-normal text-ink-400">· 등록 {profileName(c.created_by)}</span> : null}
                     </span>

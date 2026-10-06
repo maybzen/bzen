@@ -68,6 +68,8 @@ export default function EntryTable({
   highlightIssue = '',
   /* 이름별 추가 지급액 (급여 지출결의 등) → 실지급 열 표시 */
   extraPayMap = null,
+  /* 출처 뱃지 (운영비 목록에서 지출결의분을 작게 구분) */
+  showSource = false,
 }) {
   const [rowEdits, setRowEdits] = useState({})
   const [savingId, setSavingId] = useState(null)
@@ -470,6 +472,9 @@ export default function EntryTable({
                     ) : (
                       <span className="text-ink-300">—</span>
                     )}
+                    {showSource && entry.source === 'expense_report' ? (
+                      <span className="ml-1 chip bg-violet-50 text-violet-700" title="지출결의로 등록된 내역">지결</span>
+                    ) : null}
                   </td>
                   <td className="td max-w-[150px] truncate">
                     {editable ? (
@@ -674,6 +679,9 @@ export default function EntryTable({
                         </span>
                         {entry.category ? (
                           <span className="chip bg-ink-100 text-ink-600">{entry.category}</span>
+                        ) : null}
+                        {showSource && entry.source === 'expense_report' ? (
+                          <span className="chip bg-violet-50 text-violet-700">지결</span>
                         ) : null}
                       </div>
                       <p className="mt-1.5 truncate text-sm font-bold text-ink-900">

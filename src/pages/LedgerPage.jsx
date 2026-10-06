@@ -157,12 +157,14 @@ export default function LedgerPage({ type, source = 'manual', title, description
     return '미지정'
   }
   /** 직원 화면: 사원 작성분만 공유합니다 (관리자 작성분 제외).
-      단, 다른 사원의 인건비(급여) 행은 본인에게도 숨깁니다. */
+      단, 다른 사원의 인건비(급여) 행은 본인에게도 숨깁니다.
+      지출결의는 본인 것만 봅니다 (직원별 소계 없음). */
   const staffIds = useMemo(() => staffIdsFromProfiles(profiles), [profiles])
   const effectiveFilter = personFilter
   /** 퇴사자분은 기타에 합산됩니다 */
   const base = useMemo(() => {
     if (isAdmin) return entries
+    if (isReport) return entries.filter((e) => e.created_by === user?.id || e.requester_id === user?.id)
     return entries.filter((e) => {
       if (!isStaffVisible(e, staffIds)) return false
       // 남의 급여는 가립니다 (본인 급여·본인 결의는 보임)
@@ -385,7 +387,7 @@ export default function LedgerPage({ type, source = 'manual', title, description
         />
       </div>
 
-      {isReport && byPerson.length > 0 ? (
+      {isAdmin && isReport && byPerson.length > 0 ? (
         <div className="card px-4 py-3.5">
           <p className="mb-2 text-xs font-semibold text-ink-500">직원별 소계 (클릭하면 해당 직원만 표시)</p>
           <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-5">
@@ -462,7 +464,7 @@ export default function LedgerPage({ type, source = 'manual', title, description
               ))}
             </select>
 
-            {isReport ? (
+            {isAdmin && isReport ? (
               <select
                 className="input sm:w-44"
                 value={personFilter}
@@ -527,6 +529,7 @@ export default function LedgerPage({ type, source = 'manual', title, description
             canChangeAuthor={isAdmin}
             canEditEntry={ownRow}
             canDeleteEntry={ownRow}
+            showSource={type === 'opex' && source === 'manual'}
           />
         )}
       </div>

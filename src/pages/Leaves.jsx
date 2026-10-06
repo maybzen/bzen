@@ -1012,6 +1012,40 @@ function LeaveFormModal({ open, onClose, onSaved, personOptions, userId, isAdmin
       }
     >
       <div className="flex flex-col gap-4">
+        {!isAdmin ? (
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                set('leave_type', '연차')
+                set('direction', '사용')
+              }}
+              className={`rounded-lg border px-3 py-2.5 text-left transition ${
+                form.leave_type === '연차' && form.direction === '사용'
+                  ? 'border-brand-600 bg-brand-50'
+                  : 'border-ink-200 bg-white hover:border-brand-300'
+              }`}
+            >
+              <span className="block text-xs font-bold text-ink-900">휴무신청</span>
+              <span className="mt-0.5 block text-[11px] text-ink-500">연차 사용 · 승인 요청</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                set('leave_type', '대휴')
+                set('direction', '발생')
+              }}
+              className={`rounded-lg border px-3 py-2.5 text-left transition ${
+                form.leave_type === '대휴' && form.direction === '발생'
+                  ? 'border-brand-600 bg-brand-50'
+                  : 'border-ink-200 bg-white hover:border-brand-300'
+              }`}
+            >
+              <span className="block text-xs font-bold text-ink-900">주말출근</span>
+              <span className="mt-0.5 block text-[11px] text-ink-500">대휴 발생 · 아래 자동계산 이용</span>
+            </button>
+          </div>
+        ) : null}
         <div className="grid grid-cols-2 gap-3">
           <Field label="시작일" required>
             <input type="date" className="input" value={form.entry_date} onChange={(e) => set('entry_date', e.target.value)} />
