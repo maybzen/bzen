@@ -954,12 +954,20 @@ function LeaveFormModal({ open, onClose, onSaved, personOptions, userId, isAdmin
               ))}
             </select>
           </Field>
-          <Field label="발생/사용/취소" required hint="취소=소멸·정산">
+          <Field label={isAdmin ? '발생/사용/취소' : '사용'} required hint={isAdmin ? '취소=소멸·정산' : undefined}>
+            {!isAdmin && form.direction !== '사용' ? (
+              <input className="input bg-ink-100" value="발생 (주말출근 대휴)" readOnly />
+            ) : (
             <select className="input" value={form.direction} onChange={(e) => set('direction', e.target.value)}>
               <option value="사용">사용</option>
-              <option value="발생">발생</option>
-              <option value="취소">취소</option>
+              {isAdmin ? (
+                <>
+                  <option value="발생">발생</option>
+                  <option value="취소">취소</option>
+                </>
+              ) : null}
             </select>
+            )}
           </Field>
           <Field label="일수" required hint="0.5 단위">
             <input

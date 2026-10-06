@@ -4,7 +4,7 @@ import { useToast } from '../components/Toast'
 import { EmptyState, ConfirmDialog, Field, InlineAlert, LoadingBlock, Modal, PageHeader, Spinner, StatCard } from '../components/ui'
 import { useAuth } from '../auth/AuthContext'
 import { formatKRW } from '../lib/format'
-import { EXTERNAL_PARTNER_DEFAULT, OFFICE_STAFF, cardCodeForName, nicknameCode } from '../lib/constants'
+import { CARD_USERS, EXTERNAL_PARTNER_DEFAULT, OFFICE_STAFF, cardCodeForName, nicknameCode } from '../lib/constants'
 import { createProfile, deleteExternalMember, createExternalMember, listEntries, listExternalMembers, listProfiles, updateExternalMember, updateProfile } from '../lib/api'
 
 /**
@@ -343,6 +343,23 @@ export default function Members() {
 
   const totalPay = useMemo(() => Object.values(payByName).reduce((a, v) => a + v, 0), [payByName])
 
+  /* 목록 순서: 카드코드 순(Z·B·G·S·N·H·J·M) → 기타 코드(가나다) → 코드 없음(이름순) */
+  const sortedProfiles = useMemo(() => {
+    const order = CARD_USERS.map((u) => u.code).filter((c) => c !== 'ALL')
+    const rankOf = (p) => {
+      const code = nickCodeOf(p)
+      const i = order.indexOf(code)
+      if (i >= 0) return [0, i, '']
+      if (code) return [1, 0, code]
+      return [2, 0, String(p.full_name || p.email || '')]
+    }
+    return [...profiles].sort((a, b) => {
+      const ra = rankOf(a)
+      const rb = rankOf(b)
+      return ra[0] - rb[0] || ra[1] - rb[1] || String(ra[2]).localeCompare(String(rb[2]), 'ko')
+    })
+  }, [profiles])
+
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
@@ -440,7 +457,7 @@ export default function Members() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-ink-100">
-                    {profiles.map((p) => {
+                    {sortedProfiles.map((p) => {
                       const edit = rowEdits[p.id] || {}
                       const work = { ...p, ...edit }
                       const dirty = Object.keys(edit).length > 0
@@ -464,7 +481,7 @@ export default function Members() {
                                 value={['internal', 'external_partner', 'external'].includes(work.employment_type) ? work.employment_type : kind}
                                 onChange={(e) => setCell(p.id, { employment_type: e.target.value })}
                               >
-                                <option value="internal">내부 (로그인 없어도 유지)</option>
+                                <option value="internal">내부</option>
                                 <option value="external_partner">외부협력·3.3%</option>
                                 <option value="external">외부단기·3.3%</option>
                               </select>
@@ -543,7 +560,7 @@ export default function Members() {
                             />
                           </td>
                           <td className="td whitespace-nowrap text-ink-600">{tenure(work.hire_date)}</td>
-                          {p._external ? (
+                          {p._external || (!work.birth_date && !work.birth_celebrate && String(p.full_name || '').trim() !== '박현정') ? (
                             <td className="td text-ink-300">—</td>
                           ) : (
                           <td className="td whitespace-nowrap">
@@ -689,7 +706,7 @@ export default function Members() {
               value={addForm.employment_type}
               onChange={(e) => setAddForm((f) => ({ ...f, employment_type: e.target.value }))}
             >
-              <option value="internal">내부 (계정 없음 · 손선욱형)</option>
+              <option value="internal">내부</option>
               <option value="external_partner">외부협력·3.3% (상주)</option>
               <option value="external">외부단기·3.3% (행사 알바)</option>
             </select>

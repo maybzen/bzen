@@ -499,6 +499,11 @@ export default function LedgerPage({ type, source = 'manual', title, description
               <Icon name="refresh" size={16} />
               <span className="hidden sm:inline">새로고침</span>
             </button>
+            {type === 'opex' && source === 'manual' ? (
+              <span className="text-[11px] text-ink-400">
+                보라색 <span className="chip bg-violet-50 text-violet-700">지결</span> = 지출결의 등록분
+              </span>
+            ) : null}
           </div>
         </div>
 
