@@ -8,6 +8,7 @@
  * 저장 자체를 막지 않는다. 판단은 사람이 한다.
  */
 import { CATEGORIES, NON_OPERATING_SALE_CATEGORIES, isNonOperatingSale } from './constants'
+import { parseISO, toISODate } from './format'
 
 /* ------------------------------------------------------------------ */
 /* 점검 항목 코드                                                      */
@@ -260,18 +261,30 @@ export function checkEntryDraft(draft, { entries = [], excludeId = '', aliasRoot
     })
   }
 
-  /* 2) 중복 의심 */
+  /* 2) 중복 의심
+     - 금액은 1원까지 차이를 허용합니다 (카드 정산 반올림 때문에 1원 어긋난 경우가 많습니다)
+     - 같은 거래처면 날짜가 하루 어긋나 있어도 확인해 줍니다 (카드 결제일 vs 정산일) */
   if (entries.length && date && total > 0) {
     const myKey = normalizeParty(rawParty)
     const sameAll = []
     const sameAmount = []
+    const nearDay = []
+    const dObj = parseISO(date)
+    const yest = toISODate(new Date(dObj.getFullYear(), dObj.getMonth(), dObj.getDate() - 1))
+    const tmrw = toISODate(new Date(dObj.getFullYear(), dObj.getMonth(), dObj.getDate() + 1))
     for (const e of entries) {
       if (e.id && e.id === excludeId) continue
-      if (e.entry_date !== date) continue
-      if (Math.round(Number(e.total_amount) || 0) !== total) continue
-      // 표기가 달라도 같은 거래처면 중복으로 본다
-      if (myKey && similarKey(myKey, normalizeParty(e.counterparty))) sameAll.push(e)
-      else sameAmount.push(e)
+      const eDate = String(e.entry_date || '')
+      const eTotal = Math.round(Number(e.total_amount) || 0)
+      const sameParty = myKey && similarKey(myKey, normalizeParty(e.counterparty))
+      if (eDate === date) {
+        if (Math.abs(eTotal - total) > 1) continue
+        // 표기가 달라도 같은 거래처면 중복으로 본다
+        if (sameParty) sameAll.push(e)
+        else sameAmount.push(e)
+      } else if (sameParty && eTotal === total && (eDate === yest || eDate === tmrw)) {
+        nearDay.push(e)
+      }
     }
     if (sameAll.length) {
       out.push({
@@ -291,6 +304,16 @@ export function checkEntryDraft(draft, { entries = [], excludeId = '', aliasRoot
           .map((e) => e.counterparty)
           .join(', ')}`,
         entryIds: sameAmount.map((e) => e.id),
+      })
+    } else if (nearDay.length) {
+      out.push({
+        code: ISSUE.DUPLICATE,
+        level: 'warn',
+        title: '어제·내일 같은 거래처 같은 금액이 이미 있습니다',
+        detail: `${nearDay
+          .map((e) => `${e.entry_date} · ${total.toLocaleString()}원`)
+          .join(', ')} — 카드 결제일과 정산일이 하루 어긋나는 경우가 많으니 확인해 주세요.`,
+        entryIds: nearDay.map((e) => e.id),
       })
     }
   }

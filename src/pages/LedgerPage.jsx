@@ -685,7 +685,14 @@ function ImportModal({ open, onClose, onDone, type, source, projects, userId, on
         const projectLabel = indexOf('프로젝트') >= 0 ? String(raw[indexOf('프로젝트')] || '').trim() : ''
         const category = indexOf('항목') >= 0 ? String(raw[indexOf('항목')] || '').trim() : ''
         if (category && allowedCats.length && !allowedCats.includes(category)) {
-          warnList.push(`${rowNo}행: 비목 “${category}” (이 장부 목록에 없음 — 그대로 등록됨)`)
+          /* 다른 장부의 비목이면 혼입 가능성이 큽니다 (매출에 통신비, 매입에 급여 등).
+             손익이 통째로 틀어지므로 등록 전에 반드시 알려줍니다. */
+          const otherType = Object.keys(CATEGORIES).find((t) => (CATEGORIES[t] || []).includes(category))
+          warnList.push(
+            otherType
+              ? `${rowNo}행: “${category}” 는 ${ENTRY_META[otherType]?.label || otherType} 비목입니다 — 여기(다른 장부)에 등록하면 손익이 섞입니다`
+              : `${rowNo}행: 비목 “${category}” (이 장부 목록에 없음 — 그대로 등록됨)`,
+          )
         }
         if (projectLabel && !projectByName.get(projectLabel)) {
           warnList.push(`${rowNo}행: 프로젝트 “${projectLabel}” 미매칭 (미지정으로 등록됨)`)

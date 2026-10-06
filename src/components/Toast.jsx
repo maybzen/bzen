@@ -3,10 +3,19 @@ import Icon from './Icon'
 
 const ToastContext = createContext(null)
 
-export function useToast() {
-  return useContext(ToastContext)
+/* Provider 없이 쓰이는 곳(테스트·단독 컴포넌트)에서 역참조로 죽지 않도록 안전망을 둡니다. */
+const NOOP_TOAST = {
+  toast: () => {},
+  success: () => {},
+  error: () => {},
+  info: () => {},
 }
 
+export function useToast() {
+  return useContext(ToastContext) || NOOP_TOAST
+}
+
+/*aria-live: 화면에 글이 뜨는 것을 읽기 화면에도 알려줍니다. */
 const STYLES = {
   success: { bar: 'bg-gain', icon: 'check', iconBg: 'bg-emerald-50 text-emerald-600' },
   error: { bar: 'bg-loss', icon: 'alert', iconBg: 'bg-rose-50 text-rose-600' },
@@ -42,7 +51,12 @@ export function ToastProvider({ children }) {
   return (
     <ToastContext.Provider value={value}>
       {children}
-      <div className="pointer-events-none fixed inset-x-0 bottom-4 z-[80] flex flex-col items-center gap-2 px-4 sm:bottom-6 sm:right-6 sm:left-auto sm:items-end">
+      <div
+        role="status"
+        aria-live="polite"
+        aria-atomic="false"
+        className="pointer-events-none fixed inset-x-0 bottom-4 z-[80] flex flex-col items-center gap-2 px-4 sm:bottom-6 sm:right-6 sm:left-auto sm:items-end"
+      >
         {items.map((item) => {
           const style = STYLES[item.type] || STYLES.info
           return (

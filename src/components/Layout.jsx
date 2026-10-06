@@ -114,6 +114,7 @@ export default function Layout() {
   }
   const [company, setCompany] = useState(DEFAULT_COMPANY)
   const menuRef = useRef(null)
+  const profileMenuRef = useRef(null)
 
   /* 미리보기 중에는 개인 추가분을 뺀 전체 공통 권한으로 봅니다 */
   const effPerms = staffView ? global : perms
@@ -131,10 +132,22 @@ export default function Layout() {
   useEffect(() => {
     const onClick = (e) => {
       if (menuRef.current && !menuRef.current.contains(e.target)) setMenu(false)
+      if (profileMenuRef.current && !profileMenuRef.current.contains(e.target)) setProfileMenu(false)
+    }
+    /* 열려 있는 메뉴들은 Esc 로 닫습니다 (모달 밖이라 Modal 을 빌려 쓰지 않습니다) */
+    const onKey = (e) => {
+      if (e.key !== 'Escape') return
+      if (menu) setMenu(false)
+      else if (profileMenu) setProfileMenu(false)
+      else if (drawer) setDrawer(false)
     }
     document.addEventListener('mousedown', onClick)
-    return () => document.removeEventListener('mousedown', onClick)
-  }, [])
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onClick)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [menu, profileMenu, drawer])
 
   useEffect(() => {
     getSettings()
@@ -187,7 +200,7 @@ export default function Layout() {
           )
         })}
       </div>
-      <div className="relative border-t border-white/10 px-4 py-4">
+      <div ref={profileMenuRef} className="relative border-t border-white/10 px-4 py-4">
         {profileMenu ? (
           <>
             <button
@@ -227,6 +240,8 @@ export default function Layout() {
           type="button"
           onClick={() => setProfileMenu((v) => !v)}
           title="프로필 메뉴"
+          aria-haspopup="true"
+          aria-expanded={profileMenu}
           className="flex w-full items-center gap-2.5 rounded-xl p-1 text-left transition hover:bg-white/5"
         >
         <div className="flex items-center gap-2.5">
@@ -255,7 +270,7 @@ export default function Layout() {
 
       {/* 모바일 드로어 */}
       {drawer ? (
-        <div className="fixed inset-0 z-[60] lg:hidden">
+        <div className="fixed inset-0 z-[60] lg:hidden" role="dialog" aria-modal="true" aria-label="메뉴">
           <div className="absolute inset-0 bg-ink-900/50" onClick={() => setDrawer(false)} />
           <div className="absolute inset-y-0 left-0 w-[17rem] animate-slide-in shadow-pop">
             {sidebar(() => setDrawer(false))}
@@ -297,6 +312,9 @@ export default function Layout() {
             <button
               type="button"
               onClick={() => setMenu((v) => !v)}
+              aria-haspopup="true"
+              aria-expanded={menu}
+              aria-label="내 계정 메뉴"
               className="flex items-center gap-2 rounded-lg py-1.5 pl-1.5 pr-2 transition hover:bg-ink-100"
             >
               <span className="flex h-7 w-7 items-center justify-center rounded-full bg-brand-600 text-[11px] font-bold text-white">

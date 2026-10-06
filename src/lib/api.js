@@ -65,9 +65,18 @@ export function updateProfile(id, patch) {
   return unwrap(supabase.from('profiles').update(patch).eq('id', id).select().single())
 }
 
-/** 구성원 추가 (외부인력 포함, 로그인 계정 없음). 관리자 전용 */
+/**
+ * 구성원 직접 추가 (로그인 계정 없는 외부인력·손선욱형용, 관리자 전용).
+ * id를 비우면 UUID를 만들어 profiles에 바로 넣습니다.
+ * RLS(migration_rls_hardening.sql)상 관리자만 insert 가능합니다.
+ */
 export function createProfile(payload) {
-  return unwrap(supabase.from('profiles').insert(payload).select().single())
+  const row = { ...payload }
+  delete row.created_at
+  if (!row.id && typeof crypto !== 'undefined' && crypto.randomUUID) row.id = crypto.randomUUID()
+  if (!row.role) row.role = 'staff'
+  if (row.active === undefined) row.active = true
+  return unwrap(supabase.from('profiles').insert(row).select().single())
 }
 
 /** 외부인력 행 삭제 (로그인 계정이 없는 행만 화면에서 허용) */

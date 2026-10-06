@@ -3,7 +3,7 @@ import Icon from '../components/Icon'
 import { useToast } from '../components/Toast'
 import { ConfirmDialog, Field, InlineAlert, LoadingBlock, Modal, PageHeader, Spinner } from '../components/ui'
 import { useAuth } from '../auth/AuthContext'
-import { ROLE_LABEL } from '../lib/constants'
+import { EXTERNAL_PARTNER_DEFAULT, ROLE_LABEL } from '../lib/constants'
 import { PERM_DEFS, PERM_LABEL } from '../lib/permissions'
 import { formatDateHuman } from '../lib/format'
 import { callAdminFn, getSettings, listProfiles, updateSettings } from '../lib/api'
@@ -49,8 +49,17 @@ export default function Users() {
         listProfiles(),
         getSettings().catch(() => null),
       ])
-      /* 외부인력(role=external)은 구성원 메뉴에서 관리하고, 계정 목록에서는 뺍니다 */
-      setProfiles((rows || []).filter((p) => p?.role !== 'external'))
+      /* 외부인력은 구성원 메뉴에서 관리하고, 계정 목록에서는 뺍니다.
+         (구분 컬럼 우선, 아직 안 정한 허수정·장정아는 이름 기본값으로 판단) */
+      setProfiles(
+        (rows || []).filter((p) => {
+          const t = String(p?.employment_type || '')
+          if (t.startsWith('external')) return false
+          if (p?.role === 'external') return false
+          if (!t && EXTERNAL_PARTNER_DEFAULT.includes(String(p?.full_name || '').trim())) return false
+          return true
+        }),
+      )
       if (settings && settings.staff_overrides && typeof settings.staff_overrides === 'object') {
         setOverrides(settings.staff_overrides)
         setHasOverridesColumn(true)

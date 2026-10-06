@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { CARD_USERS, cardUserName } from '../lib/constants'
 
 const KNOWN = new Set(CARD_USERS.map((u) => u.code))
@@ -13,8 +13,29 @@ export function parseCardUsers(value) {
 /** 법인카드 이용자 다중 선택 (ALL은 단독). allowCustom이면 목록 외 직접 입력 가능 */
 export default function CardUserSelect({ value, onChange, allowCustom = false }) {
   const [open, setOpen] = useState(false)
+  const rootRef = useRef(null)
   const codes = parseCardUsers(value)
   const customs = codes.filter((c) => !KNOWN.has(c))
+
+  /* Esc 로 닫기 + 바깥 클릭 닫기 */
+  useEffect(() => {
+    if (!open) return undefined
+    const onKey = (e) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation()
+        setOpen(false)
+      }
+    }
+    const onDown = (e) => {
+      if (rootRef.current && !rootRef.current.contains(e.target)) setOpen(false)
+    }
+    document.addEventListener('keydown', onKey, true)
+    document.addEventListener('mousedown', onDown, true)
+    return () => {
+      document.removeEventListener('keydown', onKey, true)
+      document.removeEventListener('mousedown', onDown, true)
+    }
+  }, [open])
 
   const emit = (std, custom) => {
     const order = CARD_USERS.map((u) => u.code)
@@ -51,11 +72,13 @@ export default function CardUserSelect({ value, onChange, allowCustom = false })
     : '선택'
 
   return (
-    <span className="relative inline-block">
+    <span ref={rootRef} className="relative inline-block">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
         title={label}
+        aria-haspopup="true"
+        aria-expanded={open}
         className="input w-full truncate py-2 text-left"
       >
         {codes.join(',') || '선택 안 함'}

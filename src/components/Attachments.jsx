@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import Icon from './Icon'
 import { Modal, Spinner } from './ui'
 import { getAttachmentUrl } from '../lib/api'
@@ -30,27 +30,15 @@ export function AttachmentCell({ attachments = [], onOpen }) {
   )
 }
 
-function PreviewItem({ file }) {
-  const [url, setUrl] = useState('')
+function PreviewItem({ file, urls, ensureUrl }) {
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const toast = useToast()
   const showThumb = isImage(file.mime_type, file.file_name)
   const previewable = showThumb || isPdf(file.mime_type, file.file_name)
-
-  /* 이미지는 미리보기 썸네일을 미리 불러옵니다 */
-  useEffect(() => {
-    if (!showThumb || !file.file_path) return
-    let alive = true
-    getAttachmentUrl(file.file_path)
-      .then((signed) => {
-        if (alive) setUrl(signed)
-      })
-      .catch(() => {})
-    return () => {
-      alive = false
-    }
-  }, [showThumb, file.file_path])
+  /* 서명 URL 은 상위(AttachmentModal)가 파일마다 한 번씩만 받아 cache 해 둡니다.
+     아래에서는 그 값만 읽습니다 (N+1 요청 방지). */
+  const url = urls[file.file_path] || ''
 
   const openTab = async () => {
     if (url) {
@@ -59,8 +47,7 @@ function PreviewItem({ file }) {
     }
     setLoading(true)
     try {
-      const signed = await getAttachmentUrl(file.file_path)
-      setUrl(signed)
+      const signed = await ensureUrl(file.file_path)
       window.open(signed, '_blank', 'noopener')
     } catch (e) {
       toast.error(e.message)
@@ -77,8 +64,7 @@ function PreviewItem({ file }) {
     if (!url) {
       setLoading(true)
       try {
-        const signed = await getAttachmentUrl(file.file_path)
-        setUrl(signed)
+        await ensureUrl(file.file_path)
       } catch (e) {
         toast.error(e.message)
         return
@@ -136,12 +122,48 @@ function PreviewItem({ file }) {
 
 /** 증빙 파일 목록 모달 */
 export function AttachmentModal({ open, onClose, attachments, title = '증빙 파일' }) {
+  /* path → 서명 URL cache. 파일마다 한 번만 받고, 다시 받지 않습니다. */
+  const [urls, setUrls] = useState({})
+  const inflight = useRef({})
+
+  const ensureUrl = useCallback(async (path) => {
+    if (!path) return ''
+    if (inflight.current[path]) return inflight.current[path]
+    const p = getAttachmentUrl(path)
+      .then((signed) => {
+        setUrls((prev) => (prev[path] === signed ? prev : { ...prev, [path]: signed }))
+        delete inflight.current[path]
+        return signed
+      })
+      .catch((err) => {
+        delete inflight.current[path]
+        throw err
+      })
+    inflight.current[path] = p
+    return p
+  }, [])
+
+  /* 열릴 때 한 번에 미리 받아둡니다 (썸네일이 바로 뜨게) */
+  useEffect(() => {
+    if (!open || !attachments?.length) return
+    let alive = true
+    for (const f of attachments) {
+      if (!isImage(f.mime_type, f.file_name)) continue
+      if (urls[f.file_path] || inflight.current[f.file_path]) continue
+      ensureUrl(f.file_path).catch(() => {})
+    }
+    return () => {
+      alive = false
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, attachments])
+
   return (
     <Modal open={open} onClose={onClose} title={title} size="md">
       {attachments?.length ? (
         <ul className="flex flex-col gap-2">
           {attachments.map((file) => (
-            <PreviewItem key={file.id} file={file} />
+            <PreviewItem key={file.id} file={file} urls={urls} ensureUrl={ensureUrl} />
           ))}
         </ul>
       ) : (
