@@ -3,7 +3,7 @@ import Icon from '../components/Icon'
 import { useToast } from '../components/Toast'
 import { ConfirmDialog, EmptyState, Field, LoadingBlock, Modal, PageHeader, StatCard } from '../components/ui'
 import { useAuth } from '../auth/AuthContext'
-import { ROLE_LABEL } from '../lib/constants'
+import { EXTERNAL_PARTNER_DEFAULT, ROLE_LABEL } from '../lib/constants'
 import { todayKST } from '../lib/format'
 import {
   createLeaveEntry,
@@ -66,6 +66,43 @@ export function annualByRule(hireDate, y) {
   if (years == null) return { days: 15, years: null }
   if (years < 1) return { days: 0, years }
   return { days: Math.min(25, 15 + Math.floor((years - 1) / 2)), years }
+}
+/* 해당 월에 월차 발생 대상인지 (근태 규정: 1년 미만, 입사 익월부터, 1주년 달은 제외 → 총 11개) */
+export function monthlyEligible(hireDate, ym) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(hireDate || ''))
+  if (!m) return false
+  const hd = `${m[1]}-${m[2]}-${m[3]}`
+  const first = `${ym}-01`
+  if (!(hd < first)) return false
+  const y = Number(ym.slice(0, 4))
+  const mo = Number(ym.slice(5, 7))
+  const lastDay = new Date(y, mo, 0).getDate()
+  const ann = `${Number(m[1]) + 1}-${m[2]}-${m[3]}`
+  return ann > `${ym}-${String(lastDay).padStart(2, '0')}`
+}
+/* 월차 월별 자동 부여: 1년 미만 내부 직원, 입사 익월부터 1주년 전달까지 월 1일.
+   같은 달에 이미 월차 발생(수동 입력 포함)이 있으면 건너뜁니다. */
+async function autoGrantMonthly(all, profileRows, userId, grantedRef) {
+  const ym = todayKST().slice(0, 7)
+  const key = `monthly-${ym}`
+  if (grantedRef.current[key]) return 0
+  grantedRef.current[key] = true
+  const active = (profileRows || []).filter((p) => p.active !== false && String(p.full_name || '').trim())
+  const payloads = []
+  for (const prof of active) {
+    const name = String(prof.full_name).trim()
+    const t = String(prof.employment_type || '')
+    if (t.startsWith('external')) continue
+    if (!t && EXTERNAL_PARTNER_DEFAULT.includes(name)) continue
+    if (!monthlyEligible(prof.hire_date, ym)) continue
+    const has = (all || []).some(
+      (e) => e.person === name && e.leave_type === '월차' && e.direction === '발생' && String(e.entry_date || '').slice(0, 7) === ym,
+    )
+    if (has) continue
+    payloads.push({ entry_date: `${ym}-01`, person: name, leave_type: '월차', direction: '발생', days: 1, memo: `${ym}월 월차 자동부여`, status: '승인' })
+  }
+  for (const p of payloads) await createLeaveEntry(p, userId)
+  return payloads.length
 }
 async function autoGrantYear(all, profileRows, userId, grantedRef) {
   const y = Number(todayKST().slice(0, 4))
@@ -182,6 +219,16 @@ export default function Leaves() {
             .then((added) => {
               if (!mounted || !added) return
               toast.success(`${added}건을 새해 부여했습니다.`)
+              return listLeaveEntries().then((r) => {
+                if (mounted) setRows(r || [])
+              })
+            })
+            .catch(() => {})
+          /* 이번 달 월차: 1년 미만 직원에 월 1일 (같은 달 발생분 있으면 제외) */
+          autoGrantMonthly(all, profileRows || [], user?.id, grantedRef)
+            .then((added) => {
+              if (!mounted || !added) return
+              toast.success(`${todayKST().slice(0, 7)} 월차 ${added}건을 부여했습니다.`)
               return listLeaveEntries().then((r) => {
                 if (mounted) setRows(r || [])
               })
