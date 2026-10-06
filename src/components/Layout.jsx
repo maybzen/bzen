@@ -41,7 +41,7 @@ function Brand({ company, compact = false, onHome }) {
     <button
       type="button"
       onClick={onHome}
-      title="대시보드로 이동"
+      title="홈으로 이동"
       className="flex w-full items-center gap-2.5 rounded-xl p-1 text-left transition hover:bg-white/5"
     >
       <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-brand-500 to-brand-800 text-[13px] font-black tracking-tight text-white shadow-sm">
@@ -118,8 +118,9 @@ export default function Layout() {
 
   /* 미리보기 중에는 개인 추가분을 뺀 전체 공통 권한으로 봅니다 */
   const effPerms = staffView ? global : perms
+  /* 직원은 대시보드를 숨기고 지출결의부터 봅니다 (관리자만 대시보드) */
   const visible = NAV.filter(
-    (item) => isAdmin || item.base || (item.perm && effPerms.includes(item.perm)),
+    (item) => isAdmin || ((item.base && item.to !== '/dashboard') || (item.perm && effPerms.includes(item.perm))),
   )
   const current = visible.find((item) => location.pathname.startsWith(item.to))
 
@@ -174,7 +175,8 @@ export default function Layout() {
           company={company}
           onHome={() => {
             onNavigate?.()
-            if (location.pathname !== '/dashboard') navigate('/dashboard')
+            const home = isAdmin ? '/dashboard' : '/expense-reports'
+            if (location.pathname !== home) navigate(home)
             else window.location.reload()
           }}
         />

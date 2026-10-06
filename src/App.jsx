@@ -112,12 +112,22 @@ function Guard({ children, adminOnly = false, perm = null }) {
   if (!user) return <Navigate to="/login" replace state={{ from: location.pathname }} />
   if (!profile) return <Splash />
   if (!isActive) return <PendingApproval />
-  if (adminOnly && !isAdmin) return <Navigate to="/dashboard" replace />
+  /* 직원 첫 화면은 지출결의 (대시보드 관리자 전용) */
+  const fallback = isAdmin ? '/dashboard' : STAFF_LANDING
+  if (adminOnly && !isAdmin) return <Navigate to={fallback} replace />
   if (perm && !isAdmin) {
     if (permsLoading) return <Splash />
-    if (!perms.includes(perm)) return <Navigate to="/dashboard" replace />
+    if (!perms.includes(perm)) return <Navigate to={fallback} replace />
   }
+  /* 직원 대시보드 직접 접근도 지출결의로 */
+  if (!isAdmin && location.pathname === '/dashboard') return <Navigate to={STAFF_LANDING} replace />
   return children
+}
+
+function HomeRedirect() {
+  const { loading, isAdmin } = useAuth()
+  if (loading) return <Splash />
+  return <Navigate to={isAdmin ? '/dashboard' : STAFF_LANDING} replace />
 }
 
 export default function App() {
@@ -299,7 +309,7 @@ export default function App() {
             />
             <Route path="/settings" element={<Settings />} />
 
-            <Route path="/" element={<Navigate to="/dashboard" replace />} />
+            <Route path="/" element={<HomeRedirect />} />
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </Route>
 

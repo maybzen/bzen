@@ -5,7 +5,7 @@ import { useToast } from '../components/Toast'
 import { Field, InlineAlert, LoadingBlock, PageHeader, Spinner } from '../components/ui'
 import { useAuth } from '../auth/AuthContext'
 import { COMPANY_EN, ROLE_LABEL } from '../lib/constants'
-import { PERM_DEFS } from '../lib/permissions'
+import { PERM_DEFS, STAFF_CORE_PERMS } from '../lib/permissions'
 import { formatDateHuman } from '../lib/format'
 import { callAdminFn, getSettings, updateProfile, updateSettings } from '../lib/api'
 
@@ -272,7 +272,7 @@ export default function Settings() {
               <h2 className="text-sm font-bold text-ink-900">직원 권한</h2>
               <p className="mt-0.5 text-xs text-ink-500">
                 전체 직원에게 공통으로 보여줄 추가 메뉴를 정합니다. 특정 직원에게만 더 보여주려면 계정관리에서
-                정하세요. 대시보드·설정은 항상 보이고, 계정관리는 항상 관리자 전용입니다.
+                정하세요. 지출결의·운영비·거래처·프로젝트·휴무대장·설정은 항상 보이고, 계정관리는 항상 관리자 전용입니다.
               </p>
             </header>
             {loadingCompany ? (
@@ -290,11 +290,17 @@ export default function Settings() {
                     key={perm.key}
                     className="flex cursor-pointer items-center justify-between gap-3 rounded-lg border border-ink-200 px-3.5 py-2.5 transition hover:bg-ink-50/60"
                   >
-                    <span className="text-sm font-semibold text-ink-800">{perm.label}</span>
+                    <span className="text-sm font-semibold text-ink-800">
+                      {perm.label}
+                      {STAFF_CORE_PERMS.includes(perm.key) ? (
+                        <span className="chip ml-1.5 bg-ink-100 text-ink-500">고정</span>
+                      ) : null}
+                    </span>
                     <input
                       type="checkbox"
                       className="h-4 w-4 accent-brand-600"
-                      checked={staffPerms.includes(perm.key)}
+                      checked={staffPerms.includes(perm.key) || STAFF_CORE_PERMS.includes(perm.key)}
+                      disabled={STAFF_CORE_PERMS.includes(perm.key)}
                       onChange={() => togglePerm(perm.key)}
                     />
                   </label>

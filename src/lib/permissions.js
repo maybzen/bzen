@@ -2,15 +2,20 @@ import { useEffect, useState } from 'react'
 import { getSettings } from './api'
 
 /**
- * 직원이 볼 수 있는 추가 메뉴 키 목록.
- * 기본 메뉴(대시보드·지출결의·프로젝트·설정)는 항상 보입니다.
+ * 직원 기본 메뉴 (지출결의·운영비·거래처·프로젝트·휴무대장).
  * settings.staff_permissions 컬럼이 아직 없으면(마이그레이션 전)
- * 거래처만 기본 허용합니다.
+ * 이 기본값으로 동작합니다.
  */
-export const STAFF_DEFAULT_PERMS = ['expense-reports', 'partners', 'projects']
+export const STAFF_DEFAULT_PERMS = ['expense-reports', 'expenses', 'partners', 'projects', 'leaves']
+
+/** 직원 고정 메뉴: 설정에서 꺼도 항상 보입니다. */
+export const STAFF_CORE_PERMS = ['expense-reports', 'expenses', 'partners', 'projects', 'leaves']
+
+/** 직원 로그인 직후 첫 화면 */
+export const STAFF_LANDING = '/expense-reports'
 
 /** 토글로 관리하는 메뉴 정의 (설정·계정관리 화면과 공유)
- *  - 고정 공통(대시보드·설정)은 여기서 뺍니다. 계정관리는 항상 관리자 전용. */
+ *  - 고정 공통(설정)은 여기서 뺍니다. 계정관리는 항상 관리자 전용. */
 export const PERM_DEFS = [
   { key: 'expense-reports', label: '지출결의' },
   { key: 'partners', label: '거래처' },
@@ -28,7 +33,7 @@ export const PERM_DEFS = [
 export const PERM_LABEL = Object.fromEntries(PERM_DEFS.map((p) => [p.key, p.label]))
 
 /** 고정 공통 메뉴: 역할·권한과 무관하게 항상 보입니다. */
-export const STAFF_BASE_LABEL = '대시보드·설정'
+export const STAFF_BASE_LABEL = '설정'
 
 let cached = null
 
@@ -47,12 +52,12 @@ function getStaffSettings() {
   return cached
 }
 
-/** 전체 기본 권한 + 해당 계정의 추가 권한을 합친 실효 권한 */
+/** 전체 기본 권한 + 해당 계정의 추가 권한을 합친 실효 권한 (고정 메뉴는 항상 포함) */
 export function effectivePerms(staffSettings, profile) {
   const global = staffSettings?.global || []
   const extra =
     (profile && staffSettings?.overrides && staffSettings.overrides[profile.id]) || []
-  return [...new Set([...global, ...(Array.isArray(extra) ? extra : [])])]
+  return [...new Set([...STAFF_CORE_PERMS, ...global, ...(Array.isArray(extra) ? extra : [])])]
 }
 
 /** 사원(관리자 제외) id 집합 */
