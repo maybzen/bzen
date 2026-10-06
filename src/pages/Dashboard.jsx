@@ -1259,22 +1259,25 @@ function ScheduleCard({ userId, home, isAdmin, profiles, projects, syncBundle, o
   const [manuals, setManuals] = useState([])
   const [markers, setMarkers] = useState([])
   const [dateOk, setDateOk] = useState(false)
+  const [spanOk, setSpanOk] = useState(false)
   const [loading, setLoading] = useState(true)
   const ledger = useLedgerIndex()
 
   const loadAll = useCallback(async () => {
     setLoading(true)
     try {
-      const [loanRows, schedRows, markerRows, supported] = await Promise.all([
+      const [loanRows, schedRows, markerRows, supported, span] = await Promise.all([
         listFundRows('fund_loans').catch(() => []),
         listChecklistItems(SCHEDULE_LIST).catch(() => []),
         listChecklistItems(SCHEDULE_DONE_LIST).catch(() => []),
         dueDateSupported().catch(() => false),
+        spanSupported().catch(() => false),
       ])
       setLoans(loanRows || [])
       setManuals(schedRows || [])
       setMarkers(markerRows || [])
       setDateOk(!!supported)
+      setSpanOk(!!span)
     } finally {
       setLoading(false)
     }
@@ -1355,6 +1358,7 @@ function ScheduleCard({ userId, home, isAdmin, profiles, projects, syncBundle, o
         manuals={manuals}
         markers={markers}
         dateSupported={dateOk}
+        spanSupported={spanOk}
         userId={userId}
         onChanged={loadAll}
         home={home}
