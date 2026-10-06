@@ -297,9 +297,16 @@ export function cardCodeForName(name) {
   return ''
 }
 
-/** 닉네임 첫 글자 → 카드 코드 (예: Gianna → G). 없으면 '' */
+/** 닉네임 → 카드 코드.
+ * - 1~2자 짧은 코드(SH·BE·C)는 그대로 대문자로 씁니다.
+ *   내부 직원과 첫 글자가 겹칠 때 쓰는 구분용 두 글자 코드입니다.
+ * - 긴 영어 이름(Gianna·Shine 등)은 첫 글자 대문자가 코드입니다.
+ * 없으면 '' */
 export function nicknameCode(nickname) {
-  const m = /^([a-zA-Z])/.exec(String(nickname || '').trim())
+  const t = String(nickname || '').trim()
+  if (!t) return ''
+  if (/^[a-zA-Z]{1,2}$/.test(t)) return t.toUpperCase()
+  const m = /^([a-zA-Z])/.exec(t)
   return m ? m[1].toUpperCase() : ''
 }
 

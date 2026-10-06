@@ -98,6 +98,8 @@ export default function LedgerPage({ type, source = 'manual', title, description
   const load = useCallback(async () => {
     setLoading(true)
     try {
+      /* 프로젝트·구성원은 장부 조회 실패와 분리해서 각각 로드합니다.
+         하나가 실패해도 등록 모달의 프로젝트 목록까지 비지 않게 합니다. */
       const [rows, projectRows, profileRows] = await Promise.all([
         listEntries({
           from: period.range.from,
@@ -108,17 +110,17 @@ export default function LedgerPage({ type, source = 'manual', title, description
           ...(source !== 'manual' ? { source } : {}),
           projectId: projectFilter || undefined,
           search: debounced,
-        }),
-        listProjects(),
-        listProfiles(),
+        }).catch((e) => { toast.error(`장부 조회 실패: ${e.message}`); return [] }),
+        listProjects().catch((e) => { toast.error(`프로젝트 조회 실패: ${e.message}`); return [] }),
+        listProfiles().catch((e) => { toast.error(`구성원 조회 실패: ${e.message}`); return [] }),
       ])
-      setEntries(rows)
-      setProjects(projectRows)
-      setProfiles(profileRows)
+      setEntries(rows || [])
+      setProjects(projectRows || [])
+      setProfiles(profileRows || [])
 
-      const files = await listAttachments(rows.map((r) => r.id))
+      const files = await listAttachments((rows || []).map((r) => r.id)).catch(() => [])
       const map = {}
-      for (const file of files) {
+      for (const file of files || []) {
         if (!map[file.entry_id]) map[file.entry_id] = []
         map[file.entry_id].push(file)
       }

@@ -6,7 +6,7 @@ import { useAuth } from '../auth/AuthContext'
 import { EXTERNAL_PARTNER_DEFAULT, ROLE_LABEL } from '../lib/constants'
 import { PERM_DEFS, PERM_LABEL } from '../lib/permissions'
 import { formatDateHuman } from '../lib/format'
-import { callAdminFn, getSettings, listProfiles, updateSettings } from '../lib/api'
+import { callAdminFn, createExternalMember, getSettings, listProfiles, updateSettings } from '../lib/api'
 
 const EMPTY = {
   full_name: '',
@@ -204,9 +204,31 @@ export default function Users() {
   const handleDelete = async () => {
     if (!removing) return
     setBusy(true)
+    /* 계정 삭제는 로그인만 없앱니다. 구성원(장부·급여 연결) 유지를 위해
+       삭제 전 스냅샷을 외부 명단에 백업합니다 (같은 이름이 있으면 덮어쓰지 않음). */
+    const snapshot = {
+      full_name: String(removing.full_name || '').trim(),
+      employment_type: 'internal',
+      nickname: String(removing.nickname || '').trim(),
+      card_code: String(removing.card_code || removing.nickname || '').trim().toUpperCase(),
+      department: String(removing.department || '').trim(),
+      phone: String(removing.phone || '').trim(),
+      hire_date: removing.hire_date || null,
+      active: true,
+    }
     try {
       await callAdminFn({ action: 'delete', user_id: removing.id })
-      toast.success('계정이 삭제되었습니다.')
+      if (snapshot.full_name) {
+        try {
+          await createExternalMember(snapshot, user?.id)
+        } catch (backupErr) {
+          const msg = String(backupErr?.message || '')
+          if (!/duplicate|already|unique|중복|이미/i.test(msg)) {
+            toast.error(`계정은 지웠지만 구성원 백업에 실패했습니다: ${msg}`)
+          }
+        }
+      }
+      toast.success('계정(로그인)만 삭제했습니다. 구성원 명단에는 그대로 남습니다.')
       setRemoving(null)
       setReloadKey((k) => k + 1)
     } catch (err) {
@@ -544,10 +566,10 @@ export default function Users() {
       <ConfirmDialog
         open={Boolean(removing)}
         busy={busy}
-        title="계정을 삭제하시겠습니까?"
+        title="계정(로그인)만 삭제하시겠습니까?"
         message={
           removing
-            ? `${removing.full_name || removing.email} 계정을 완전히 삭제합니다.\n이 사용자가 등록한 장부 내역은 '담당자 없음'으로 남습니다.`
+            ? `${removing.full_name || removing.email} 님의 로그인을 없앱니다.\n구성원 명단·장부·급여 내역은 그대로 남습니다 (손선욱님처럼 사이트 안 쓰는 분은 이 방식으로 지우세요).\n정말 로그인만 없앨까요?`
             : ''
         }
         onClose={() => setRemoving(null)}

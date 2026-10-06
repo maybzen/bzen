@@ -61,8 +61,14 @@ const KIND_META = {
   external: { label: '외부단기', chip: 'bg-amber-50 text-amber-700', title: '행사 알바 등 단기 외부 · 3.3% 원천징수' },
 }
 
-/* 닉네임 첫 글자 → 카드 코드 (예: Gianna → G). 없으면 기존 이름 매칭으로 찾습니다 */
+/* 급여관리와 같은 기준: 4대보험 회사부담은 인별 인건비에서 뺍니다 */
+const INSURANCE_MEMBERS = ['국민건강보험공단', '근로복지공단']
+
+/* 코드 우선순위: 직접 정한 코드(card_code) > 닉네임(SH·BE·C 그대로, 긴 이름은 첫 글자) > 이름 매칭.
+ * 박현정(S)과 겹치는 손선욱은 카드코드에 SH를 직접 적으면 SH로 뜹니다. */
 function nickCodeOf(p) {
+  const explicit = String(p?.card_code || '').trim().toUpperCase()
+  if (explicit) return explicit
   return nicknameCode(p?.nickname) || cardCodeForName(p?.full_name) || ''
 }
 
@@ -76,6 +82,8 @@ export default function Members() {
   const [loading, setLoading] = useState(true)
   const [profiles, setProfiles] = useState([])
   const [payByName, setPayByName] = useState({})
+  const [payRowsByName, setPayRowsByName] = useState({})
+  const [payDetailName, setPayDetailName] = useState('')
   const [rowEdits, setRowEdits] = useState({})
   const [savingId, setSavingId] = useState(null)
   const [bulkSaving, setBulkSaving] = useState(false)
@@ -87,6 +95,7 @@ export default function Members() {
     full_name: '',
     employment_type: 'internal',
     nickname: '',
+    card_code: '',
     department: '',
     phone: '',
     hire_date: '',
@@ -98,7 +107,8 @@ export default function Members() {
     Promise.all([
       listProfiles(),
       listExternalMembers().catch(() => []),
-      listEntries({ types: ['opex'], maxRows: 20000 }).catch(() => []),
+      /* 인건비 집계용: 카테고리 기준이라 유형 필터 없이 넉넉히 가져옵니다 */
+      listEntries({ maxRows: 20000 }).catch(() => []),
     ])
       .then(([profRows, extRows, entryRows]) => {
         if (!alive) return
@@ -106,13 +116,22 @@ export default function Members() {
         const tagged = (extRows || []).map((r) => ({ ...r, _external: true }))
         setProfiles([...(profRows || []), ...tagged])
         const map = {}
+        const detailMap = {}
         for (const e of entryRows || []) {
           if (e.category !== '인건비') continue
+          /* 4대보험 회사부담(건보·근복공단)은 인별 급여가 아니라 별도이므로 제외 — 급여관리와 같은 기준 */
+          if (INSURANCE_MEMBERS.includes(String(e.counterparty || '').trim())) continue
           const n = String(e.counterparty || '').trim()
           if (!n) continue
           map[n] = (map[n] || 0) + Number(e.total_amount || 0)
+          if (!detailMap[n]) detailMap[n] = []
+          detailMap[n].push(e)
+        }
+        for (const n of Object.keys(detailMap)) {
+          detailMap[n].sort((a, b) => String(b.entry_date || '').localeCompare(String(a.entry_date || '')))
         }
         setPayByName(map)
+        setPayRowsByName(detailMap)
       })
       .catch((e) => toast.error(e.message))
       .finally(() => {
@@ -138,12 +157,14 @@ export default function Members() {
     const patch = rowEdits[p.id]
     if (!patch) return true
     setSavingId(p.id)
-    /* 외부인력 표는 별도 함수로 저장합니다 */
+    /* 외부인력 표는 별도 함수로 저장합니다 (로그인 없는 내부(손선욱형) 포함) */
     if (p._external) {
+      const rawType = patch.employment_type ?? p.employment_type ?? 'external_partner'
       const base = {
         full_name: String(patch.full_name ?? p.full_name ?? '').trim(),
-        employment_type: patch.employment_type ?? p.employment_type ?? 'external_partner',
+        employment_type: ['internal', 'external_partner', 'external'].includes(rawType) ? rawType : 'external_partner',
         nickname: String(patch.nickname ?? p.nickname ?? '').trim(),
+        card_code: String(patch.card_code ?? p.card_code ?? '').trim().toUpperCase(),
         department: String(patch.department ?? p.department ?? '').trim(),
         phone: String(patch.phone ?? p.phone ?? '').trim(),
         hire_date: patch.hire_date ?? p.hire_date ?? null,
@@ -182,6 +203,9 @@ export default function Members() {
     if (nicknameSupported) {
       base.nickname = String(patch.nickname ?? p.nickname ?? '').trim()
     }
+    if (cardCodeSupported) {
+      base.card_code = String(patch.card_code ?? p.card_code ?? '').trim().toUpperCase()
+    }
     if (!base.full_name) {
       if (!silent) toast.error('이름을 입력해 주세요.')
       setSavingId(null)
@@ -200,6 +224,7 @@ export default function Members() {
           const fallback = { ...base }
           delete fallback.employment_type
           delete fallback.nickname
+          delete fallback.card_code
           const saved = await updateProfile(p.id, fallback)
           setProfiles((rows) => rows.map((r) => (r.id === p.id ? { ...r, ...saved } : r)))
           cancelRow(p.id)
@@ -242,8 +267,11 @@ export default function Members() {
   const openAdd = (preset = {}) => {
     setAddForm({
       full_name: preset.full_name || '',
-      employment_type: preset.employment_type && preset.employment_type !== 'internal' ? preset.employment_type : 'external_partner',
+      employment_type: ['internal', 'external_partner', 'external'].includes(preset.employment_type)
+        ? preset.employment_type
+        : 'external_partner',
       nickname: preset.nickname || '',
+      card_code: preset.card_code || '',
       department: preset.department || '',
       phone: preset.phone || '',
       hire_date: preset.hire_date || '',
@@ -252,8 +280,8 @@ export default function Members() {
     setAddOpen(true)
   }
 
-  /* 구성원 추가 팝업은 외부인력 전용입니다 (내부 직원은 계정관리에서 계정 생성).
-     profiles는 로그인 계정과 1:1이라 계정 없는 행을 못 만듭니다. */
+  /* 구성원 추가 팝업은 로그인 없는 인력용입니다 (외부협력·외부단기 + 사이트 안 쓰는 내부(손선욱형)).
+     내부 직원 중 로그인 계정이 필요하면 계정관리에서 만듭니다. */
   const submitAdd = async (e) => {
     e.preventDefault()
     const name = String(addForm.full_name || '').trim()
@@ -265,8 +293,11 @@ export default function Members() {
     setAddError('')
     const row = {
       full_name: name,
-      employment_type: addForm.employment_type === 'external' ? 'external' : 'external_partner',
+      employment_type: ['internal', 'external_partner', 'external'].includes(addForm.employment_type)
+        ? addForm.employment_type
+        : 'external_partner',
       nickname: String(addForm.nickname || '').trim(),
+      card_code: String(addForm.card_code || '').trim().toUpperCase(),
       department: String(addForm.department || '').trim(),
       phone: String(addForm.phone || '').trim(),
       hire_date: addForm.hire_date || null,
@@ -276,7 +307,7 @@ export default function Members() {
       const saved = await createExternalMember(row, user?.id)
       setProfiles((rows) => [...rows, { ...saved, _external: true }])
       setAddOpen(false)
-      toast.success(`${saved.full_name} 님이 외부인력으로 등록되었습니다.`)
+      toast.success(`${saved.full_name} 님이 등록되었습니다. (계정 없이 구성원에만 유지됩니다)`)
     } catch (err) {
       setAddError(err.message)
     } finally {
@@ -308,6 +339,7 @@ export default function Members() {
   const celebrateSupported = useMemo(() => profiles.some((p) => p && 'birth_celebrate' in p), [profiles])
   const externalSupported = useMemo(() => profiles.some((p) => p && 'employment_type' in p), [profiles])
   const nicknameSupported = useMemo(() => profiles.some((p) => p && 'nickname' in p), [profiles])
+  const cardCodeSupported = useMemo(() => profiles.some((p) => p && 'card_code' in p), [profiles])
 
   const totalPay = useMemo(() => Object.values(payByName).reduce((a, v) => a + v, 0), [payByName])
 
@@ -344,7 +376,14 @@ export default function Members() {
               icon="users"
               hint={`외부단기 ${tempExternalList.filter((p) => p.active !== false).length}명`}
             />
-            <StatCard label="인건비 누적" value={totalPay} tone="opex" icon="coins" hint="장부 인건비 합계" />
+            <StatCard
+              label="인건비 누적"
+              value={totalPay}
+              tone="opex"
+              icon="coins"
+              hint="누르면 인별 내역 확인"
+              onClick={() => setPayDetailName('__ALL__')}
+            />
           </div>
 
           {OFFICE_STAFF.filter(
@@ -389,7 +428,7 @@ export default function Members() {
                     <tr>
                       <th className="th">이름</th>
                       <th className="th">구분</th>
-                      <th className="th">닉네임</th>
+                      <th className="th">닉네임 / 코드</th>
                       <th className="th">부서</th>
                       <th className="th">연락처</th>
                       <th className="th">입사일</th>
@@ -421,11 +460,11 @@ export default function Members() {
                           <td className="td">
                             {externalSupported ? (
                               <select
-                                className="input w-28 py-1 text-xs"
+                                className="input w-32 py-1 text-xs"
                                 value={['internal', 'external_partner', 'external'].includes(work.employment_type) ? work.employment_type : kind}
                                 onChange={(e) => setCell(p.id, { employment_type: e.target.value })}
                               >
-                                {p._external ? null : <option value="internal">내부</option>}
+                                <option value="internal">내부 (로그인 없어도 유지)</option>
                                 <option value="external_partner">외부협력·3.3%</option>
                                 <option value="external">외부단기·3.3%</option>
                               </select>
@@ -439,16 +478,26 @@ export default function Members() {
                             )}
                           </td>
                           <td className="td">
-                            {nicknameSupported ? (
+                            {nicknameSupported || cardCodeSupported ? (
                               <>
                                 <input
-                                  className="input w-24 py-1 text-xs"
+                                  className="input w-28 py-1 text-xs"
                                   value={work.nickname || ''}
-                                  onChange={(e) => setCell(p.id, { nickname: e.target.value.trim() })}
-                                  placeholder="예: Gianna"
+                                  onChange={(e) => setCell(p.id, { nickname: e.target.value })}
+                                  placeholder="닉네임 (예: Shine)"
+                                  title="보이는 이름. 코드는 아래 칸에서 직접 정합니다"
                                 />
-                                <span className="mt-0.5 block text-[11px] font-bold text-ink-500">
-                                  {nickCodeOf({ ...p, ...work }) ? `코드 ${nickCodeOf({ ...p, ...work })}` : '코드 없음'}
+                                <span className="mt-1 flex items-center gap-1">
+                                  <input
+                                    className="input w-20 py-1 text-xs font-bold uppercase"
+                                    value={String(work.card_code ?? p.card_code ?? '')}
+                                    onChange={(e) => setCell(p.id, { card_code: e.target.value.toUpperCase() })}
+                                    placeholder="코드"
+                                    title="카드 이용자 코드 직접 입력 (예: SH). 비우면 닉네임에서 자동"
+                                  />
+                                  <span className="text-[11px] font-bold text-ink-500">
+                                    {nickCodeOf({ ...p, ...work }) ? `→ ${nickCodeOf({ ...p, ...work })}` : '코드 없음'}
+                                  </span>
                                 </span>
                               </>
                             ) : (
@@ -507,7 +556,24 @@ export default function Members() {
                             ) : null}
                           </td>
                           )}
-                          <td className="td num">{formatKRW(payByName[String(p.full_name || '').trim()] || 0)}</td>
+                          <td className="td num">
+                            {(() => {
+                              const nm = String(p.full_name || '').trim()
+                              const amt = payByName[nm] || 0
+                              const rows = payRowsByName[nm] || []
+                              if (!amt || !rows.length) return formatKRW(0)
+                              return (
+                                <button
+                                  type="button"
+                                  onClick={() => setPayDetailName(nm)}
+                                  className="font-num font-bold tabular-nums text-brand-700 hover:underline"
+                                  title="클릭하면 장부 내역 확인"
+                                >
+                                  {formatKRW(amt)}
+                                </button>
+                              )
+                            })()}
+                          </td>
                           <td className="td">
                             <button
                               type="button"
@@ -560,8 +626,9 @@ export default function Members() {
               <p className="border-t border-ink-100 px-4 py-3 text-xs leading-relaxed text-ink-500">
                 <Icon name="info" size={13} className="mr-1 inline text-ink-400" />
                 휴무대장 입사일과 함께 씁니다. 퇴사로 바꾸면 목록·집계에서 빠집니다. 외부협력·외부단기는 급여관리에서
-                분리 표시되고(3.3%), 닉네임 첫 글자(대문자)가 카드 이용자 코드로 쓰입니다.
-                {user ? '' : ''}
+                분리 표시되고(3.3%), 코드는 직접 정한 값이 우선이고 비우면 닉네임에서 자동(짧으면 그대로·길면 첫 글자)으로 뜹니다
+                (손선욱 Shine→코드 SH, 장정아→BE). 인건비 누적(요약·인별 금액)을 누르면 장부 내역이 뜹니다.
+                계정을 지워도 구성원은 남습니다 (로그인만 없어짐).
               </p>
             </div>
           ) : (
@@ -574,7 +641,7 @@ export default function Members() {
         open={addOpen}
         onClose={addSaving ? undefined : () => setAddOpen(false)}
         title="구성원 추가"
-        subtitle="로그인 없이 일하는 외부 인력(외부협력·외부단기)을 등록합니다. 내부 직원은 계정관리에서 계정을 먼저 만드세요."
+        subtitle="로그인 없이 일하는 인력(외부협력·외부단기 + 사이트 안 쓰는 내부)을 등록합니다. 계정이 필요한 내부 직원은 계정관리에서 만드세요."
         footer={
           <>
             <button type="button" className="btn-ghost" onClick={() => setAddOpen(false)} disabled={addSaving}>
@@ -602,22 +669,31 @@ export default function Members() {
               required
             />
           </Field>
-          <Field label="구분" hint="외부는 3.3% · 내부 직원은 계정관리에서 추가">
+          <Field label="구분" hint="외부는 3.3% · 사이트 안 쓰는 내부는 '내부(계정 없음)'">
             <select
               className="input"
               value={addForm.employment_type}
               onChange={(e) => setAddForm((f) => ({ ...f, employment_type: e.target.value }))}
             >
+              <option value="internal">내부 (계정 없음 · 손선욱형)</option>
               <option value="external_partner">외부협력·3.3% (상주)</option>
               <option value="external">외부단기·3.3% (행사 알바)</option>
             </select>
           </Field>
-          <Field label="닉네임" hint="영어 이름 (첫 글자가 카드 코드로 쓰입니다)">
+          <Field label="닉네임" hint="보이는 이름 (예: Shine)">
             <input
               className="input"
               value={addForm.nickname}
-              onChange={(e) => setAddForm((f) => ({ ...f, nickname: e.target.value.trim() }))}
-              placeholder="예: Gianna"
+              onChange={(e) => setAddForm((f) => ({ ...f, nickname: e.target.value }))}
+              placeholder="예: Shine"
+            />
+          </Field>
+          <Field label="코드" hint="직접 지정 (예: SH) · 비우면 자동">
+            <input
+              className="input uppercase"
+              value={addForm.card_code}
+              onChange={(e) => setAddForm((f) => ({ ...f, card_code: e.target.value.toUpperCase() }))}
+              placeholder="예: SH"
             />
           </Field>
           <Field label="부서">
@@ -664,6 +740,95 @@ export default function Members() {
         onClose={() => setRemoving(null)}
         onConfirm={handleDeleteExternal}
       />
+
+      <Modal
+        open={Boolean(payDetailName)}
+        onClose={() => setPayDetailName('')}
+        title={payDetailName === '__ALL__' ? '인건비 누적 · 인별 내역' : payDetailName ? `${payDetailName} · 인건비 내역` : '인건비 내역'}
+        subtitle={
+          payDetailName === '__ALL__'
+            ? `장부 인건비 합계 ${formatKRW(totalPay)}원 · 이름을 누르면 해당 내역 확인`
+            : payDetailName
+              ? `장부 인건비 합계 ${formatKRW(payByName[payDetailName] || 0)}원 · ${(payRowsByName[payDetailName] || []).length}건`
+              : ''
+        }
+        size="lg"
+        footer={
+          <span className="flex w-full items-center gap-2">
+            {payDetailName && payDetailName !== '__ALL__' ? (
+              <button type="button" className="btn-ghost mr-auto" onClick={() => setPayDetailName('__ALL__')}>
+                ← 전체 목록
+              </button>
+            ) : null}
+            <button type="button" className="btn-ghost ml-auto" onClick={() => setPayDetailName('')}>
+              닫기
+            </button>
+          </span>
+        }
+      >
+        {payDetailName === '__ALL__' ? (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[520px] border-collapse text-xs">
+              <thead className="bg-ink-50/70">
+                <tr>
+                  <th className="th">이름</th>
+                  <th className="th text-right">건수</th>
+                  <th className="th text-right">누적</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-ink-100">
+                {Object.keys(payByName)
+                  .sort((a, b) => (payByName[b] || 0) - (payByName[a] || 0))
+                  .map((nm) => (
+                    <tr key={nm}>
+                      <td className="td">
+                        <button
+                          type="button"
+                          onClick={() => setPayDetailName(nm)}
+                          className="font-bold text-brand-700 hover:underline"
+                        >
+                          {nm}
+                        </button>
+                      </td>
+                      <td className="td num">{(payRowsByName[nm] || []).length}건</td>
+                      <td className="td num font-bold">{formatKRW(payByName[nm] || 0)}원</td>
+                    </tr>
+                  ))}
+                {!Object.keys(payByName).length ? (
+                  <tr>
+                    <td colSpan={3} className="empty">인건비 내역이 없습니다.</td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
+          </div>
+        ) : (payRowsByName[payDetailName] || []).length ? (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[520px] border-collapse text-xs">
+              <thead className="bg-ink-50/70">
+                <tr>
+                  <th className="th">일자</th>
+                  <th className="th">적요</th>
+                  <th className="th">메모</th>
+                  <th className="th text-right">금액</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-ink-100">
+                {(payRowsByName[payDetailName] || []).map((e) => (
+                  <tr key={e.id}>
+                    <td className="td whitespace-nowrap">{e.entry_date}</td>
+                    <td className="td">{e.description || '—'}</td>
+                    <td className="td text-ink-500">{e.memo || '—'}</td>
+                    <td className="td num font-bold">{formatKRW(e.total_amount)}원</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="text-xs text-ink-500">내역이 없습니다.</p>
+        )}
+      </Modal>
     </div>
   )
 }

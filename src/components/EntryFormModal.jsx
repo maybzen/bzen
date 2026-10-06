@@ -226,9 +226,11 @@ export default function EntryFormModal({
   )
 
   const warnings = useMemo(() => {
+    /* 직원은 경고 없이 바로 저장 (마찰 줄이기). 관리자는 전체 대조 유지. */
+    if (!isAdmin) return []
     if (supply === 0 && vat === 0) return []
     return checkEntryDraft(draftValues, { entries: visibleEntries, excludeId: initial?.id || '', aliasRoot })
-  }, [draftValues, supply, vat, visibleEntries, initial?.id])
+  }, [draftValues, supply, vat, visibleEntries, initial?.id, isAdmin])
 
   /* 저장 전 경고를 확인해야 하는 단계인가 */
   const needConfirm = warnings.length > 0 && !forceSave
@@ -261,8 +263,9 @@ export default function EntryFormModal({
     if (isReport && !form.requester_id && !userId) return setError('지출자를 선택해 주세요.')
     // 장부 대조 데이터가 아직 없으면 잠깐 기다렸다가 검사합니다 (중복 경고를 놓치지 않기 위해).
     // 8초 안에 안 오면 입력값 자체의 문제(깨진 텍스트·부가세·비목)만으로 판단하고 진행합니다.
+    // 직원은 경고 없이 바로 저장합니다.
     let liveWarnings = warnings
-    if (!ledger.ready) {
+    if (!ledger.ready && isAdmin) {
       try {
         const fresh = await Promise.race([
           ensureLedgerIndex(),
@@ -434,9 +437,12 @@ export default function EntryFormModal({
                   </option>
                 ))}
               </select>
+              {!sortedProjects.length ? (
+                <p className="mt-1 text-xs text-loss">프로젝트를 불러오지 못했습니다. 페이지를 새로고침해 주세요.</p>
+              ) : null}
             </Field>
           ) : (
-            <Field label="프로젝트" hint="비우면 공통비용으로 잡힙니다.">
+            <Field label="프로젝트" hint={`비우면 공통비용으로 잡힙니다.${sortedProjects.length ? '' : ' (목록 로딩 실패 — 새로고침해 주세요)'}`}>
               <select className="input" value={form.project_id} onChange={set('project_id')}>
                 <option value="">선택 없음 (공통)</option>
                 {sortedProjects.map((p) => (
