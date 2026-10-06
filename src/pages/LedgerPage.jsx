@@ -501,7 +501,7 @@ export default function LedgerPage({ type, source = 'manual', title, description
             </button>
             {type === 'opex' && source === 'manual' ? (
               <span className="text-[11px] text-ink-400">
-                보라색 <span className="chip bg-violet-50 text-violet-700">지결</span> = 지출결의 등록분
+                보라색 <span className="chip bg-violet-50 text-violet-700">지결</span> = 지출결의·직원 입력분
               </span>
             ) : null}
           </div>

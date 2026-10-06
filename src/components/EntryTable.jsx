@@ -81,6 +81,17 @@ export default function EntryTable({
 
   const editable = bulkEdit && canEdit && typeof onSaveRow === 'function'
 
+  /* 직원 id 집합: 지출결의 출처가 비어도 지출자가 직원이면 직원 입력분으로 봅니다 */
+  const staffIdSet = useMemo(
+    () => new Set((profiles || []).filter((p) => p && p.id && p.role !== 'admin').map((p) => p.id)),
+    [profiles],
+  )
+  const isReportRow = (entry) => {
+    if (!entry) return false
+    if (entry.source === 'expense_report') return true
+    return Boolean(entry.requester_id && staffIdSet.has(entry.requester_id))
+  }
+
   const hlSet = useMemo(() => new Set((highlightIds || []).map(String)), [highlightIds])
 
   /* 사유별 색: 중복·깨짐은 빨강, 부가세·표기는 노랑, 누락은 파랑 */
@@ -472,8 +483,8 @@ export default function EntryTable({
                     ) : (
                       <span className="text-ink-300">—</span>
                     )}
-                    {showSource && entry.source === 'expense_report' ? (
-                      <span className="ml-1 chip bg-violet-50 text-violet-700" title="지출결의로 등록된 내역">지결</span>
+                    {showSource && isReportRow(entry) ? (
+                      <span className="ml-1 chip bg-violet-50 text-violet-700" title="지출결의·직원 입력분">지결</span>
                     ) : null}
                   </td>
                   <td className="td max-w-[150px] truncate">
@@ -680,7 +691,7 @@ export default function EntryTable({
                         {entry.category ? (
                           <span className="chip bg-ink-100 text-ink-600">{entry.category}</span>
                         ) : null}
-                        {showSource && entry.source === 'expense_report' ? (
+                        {showSource && isReportRow(entry) ? (
                           <span className="chip bg-violet-50 text-violet-700">지결</span>
                         ) : null}
                       </div>
