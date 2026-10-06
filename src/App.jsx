@@ -91,10 +91,13 @@ function Splash() {
 class ChunkErrorBoundary extends Component {
   constructor(props) {
     super(props)
-    this.state = { failed: false }
+    this.state = { failed: false, message: '' }
   }
   static getDerivedStateFromError() {
     return { failed: true }
+  }
+  componentDidCatch(error) {
+    this.setState({ message: String(error?.message || error || '') })
   }
   render() {
     if (!this.state.failed) return this.props.children
@@ -104,6 +107,11 @@ class ChunkErrorBoundary extends Component {
           BZ
         </span>
         <p className="text-sm font-bold text-ink-800">새 버전으로 새로고침이 필요합니다</p>
+        {this.state.message ? (
+          <p className="max-w-md break-all rounded-lg bg-white px-3 py-2 font-mono text-[11px] text-ink-500">
+            {this.state.message}
+          </p>
+        ) : null}
         <button
           type="button"
           className="btn-primary"
