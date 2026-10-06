@@ -48,8 +48,25 @@ function periodLabel(e) {
   return s
 }
 
-/* 새해 자동 부여: 연차 15일~ (기준표 우선)·동계 10일·전원 보건 12일.
-   재직자만, 올해 입사자는 연차 비례(월 1일·최대 11일). 동시 부여 방지를 위해 연 1회만. */
+/* 새해 자동 부여 (근태 규정식, 1/1 일괄).
+   - 연차: 입사일 기준 만 1년 이상만 발생. 15개 + 근속 2년마다 1개, 최대 25개
+     (1년차 15·2년차 15·3년차 16·5년차 17 …). 1년 미만은 월차 대상이라 연차 제외
+   - 개인 지정(GRANT_DEFAULTS)이 있으면 그 값을 우선합니다
+   - 동계 10일·보건휴가 12일은 그대로 전원 부여
+   - 재직자만, 연 1회만. 메모에 산정 근거를 남깁니다 */
+export function serviceYears(hireDate, y) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(hireDate || ''))
+  if (!m) return null
+  let years = y - Number(m[1])
+  if (`${m[2]}-${m[3]}` > '01-01') years -= 1
+  return years
+}
+export function annualByRule(hireDate, y) {
+  const years = serviceYears(hireDate, y)
+  if (years == null) return { days: 15, years: null }
+  if (years < 1) return { days: 0, years }
+  return { days: Math.min(25, 15 + Math.floor((years - 1) / 2)), years }
+}
 async function autoGrantYear(all, profileRows, userId, grantedRef) {
   const y = Number(todayKST().slice(0, 4))
   if (grantedRef.current[y]) return 0
@@ -72,14 +89,19 @@ async function autoGrantYear(all, profileRows, userId, grantedRef) {
   const payloads = []
   for (const person of names) {
     const prof = byName.get(person)
-    let annual = Number(GRANT_DEFAULTS[person]?.연차 || 15)
-    // 올해 입사자: 입사 익월부터 월 1일씩 (최대 11일)
-    const hireY = Number(String(prof?.hire_date || '').slice(0, 4))
-    const hireM = Number(String(prof?.hire_date || '').slice(5, 7))
-    if (hireY === y && hireM >= 1 && hireM <= 12) {
-      annual = Math.min(11, Math.max(0, 12 - hireM))
+    const hire = String(prof?.hire_date || '').slice(0, 10)
+    const rule = annualByRule(prof?.hire_date, y)
+    const fixed = GRANT_DEFAULTS[person]?.연차
+    const annual = fixed != null && fixed !== '' ? Number(fixed) : rule.days
+    const basis =
+      fixed != null && fixed !== ''
+        ? '개별지정'
+        : rule.years == null
+          ? '입사일 미등록(기본 15일)'
+          : `입사 ${hire}·근속${rule.years}년`
+    if (annual > 0) {
+      payloads.push({ entry_date: marker, person, leave_type: '연차', direction: '발생', days: annual, memo: `${y}년 자동부여(${basis})`, status: '승인' })
     }
-    payloads.push({ entry_date: marker, person, leave_type: '연차', direction: '발생', days: annual, memo: `${y}년 자동부여`, status: '승인' })
     payloads.push({ entry_date: marker, person, leave_type: '동계휴가', direction: '발생', days: 10, memo: `${y}년 자동부여`, status: '승인' })
     payloads.push({ entry_date: marker, person, leave_type: '보건휴가', direction: '발생', days: 12, memo: `${y}년 자동부여`, status: '승인' })
   }
