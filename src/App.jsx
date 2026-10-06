@@ -1,4 +1,4 @@
-import { Suspense, lazy } from 'react'
+import { Component, Suspense, lazy } from 'react'
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import Layout from './components/Layout'
 import Icon from './components/Icon'
@@ -76,6 +76,42 @@ function Splash() {
   )
 }
 
+/* 배포 직후 낡은 파일이 남으면 흰 화면 대신 새로고침 안내를 보여줍니다 */
+class ChunkErrorBoundary extends Component {
+  constructor(props) {
+    super(props)
+    this.state = { failed: false }
+  }
+  static getDerivedStateFromError() {
+    return { failed: true }
+  }
+  render() {
+    if (!this.state.failed) return this.props.children
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-ink-100 px-5 text-center text-ink-500">
+        <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-500 to-brand-800 text-sm font-black text-white">
+          BZ
+        </span>
+        <p className="text-sm font-bold text-ink-800">새 버전으로 새로고침이 필요합니다</p>
+        <button
+          type="button"
+          className="btn-primary"
+          onClick={() => {
+            try {
+              window.sessionStorage.removeItem('bzen.chunk-retry')
+            } catch {
+              /* 무시 */
+            }
+            window.location.reload()
+          }}
+        >
+          새로고침
+        </button>
+      </div>
+    )
+  }
+}
+
 function PendingApproval() {
   const { profile, signOut } = useAuth()
   return (
@@ -134,6 +170,7 @@ export default function App() {
   return (
     <ToastProvider>
       <AuthProvider>
+        <ChunkErrorBoundary>
         <Suspense fallback={<Splash />}>
           <Routes>
           <Route path="/login" element={<Login />} />
@@ -316,6 +353,7 @@ export default function App() {
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </Routes>
         </Suspense>
+        </ChunkErrorBoundary>
       </AuthProvider>
     </ToastProvider>
   )
