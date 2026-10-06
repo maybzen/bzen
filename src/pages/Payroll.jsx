@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+﻿import { useCallback, useEffect, useMemo, useState } from 'react'
 import EntryFormModal from '../components/EntryFormModal'
 import EntryTable from '../components/EntryTable'
 import Icon from '../components/Icon'
@@ -16,6 +16,7 @@ import {
   deleteSlip,
   listAttachments,
   listEntries,
+  listExternalMembers,
   listProfiles,
   listProjects,
   listSlips,
@@ -152,6 +153,9 @@ export default function Payroll() {
         listProjects(),
         listProfiles(),
       ])
+      /* 외부인력 명단도 구분 판단에 합칩니다 */
+      const extRows = await listExternalMembers().catch(() => [])
+      const mergedProfiles = [...(profileRows || []), ...(extRows || [])]
       const pick = (rows) => (rows || []).filter((e) => isSalary(e) || isInsurance(e) || isTaxRow(e))
       const inYm = (rows) => pick(rows).filter((e) => attrMonth(e) === ym)
       setEntries(inYm(all))
@@ -160,7 +164,7 @@ export default function Payroll() {
         (all || []).filter((e) => e.source === 'expense_report' && String(e.entry_date || '').slice(0, 7) === ym),
       )
       setProjects(projectRows || [])
-      setProfiles(profileRows || [])
+      setProfiles(mergedProfiles || [])
 
       const curRows = inYm(all)
       const files = await listAttachments(curRows.map((r) => r.id)).catch(() => [])

@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import Icon from '../components/Icon'
 import { useToast } from '../components/Toast'
-import { EmptyState, Field, InlineAlert, LoadingBlock, Modal, PageHeader, Spinner, StatCard } from '../components/ui'
+import { EmptyState, ConfirmDialog, Field, InlineAlert, LoadingBlock, Modal, PageHeader, Spinner, StatCard } from '../components/ui'
 import { useAuth } from '../auth/AuthContext'
 import { formatKRW } from '../lib/format'
 import { EXTERNAL_PARTNER_DEFAULT, OFFICE_STAFF, cardCodeForName, nicknameCode } from '../lib/constants'
-import { createProfile, listEntries, listProfiles, updateProfile } from '../lib/api'
+import { createProfile, deleteExternalMember, createExternalMember, listEntries, listExternalMembers, listProfiles, updateExternalMember, updateProfile } from '../lib/api'
 
 /**
  * 구성원 (인사관리 · 대표 전용).
@@ -97,11 +97,14 @@ export default function Members() {
     setLoading(true)
     Promise.all([
       listProfiles(),
+      listExternalMembers().catch(() => []),
       listEntries({ types: ['opex'], maxRows: 20000 }).catch(() => []),
     ])
-      .then(([profRows, entryRows]) => {
+      .then(([profRows, extRows, entryRows]) => {
         if (!alive) return
-        setProfiles(profRows || [])
+        /* 외부인력은 별도 표 — 한 화면에 합쳐서 보여줍니다 (_external 표시) */
+        const tagged = (extRows || []).map((r) => ({ ...r, _external: true }))
+        setProfiles([...(profRows || []), ...tagged])
         const map = {}
         for (const e of entryRows || []) {
           if (e.category !== '인건비') continue
@@ -135,6 +138,37 @@ export default function Members() {
     const patch = rowEdits[p.id]
     if (!patch) return true
     setSavingId(p.id)
+    /* 외부인력 표는 별도 함수로 저장합니다 */
+    if (p._external) {
+      const base = {
+        full_name: String(patch.full_name ?? p.full_name ?? '').trim(),
+        employment_type: patch.employment_type ?? p.employment_type ?? 'external_partner',
+        nickname: String(patch.nickname ?? p.nickname ?? '').trim(),
+        department: String(patch.department ?? p.department ?? '').trim(),
+        phone: String(patch.phone ?? p.phone ?? '').trim(),
+        hire_date: patch.hire_date ?? p.hire_date ?? null,
+        memo: String(patch.memo ?? p.memo ?? ''),
+        active: patch.active ?? p.active ?? true,
+      }
+      if (!base.full_name) {
+        if (!silent) toast.error('이름을 입력해 주세요.')
+        setSavingId(null)
+        return false
+      }
+      try {
+        const saved = await updateExternalMember(p.id, base)
+        setProfiles((rows) => rows.map((r) => (r.id === p.id ? { ...saved, _external: true } : r)))
+        cancelRow(p.id)
+        if (!silent) toast.success(`${saved.full_name || p.full_name} 저장되었습니다.`)
+        return true
+      } catch (e) {
+        if (!silent) toast.error(e.message)
+        setSavingId(null)
+        return false
+      } finally {
+        setSavingId((cur) => (cur === p.id ? null : cur))
+      }
+    }
     const base = {
       full_name: String(patch.full_name ?? p.full_name ?? '').trim(),
       department: String(patch.department ?? p.department ?? '').trim(),
@@ -203,10 +237,12 @@ export default function Members() {
     }
   }
 
+  const [removing, setRemoving] = useState(null)
+
   const openAdd = (preset = {}) => {
     setAddForm({
       full_name: preset.full_name || '',
-      employment_type: preset.employment_type || 'internal',
+      employment_type: preset.employment_type && preset.employment_type !== 'internal' ? preset.employment_type : 'external_partner',
       nickname: preset.nickname || '',
       department: preset.department || '',
       phone: preset.phone || '',
@@ -216,6 +252,8 @@ export default function Members() {
     setAddOpen(true)
   }
 
+  /* 구성원 추가 팝업은 외부인력 전용입니다 (내부 직원은 계정관리에서 계정 생성).
+     profiles는 로그인 계정과 1:1이라 계정 없는 행을 못 만듭니다. */
   const submitAdd = async (e) => {
     e.preventDefault()
     const name = String(addForm.full_name || '').trim()
@@ -227,38 +265,38 @@ export default function Members() {
     setAddError('')
     const row = {
       full_name: name,
-      role: 'staff',
+      employment_type: addForm.employment_type === 'external' ? 'external' : 'external_partner',
+      nickname: String(addForm.nickname || '').trim(),
       department: String(addForm.department || '').trim(),
       phone: String(addForm.phone || '').trim(),
       hire_date: addForm.hire_date || null,
       active: true,
     }
-    if (externalSupported) row.employment_type = addForm.employment_type || 'internal'
-    if (nicknameSupported) row.nickname = String(addForm.nickname || '').trim()
     try {
-      const saved = await createProfile(row)
-      setProfiles((rows) => [...rows, saved])
+      const saved = await createExternalMember(row, user?.id)
+      setProfiles((rows) => [...rows, { ...saved, _external: true }])
       setAddOpen(false)
-      toast.success(`${saved.full_name} 님이 구성원에 등록되었습니다.`)
+      toast.success(`${saved.full_name} 님이 외부인력으로 등록되었습니다.`)
     } catch (err) {
-      if (isMissingColumnError(err)) {
-        try {
-          const fallback = { ...row }
-          delete fallback.employment_type
-          delete fallback.nickname
-          const saved = await createProfile(fallback)
-          setProfiles((rows) => [...rows, saved])
-          setAddOpen(false)
-          toast.success(`${saved.full_name} 님이 등록되었습니다. (구분·닉네임은 SQL 실행 후 표시됩니다)`)
-          return
-        } catch (e2) {
-          setAddError(`${e2.message} — Supabase SQL Editor에서 supabase/migration_profiles_external.sql 실행이 필요할 수 있습니다.`)
-          return
-        }
-      }
       setAddError(err.message)
     } finally {
       setAddSaving(false)
+    }
+  }
+
+  const handleDeleteExternal = async () => {
+    if (!removing) return
+    setSavingId(removing.id)
+    try {
+      await deleteExternalMember(removing.id)
+      setProfiles((rows) => rows.filter((r) => r.id !== removing.id))
+      cancelRow(removing.id)
+      toast.success('외부인력 명단에서 삭제했습니다.')
+      setRemoving(null)
+    } catch (err) {
+      toast.error(err.message)
+    } finally {
+      setSavingId(null)
     }
   }
 
@@ -387,7 +425,7 @@ export default function Members() {
                                 value={['internal', 'external_partner', 'external'].includes(work.employment_type) ? work.employment_type : kind}
                                 onChange={(e) => setCell(p.id, { employment_type: e.target.value })}
                               >
-                                <option value="internal">내부</option>
+                                {p._external ? null : <option value="internal">내부</option>}
                                 <option value="external_partner">외부협력·3.3%</option>
                                 <option value="external">외부단기·3.3%</option>
                               </select>
@@ -442,6 +480,9 @@ export default function Members() {
                             />
                           </td>
                           <td className="td whitespace-nowrap text-ink-600">{tenure(work.hire_date)}</td>
+                          {p._external ? (
+                            <td className="td text-ink-300">—</td>
+                          ) : (
                           <td className="td whitespace-nowrap">
                             <input
                               type="date"
@@ -465,6 +506,7 @@ export default function Members() {
                               </>
                             ) : null}
                           </td>
+                          )}
                           <td className="td num">{formatKRW(payByName[String(p.full_name || '').trim()] || 0)}</td>
                           <td className="td">
                             <button
@@ -496,6 +538,15 @@ export default function Members() {
                                   취소
                                 </button>
                               </>
+                            ) : p._external ? (
+                              <button
+                                type="button"
+                                onClick={() => setRemoving(p)}
+                                className="rounded-md p-1.5 text-ink-400 transition hover:bg-rose-50 hover:text-loss"
+                                title="명단에서 삭제"
+                              >
+                                <Icon name="trash" size={15} />
+                              </button>
                             ) : (
                               <span className="text-xs text-ink-300">—</span>
                             )}
@@ -523,7 +574,7 @@ export default function Members() {
         open={addOpen}
         onClose={addSaving ? undefined : () => setAddOpen(false)}
         title="구성원 추가"
-        subtitle="로그인 계정 없이 근무하는 분(외부협력·손선욱형)도 여기서 등록합니다. 로그인용 계정은 계정관리에서 만듭니다."
+        subtitle="로그인 없이 일하는 외부 인력(외부협력·외부단기)을 등록합니다. 내부 직원은 계정관리에서 계정을 먼저 만드세요."
         footer={
           <>
             <button type="button" className="btn-ghost" onClick={() => setAddOpen(false)} disabled={addSaving}>
@@ -551,13 +602,12 @@ export default function Members() {
               required
             />
           </Field>
-          <Field label="구분" hint="외부는 3.3% · 외부협력은 급여에서 따로 표시">
+          <Field label="구분" hint="외부는 3.3% · 내부 직원은 계정관리에서 추가">
             <select
               className="input"
               value={addForm.employment_type}
               onChange={(e) => setAddForm((f) => ({ ...f, employment_type: e.target.value }))}
             >
-              <option value="internal">내부 (4대보험·명세서)</option>
               <option value="external_partner">외부협력·3.3% (상주)</option>
               <option value="external">외부단기·3.3% (행사 알바)</option>
             </select>
@@ -601,6 +651,19 @@ export default function Members() {
           ) : null}
         </form>
       </Modal>
+
+      <ConfirmDialog
+        open={Boolean(removing)}
+        busy={savingId === removing?.id}
+        title="외부인력을 삭제하시겠습니까?"
+        message={
+          removing
+            ? `"${removing.full_name}" 님을 명단에서 지웁니다.\n장부에 입력된 내역은 그대로 남습니다.`
+            : ''
+        }
+        onClose={() => setRemoving(null)}
+        onConfirm={handleDeleteExternal}
+      />
     </div>
   )
 }

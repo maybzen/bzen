@@ -85,6 +85,35 @@ export function deleteProfile(id) {
 }
 
 /* ------------------------------------------------------------------ */
+/* 외부인력 명단 (로그인 계정 없음. 허수정·장정아님형)                     */
+/* ------------------------------------------------------------------ */
+
+export function listExternalMembers() {
+  return unwrap(supabase.from('external_members').select('*').order('full_name', { ascending: true }))
+}
+
+export function createExternalMember(payload, userId) {
+  const row = { ...payload }
+  delete row.created_at
+  delete row._external
+  if (userId) row.created_by = userId
+  return unwrap(supabase.from('external_members').insert(row).select().single())
+}
+
+export function updateExternalMember(id, patch) {
+  const clean = { ...patch }
+  delete clean.id
+  delete clean.created_at
+  delete clean._external
+  clean.updated_at = new Date().toISOString()
+  return unwrap(supabase.from('external_members').update(clean).eq('id', id).select().single())
+}
+
+export function deleteExternalMember(id) {
+  return unwrap(supabase.from('external_members').delete().eq('id', id))
+}
+
+/* ------------------------------------------------------------------ */
 /* 프로젝트                                                            */
 /* 휴지통: 삭제는 휴지통 이동(UPDATE)입니다. 영구삭제·복원은 휴지통 메뉴에서. */
 /* ------------------------------------------------------------------ */
