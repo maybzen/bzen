@@ -215,7 +215,7 @@ export default function Payroll() {
   const personKind = (name) => {
     const n = String(name || '').trim()
     if (!n) return '외부·단기'
-    // 구성원에서 고른 구분(내부/외부협력/단기외부)이 있으면 그 선택을 우선합니다
+    // 구성원에서 고른 구분(내부/외부협력/외부단기)이 있으면 그 선택을 우선합니다
     const emp = profileByName.get(n)?.employment_type
     if (emp === 'external_partner' || emp === 'external_office' || emp === 'external' || emp === 'internal') {
       return employmentKindOf(n, staffNames, emp)
@@ -505,7 +505,7 @@ export default function Payroll() {
               unit="명"
               tone="neutral"
               icon="users"
-              hint={`내부 ${internalCount}명 · 외부협력 ${officeHeads}명(${formatKRW(officeTotal)}원) · 단기외부 ${tempHeads}명(${formatKRW(tempTotal)}원)`}
+              hint={`내부 ${internalCount}명 · 외부협력 ${officeHeads}명(${formatKRW(officeTotal)}원) · 외부단기 ${tempHeads}명(${formatKRW(tempTotal)}원)`}
             />
             <StatCard label="4대보험 회사부담" value={insuranceTotal} tone="opex" icon="receipt" hint="건보·산재" />
             <StatCard label="세금·원천징수" value={taxTotal} tone={taxTotal > 0 ? 'loss' : 'neutral'} icon="file" hint="원천세 등" />

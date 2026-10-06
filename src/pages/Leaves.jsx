@@ -161,9 +161,11 @@ export default function Leaves() {
     () => (profiles || []).find((p) => p.id === user?.id)?.full_name || '',
     [profiles, user?.id],
   )
+  /* 직원은 본인 것만 봅니다. 필터 변경 불가 */
   useEffect(() => {
-    if (!isAdmin && ownName && !personFilter) setPersonFilter(ownName)
-  }, [isAdmin, ownName, personFilter])
+    if (!isAdmin && ownName) setPersonFilter(ownName)
+  }, [isAdmin, ownName])
+  const [weekendOpen, setWeekendOpen] = useState(false)
 
   useEffect(() => {
     let mounted = true
@@ -310,15 +312,25 @@ export default function Leaves() {
   return (
     <div className="flex flex-col gap-5">
       <PageHeader title="휴무대장" description="연차·월차·대휴·동계휴가·보건휴가 발생과 사용을 기록합니다.">
-        <select className="input sm:w-44" value={personFilter} onChange={(e) => setPersonFilter(e.target.value)}>
-          <option value="">전체 직원</option>
-          {summary.map((r) => (
-            <option key={r.person} value={r.person}>
-              {r.person}
-            </option>
-          ))}
-        </select>
-        <button type="button" className="btn-primary" onClick={() => { setPresetPerson(''); setFormOpen(true) }}>
+        {isAdmin ? (
+          <select className="input sm:w-44" value={personFilter} onChange={(e) => setPersonFilter(e.target.value)}>
+            <option value="">전체 직원</option>
+            {summary.map((r) => (
+              <option key={r.person} value={r.person}>
+                {r.person}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <span className="chip bg-brand-50 text-brand-700">내 휴무만 표시됩니다</span>
+        )}
+        {!isAdmin ? (
+          <button type="button" className="btn-ghost" onClick={() => setWeekendOpen(true)}>
+            <Icon name="calendar" size={16} />
+            주말출근 신청
+          </button>
+        ) : null}
+        <button type="button" className="btn-primary" onClick={() => { setPresetPerson(isAdmin ? '' : ownName); setFormOpen(true) }}>
           <Icon name="plus" size={16} />
           휴무 등록
         </button>
@@ -456,7 +468,18 @@ export default function Leaves() {
                           {isAdmin ? (
                             <StatusToggle status={e.status} busy={busy} onChange={(next) => decide(e, next)} />
                           ) : (
-                            statusChip(e.status)
+                            <span className="flex items-center gap-1.5">
+                              {statusChip(e.status)}
+                              {e.status === '요청' && e.person === ownName ? (
+                                <button
+                                  type="button"
+                                  onClick={() => setRemoving(e)}
+                                  className="shrink-0 text-[11px] font-semibold text-ink-400 hover:text-loss hover:underline"
+                                >
+                                  요청 취소
+                                </button>
+                              ) : null}
+                            </span>
                           )}
                         </td>
                         {isAdmin ? (
@@ -499,7 +522,18 @@ export default function Leaves() {
         userId={user?.id}
         isAdmin={isAdmin}
         defaultPerson={presetPerson || personFilter}
+        lockPerson={isAdmin ? '' : ownName}
         rows={rows}
+      />
+      <WeekendModal
+        open={weekendOpen}
+        onClose={() => setWeekendOpen(false)}
+        onSaved={() => {
+          setWeekendOpen(false)
+          setReloadKey((k) => k + 1)
+        }}
+        person={ownName}
+        userId={user?.id}
       />
 
       <PersonModal
@@ -697,9 +731,116 @@ function InfoBox({ label, value }) {
   )
 }
 
+/* ------------------------- 주말출근 신청 (직원용) ------------------------- */
+
+function WeekendModal({ open, onClose, onSaved, person, userId }) {
+  const toast = useToast()
+  const [saving, setSaving] = useState(false)
+  const [date, setDate] = useState(todayKST())
+  const [start, setStart] = useState('')
+  const [end, setEnd] = useState('')
+
+  useEffect(() => {
+    if (open) {
+      setDate(todayKST())
+      setStart('')
+      setEnd('')
+    }
+  }, [open ])
+
+  const calc = useMemo(() => {
+    const toMin = (t) => {
+      const m = /^(\d{1,2}):(\d{2})$/.exec(String(t || ''))
+      if (!m) return null
+      return Number(m[1]) * 60 + Number(m[2])
+    }
+    const s = toMin(start)
+    const e = toMin(end)
+    if (s == null || e == null || e - s <= 0) return null
+    const h = Math.round(((e - s) / 60) * 10) / 10
+    return { h, days: h >= 4 ? 1 : 0.5 }
+  }, [start, end])
+
+  const submit = async () => {
+    if (!person) {
+      toast.error('본인 정보를 찾지 못했습니다. 다시 로그인해 주세요.')
+      return
+    }
+    if (!calc) {
+      toast.error('출근·퇴근 시간을 입력해 주세요. (퇴근이 출근보다 늦어야 합니다)')
+      return
+    }
+    setSaving(true)
+    try {
+      await createLeaveEntry(
+        {
+          entry_date: date,
+          end_date: null,
+          person,
+          leave_type: '대휴',
+          direction: '발생',
+          days: calc.days,
+          memo: `주말출근 ${start}~${end} (${calc.h}시간)`,
+          status: '요청',
+        },
+        userId,
+      )
+      toast.success('주말출근을 신청했습니다. 대표 승인 후 대휴에 반영됩니다.')
+      onSaved()
+    } catch (e) {
+      toast.error(e.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Modal
+      open={open}
+      onClose={saving ? undefined : onClose}
+      title="주말출근 신청"
+      subtitle="근무한 시간이 대휴로 계산되어 대표에게 승인 요청됩니다. (4시간 이상 1일 · 미만 0.5일)"
+      footer={
+        <>
+          <button type="button" className="btn-ghost" onClick={onClose} disabled={saving}>
+            취소
+          </button>
+          <button type="button" className="btn-primary" onClick={submit} disabled={saving || !calc}>
+            {saving ? '신청 중…' : '승인 요청'}
+          </button>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-4">
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="출근일" required>
+            <input type="date" className="input" value={date} onChange={(e) => setDate(e.target.value)} />
+          </Field>
+          <Field label="신청자" required>
+            <input className="input bg-ink-100" value={person || ''} readOnly />
+          </Field>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="출근 시간" required>
+            <input type="time" className="input" value={start} onChange={(e) => setStart(e.target.value)} />
+          </Field>
+          <Field label="퇴근 시간" required>
+            <input type="time" className="input" value={end} onChange={(e) => setEnd(e.target.value)} />
+          </Field>
+        </div>
+        {calc ? (
+          <div className="rounded-lg border border-brand-100 bg-brand-50/60 px-3.5 py-2.5 text-xs text-ink-700">
+            {calc.h}시간 근무 → <strong>대휴 {calc.days}일</strong>로 신청됩니다.
+          </div>
+        ) : null}
+      </div>
+    </Modal>
+  )
+}
+
 /* --------------------------- 휴무 등록 --------------------------- */
 
-function LeaveFormModal({ open, onClose, onSaved, personOptions, userId, isAdmin, defaultPerson, rows }) {
+function LeaveFormModal({ open, onClose, onSaved, personOptions, userId, isAdmin, defaultPerson, lockPerson, rows }) {
   const toast = useToast()
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState({
@@ -720,7 +861,7 @@ function LeaveFormModal({ open, onClose, onSaved, personOptions, userId, isAdmin
         ...f,
         entry_date: todayKST(),
         end_date: todayKST(),
-        person: defaultPerson || f.person || '',
+        person: lockPerson || defaultPerson || f.person || '',
         weekendStart: '',
         weekendEnd: '',
       }))
@@ -833,14 +974,18 @@ function LeaveFormModal({ open, onClose, onSaved, personOptions, userId, isAdmin
           </Field>
         </div>
         <Field label="직원" required>
-          <select className="input" value={form.person} onChange={(e) => set('person', e.target.value)}>
-            <option value="">선택</option>
-            {personOptions.map((n) => (
-              <option key={n} value={n}>
-                {n}
-              </option>
-            ))}
-          </select>
+          {lockPerson ? (
+            <input className="input bg-ink-100" value={lockPerson} readOnly />
+          ) : (
+            <select className="input" value={form.person} onChange={(e) => set('person', e.target.value)}>
+              <option value="">선택</option>
+              {personOptions.map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
+          )}
         </Field>
         <div className="grid grid-cols-3 gap-3">
           <Field label="구분" required>

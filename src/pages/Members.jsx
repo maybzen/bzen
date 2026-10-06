@@ -4,13 +4,13 @@ import { useToast } from '../components/Toast'
 import { EmptyState, Field, InlineAlert, LoadingBlock, Modal, PageHeader, Spinner, StatCard } from '../components/ui'
 import { useAuth } from '../auth/AuthContext'
 import { formatKRW } from '../lib/format'
-import { EXTERNAL_PARTNER_DEFAULT, OFFICE_STAFF, cardCodeForName } from '../lib/constants'
+import { EXTERNAL_PARTNER_DEFAULT, OFFICE_STAFF, cardCodeForName, nicknameCode } from '../lib/constants'
 import { createProfile, listEntries, listProfiles, updateProfile } from '../lib/api'
 
 /**
  * 구성원 (인사관리 · 대표 전용).
  * 내부 직원 + 협력 인력(손선욱·허수정·장정아)을 함께 관리합니다.
- * 이름·부서·연락처·입사일·재직·구분(내부/외부)·카드코드를 이 화면에서 직접 추가·수정합니다.
+ * 이름·부서·연락처·입사일·재직·구분(내부/외부)·닉네임을 이 화면에서 직접 추가·수정합니다.
  * 로그인 계정이 필요한 경우(출근·장부 작성용)는 계정관리에서 만듭니다.
  */
 
@@ -58,13 +58,12 @@ function kindOfProfile(p) {
 const KIND_META = {
   internal: { label: '내부', chip: 'bg-ink-100 text-ink-600', title: '내부 직원 (4대보험·명세서)' },
   external_partner: { label: '외부협력', chip: 'bg-sky-50 text-sky-700', title: '사무실 상주지만 세무상 외부 · 3.3% 원천징수' },
-  external: { label: '단기외부', chip: 'bg-amber-50 text-amber-700', title: '행사 알바 등 단기 외부 · 3.3% 원천징수' },
+  external: { label: '외부단기', chip: 'bg-amber-50 text-amber-700', title: '행사 알바 등 단기 외부 · 3.3% 원천징수' },
 }
 
-function cardCodeOf(p) {
-  const saved = String(p?.card_code || '').trim().toUpperCase()
-  if (saved) return saved
-  return cardCodeForName(p?.full_name) || ''
+/* 닉네임 첫 글자 → 카드 코드 (예: Gianna → G). 없으면 기존 이름 매칭으로 찾습니다 */
+function nickCodeOf(p) {
+  return nicknameCode(p?.nickname) || cardCodeForName(p?.full_name) || ''
 }
 
 function isMissingColumnError(e) {
@@ -87,7 +86,7 @@ export default function Members() {
   const [addForm, setAddForm] = useState({
     full_name: '',
     employment_type: 'internal',
-    card_code: '',
+    nickname: '',
     department: '',
     phone: '',
     hire_date: '',
@@ -146,8 +145,8 @@ export default function Members() {
       active: patch.active ?? p.active ?? true,
     }
     if (externalSupported) base.employment_type = patch.employment_type ?? p.employment_type ?? 'internal'
-    if (cardCodeSupported) {
-      base.card_code = String(patch.card_code ?? p.card_code ?? '').trim().toUpperCase()
+    if (nicknameSupported) {
+      base.nickname = String(patch.nickname ?? p.nickname ?? '').trim()
     }
     if (!base.full_name) {
       if (!silent) toast.error('이름을 입력해 주세요.')
@@ -166,7 +165,7 @@ export default function Members() {
         try {
           const fallback = { ...base }
           delete fallback.employment_type
-          delete fallback.card_code
+          delete fallback.nickname
           const saved = await updateProfile(p.id, fallback)
           setProfiles((rows) => rows.map((r) => (r.id === p.id ? { ...r, ...saved } : r)))
           cancelRow(p.id)
@@ -208,7 +207,7 @@ export default function Members() {
     setAddForm({
       full_name: preset.full_name || '',
       employment_type: preset.employment_type || 'internal',
-      card_code: preset.card_code || cardCodeForName(preset.full_name) || '',
+      nickname: preset.nickname || '',
       department: preset.department || '',
       phone: preset.phone || '',
       hire_date: preset.hire_date || '',
@@ -235,7 +234,7 @@ export default function Members() {
       active: true,
     }
     if (externalSupported) row.employment_type = addForm.employment_type || 'internal'
-    if (cardCodeSupported) row.card_code = String(addForm.card_code || cardCodeForName(name) || '').trim().toUpperCase()
+    if (nicknameSupported) row.nickname = String(addForm.nickname || '').trim()
     try {
       const saved = await createProfile(row)
       setProfiles((rows) => [...rows, saved])
@@ -246,11 +245,11 @@ export default function Members() {
         try {
           const fallback = { ...row }
           delete fallback.employment_type
-          delete fallback.card_code
+          delete fallback.nickname
           const saved = await createProfile(fallback)
           setProfiles((rows) => [...rows, saved])
           setAddOpen(false)
-          toast.success(`${saved.full_name} 님이 등록되었습니다. (구분·카드코드는 SQL 실행 후 표시됩니다)`)
+          toast.success(`${saved.full_name} 님이 등록되었습니다. (구분·닉네임은 SQL 실행 후 표시됩니다)`)
           return
         } catch (e2) {
           setAddError(`${e2.message} — Supabase SQL Editor에서 supabase/migration_profiles_external.sql 실행이 필요할 수 있습니다.`)
@@ -270,7 +269,7 @@ export default function Members() {
   /* 챙기는 생일 컬럼(migration_profiles_celebrate.sql) 적용 전에는 숨깁니다 */
   const celebrateSupported = useMemo(() => profiles.some((p) => p && 'birth_celebrate' in p), [profiles])
   const externalSupported = useMemo(() => profiles.some((p) => p && 'employment_type' in p), [profiles])
-  const cardCodeSupported = useMemo(() => profiles.some((p) => p && 'card_code' in p), [profiles])
+  const nicknameSupported = useMemo(() => profiles.some((p) => p && 'nickname' in p), [profiles])
 
   const totalPay = useMemo(() => Object.values(payByName).reduce((a, v) => a + v, 0), [payByName])
 
@@ -278,7 +277,7 @@ export default function Members() {
     <div className="flex flex-col gap-5">
       <PageHeader
         title="구성원"
-        description="인사관리 · 내부 직원과 협력 인력(손선욱·허수정·장정아)을 함께 관리합니다. 이름·구분·카드코드까지 이 화면에서 추가·수정합니다."
+        description="인사관리 · 내부 직원과 협력 인력(손선욱·허수정·장정아)을 함께 관리합니다. 이름·구분·닉네임까지 이 화면에서 추가·수정합니다."
       >
         <button type="button" className="btn-primary" onClick={() => openAdd()}>
           <Icon name="plus" size={16} />
@@ -287,7 +286,7 @@ export default function Members() {
       </PageHeader>
       {!loading && !externalSupported ? (
         <InlineAlert tone="info">
-          인별 구분(내부/외부협력/단기외부·카드코드)을 저장하려면 Supabase SQL Editor에서{' '}
+          인별 구분(내부/외부협력/외부단기·닉네임)을 저장하려면 Supabase SQL Editor에서{' '}
           <strong>supabase/migration_profiles_external.sql</strong>을 1회 실행하세요. 실행 전에도 허수정·장정아님은
           외부협력으로 표시됩니다.
         </InlineAlert>
@@ -305,7 +304,7 @@ export default function Members() {
               unit="명"
               tone="neutral"
               icon="users"
-              hint={`단기외부 ${tempExternalList.filter((p) => p.active !== false).length}명`}
+              hint={`외부단기 ${tempExternalList.filter((p) => p.active !== false).length}명`}
             />
             <StatCard label="인건비 누적" value={totalPay} tone="opex" icon="coins" hint="장부 인건비 합계" />
           </div>
@@ -352,7 +351,7 @@ export default function Members() {
                     <tr>
                       <th className="th">이름</th>
                       <th className="th">구분</th>
-                      <th className="th">카드코드</th>
+                      <th className="th">닉네임</th>
                       <th className="th">부서</th>
                       <th className="th">연락처</th>
                       <th className="th">입사일</th>
@@ -390,7 +389,7 @@ export default function Members() {
                               >
                                 <option value="internal">내부</option>
                                 <option value="external_partner">외부협력·3.3%</option>
-                                <option value="external">단기외부·3.3%</option>
+                                <option value="external">외부단기·3.3%</option>
                               </select>
                             ) : (
                               <span
@@ -402,15 +401,20 @@ export default function Members() {
                             )}
                           </td>
                           <td className="td">
-                            {cardCodeSupported ? (
-                              <input
-                                className="input w-16 py-1 text-xs font-bold uppercase"
-                                value={String(work.card_code ?? cardCodeOf(p) ?? '').toUpperCase()}
-                                onChange={(e) => setCell(p.id, { card_code: e.target.value.toUpperCase() })}
-                                placeholder="예: C"
-                              />
+                            {nicknameSupported ? (
+                              <>
+                                <input
+                                  className="input w-24 py-1 text-xs"
+                                  value={work.nickname || ''}
+                                  onChange={(e) => setCell(p.id, { nickname: e.target.value.trim() })}
+                                  placeholder="예: Gianna"
+                                />
+                                <span className="mt-0.5 block text-[11px] font-bold text-ink-500">
+                                  {nickCodeOf({ ...p, ...work }) ? `코드 ${nickCodeOf({ ...p, ...work })}` : '코드 없음'}
+                                </span>
+                              </>
                             ) : (
-                              <span className="font-bold text-ink-700">{cardCodeOf(work) || '—'}</span>
+                              <span className="font-bold text-ink-700">{nickCodeOf(work) || '—'}</span>
                             )}
                           </td>
                           <td className="td">
@@ -504,8 +508,8 @@ export default function Members() {
               </div>
               <p className="border-t border-ink-100 px-4 py-3 text-xs leading-relaxed text-ink-500">
                 <Icon name="info" size={13} className="mr-1 inline text-ink-400" />
-                휴무대장 입사일과 함께 씁니다. 퇴사로 바꾸면 목록·집계에서 빠집니다. 외부협력·단기외부는 급여관리에서
-                분리 표시되고(3.3%), 카드코드는 카드내역·운영비 작성 시 기타 직접입력과 같은 값으로 씁니다.
+                휴무대장 입사일과 함께 씁니다. 퇴사로 바꾸면 목록·집계에서 빠집니다. 외부협력·외부단기는 급여관리에서
+                분리 표시되고(3.3%), 닉네임 첫 글자(대문자)가 카드 이용자 코드로 쓰입니다.
                 {user ? '' : ''}
               </p>
             </div>
@@ -542,13 +546,7 @@ export default function Members() {
             <input
               className="input"
               value={addForm.full_name}
-              onChange={(e) =>
-                setAddForm((f) => ({
-                  ...f,
-                  full_name: e.target.value,
-                  card_code: f.card_code || cardCodeForName(e.target.value),
-                }))
-              }
+              onChange={(e) => setAddForm((f) => ({ ...f, full_name: e.target.value }))}
               placeholder="예: 허수정"
               required
             />
@@ -561,15 +559,15 @@ export default function Members() {
             >
               <option value="internal">내부 (4대보험·명세서)</option>
               <option value="external_partner">외부협력·3.3% (상주)</option>
-              <option value="external">단기외부·3.3% (행사 알바)</option>
+              <option value="external">외부단기·3.3% (행사 알바)</option>
             </select>
           </Field>
-          <Field label="카드코드" hint="영어 대문자 (카드 화면의 기타 직접입력과 같은 값)">
+          <Field label="닉네임" hint="영어 이름 (첫 글자가 카드 코드로 쓰입니다)">
             <input
-              className="input uppercase"
-              value={addForm.card_code}
-              onChange={(e) => setAddForm((f) => ({ ...f, card_code: e.target.value.toUpperCase() }))}
-              placeholder="예: C"
+              className="input"
+              value={addForm.nickname}
+              onChange={(e) => setAddForm((f) => ({ ...f, nickname: e.target.value.trim() }))}
+              placeholder="예: Gianna"
             />
           </Field>
           <Field label="부서">
@@ -598,7 +596,7 @@ export default function Members() {
           </Field>
           {!externalSupported ? (
             <p className="text-xs leading-relaxed text-ink-500 sm:col-span-2">
-              구분·카드코드 칸은 supabase/migration_profiles_external.sql 실행 뒤 DB에 저장됩니다. 실행 전에도 구분 변경·카드코드 입력은 화면에 바로 반영됩니다.
+              구분·닉네임 칸은 supabase/migration_profiles_external.sql + migration_profiles_nickname.sql 실행 뒤 DB에 저장됩니다.
             </p>
           ) : null}
         </form>

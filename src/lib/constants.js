@@ -277,7 +277,7 @@ export const INTERNAL_EXTRA_STAFF = ['손선욱']
 /**
  * 외부협력 (사무실 상주지만 세무상 외부·3.3% 사업소득).
  * 예: 허수정·장정아님 — 행사 알바와 분리 표시합니다.
- * 구성원 화면에서 인별로 내부/외부협력/단기외부로 바꿀 수 있고,
+ * 구성원 화면에서 인별로 내부/외부협력/외부단기로 바꿀 수 있고,
  * 정하지 않았을 때의 기본값입니다.
  */
 export const EXTERNAL_PARTNER_DEFAULT = ['허수정', '장정아']
@@ -295,6 +295,12 @@ export function cardCodeForName(name) {
   const hit = CARD_USERS.find((u) => String(u.name || '').replace(/\s+/g, '').startsWith(n) || n.startsWith(String(u.name || '').split(' ')[0]))
   if (hit && hit.code !== 'ALL') return hit.code
   return ''
+}
+
+/** 닉네임 첫 글자 → 카드 코드 (예: Gianna → G). 없으면 '' */
+export function nicknameCode(nickname) {
+  const m = /^([a-zA-Z])/.exec(String(nickname || '').trim())
+  return m ? m[1].toUpperCase() : ''
 }
 
 /**
