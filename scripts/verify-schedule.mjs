@@ -40,7 +40,7 @@ const manuals = [
   { id: 'm4', text: '범위 밖', done: false, due_date: '2026-12-01' },
 ]
 const items2 = buildSchedule({ loans: [], manuals, fromISO: '2026-09-29', toISO: '2026-10-31' })
-t('수동 날짜 있음 포함', items2.some((i) => i.key === 'manual-m1'))
+t('수동 날짜 있음 포함', items2.some((i) => i.key === 'manual-m1-2026-10-05'))
 t('완료 제외', !items2.some((i) => i.key === 'manual-m2'))
 t('날짜 없음 포함(끝 정렬)', items2.some((i) => i.key === 'manual-m3'))
 t('범위 밖 제외', !items2.some((i) => i.key === 'manual-m4'))

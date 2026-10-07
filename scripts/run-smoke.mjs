@@ -11,10 +11,10 @@ import { execFileSync } from 'node:child_process'
 import { readFileSync, existsSync, mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { pathToFileURL } from 'node:url'
+import { pathToFileURL, fileURLToPath } from 'node:url'
 import { JSDOM } from 'jsdom'
 
-const ROOT = new URL('..', import.meta.url).pathname
+const ROOT = fileURLToPath(new URL('..', import.meta.url))
 
 /* ---------- .env ---------- */
 const env = {}
@@ -110,9 +110,14 @@ window.fetch = globalThis.fetch
 const outDir = mkdtempSync(join(tmpdir(), 'bzen-smoke-'))
 const outFile = join(outDir, 'smoke.mjs')
 
+/* Windows에서는 확장자 없는 esbuild 스크립트를 직접 spawn할 수 없어 node로 실행합니다 */
+const ESBUILD_BIN = join(ROOT, 'node_modules/esbuild/bin/esbuild')
+const ESBUILD_CMD = process.platform === 'win32' ? process.execPath : ESBUILD_BIN
+const esbuildArgs = (args) => (process.platform === 'win32' ? [ESBUILD_BIN, ...args] : args)
+
 execFileSync(
-  join(ROOT, 'node_modules/esbuild/bin/esbuild'),
-  [
+  ESBUILD_CMD,
+  esbuildArgs([
     join(ROOT, 'scripts/smoke-render.jsx'),
     '--bundle',
     '--platform=node',
@@ -125,7 +130,7 @@ execFileSync(
     `--outfile=${outFile}`,
     '--banner:js=import { createRequire as __cr } from "node:module"; const require = __cr(import.meta.url);',
     '--log-level=error',
-  ],
+  ]),
   { stdio: 'inherit', cwd: ROOT },
 )
 

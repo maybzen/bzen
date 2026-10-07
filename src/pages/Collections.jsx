@@ -89,7 +89,8 @@ export default function Collections() {
     for (const e of entries) {
       if (!e.project_id) continue
       const supply = Number(e.supply_amount || 0)
-      if (e.entry_type === 'sale') saleByProject.set(e.project_id, (saleByProject.get(e.project_id) || 0) + supply)
+      /* 거래처별 탭·손익집계와 같은 기준: 영업외수익(지원금·환입 등)은 매출에서 뺍니다 */
+      if (e.entry_type === 'sale' && !isNonOperatingSale(e)) saleByProject.set(e.project_id, (saleByProject.get(e.project_id) || 0) + supply)
       else if (e.entry_type === 'purchase' || e.entry_type === 'opex') {
         costByProject.set(e.project_id, (costByProject.get(e.project_id) || 0) + supply)
       }

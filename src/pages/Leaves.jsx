@@ -112,14 +112,22 @@ async function autoGrantYear(all, profileRows, userId, grantedRef) {
   const has = (all || []).some((e) => e.entry_date === marker && /부여/.test(e.memo || ''))
   if (has) return 0
   const byName = new Map((profileRows || []).map((p) => [String(p.full_name || '').trim(), p]))
+  /* 외부협력·외부단기에게는 연차·동계·보건을 자동부여하지 않습니다 (월차 로직과 동일 기준) */
+  const isExternalName = (n) => {
+    const p = byName.get(n)
+    const t = String(p?.employment_type || '')
+    if (t.startsWith('external')) return true
+    if (!t && EXTERNAL_PARTNER_DEFAULT.includes(n)) return true
+    return false
+  }
   const names = [
     ...new Set([
       ...SHEET_ORDER.filter((n) => {
         const p = byName.get(n)
-        return !p || p.active !== false
+        return !isExternalName(n) && (!p || p.active !== false)
       }),
       ...(profileRows || [])
-        .filter((p) => p.active !== false && String(p.full_name || '').trim())
+        .filter((p) => p.active !== false && String(p.full_name || '').trim() && !isExternalName(String(p.full_name).trim()))
         .map((p) => String(p.full_name).trim()),
     ]),
   ]
@@ -129,12 +137,14 @@ async function autoGrantYear(all, profileRows, userId, grantedRef) {
     const hire = String(prof?.hire_date || '').slice(0, 10)
     const rule = annualByRule(prof?.hire_date, y)
     const fixed = GRANT_DEFAULTS[person]?.연차
-    const annual = fixed != null && fixed !== '' ? Number(fixed) : rule.days
+    /* 입사일이 없어 근속 산정이 안 되면 연차는 부여하지 않습니다 (15일 과다부여 방지).
+       개별지정값이 있으면 그대로 따릅니다. 동계·보건은 전원 부여 유지. */
+    const annual = fixed != null && fixed !== '' ? Number(fixed) : rule.years == null ? 0 : rule.days
     const basis =
       fixed != null && fixed !== ''
         ? '개별지정'
         : rule.years == null
-          ? '입사일 미등록(기본 15일)'
+          ? '입사일 미등록(연차 미부여·입사일 입력 후 수동 부여)'
           : `입사 ${hire}·근속${rule.years}년`
     if (annual > 0) {
       payloads.push({ entry_date: marker, person, leave_type: '연차', direction: '발생', days: annual, memo: `${y}년 자동부여(${basis})`, status: '승인' })
@@ -307,7 +317,7 @@ export default function Leaves() {
     let list = rows || []
     if (personFilter) list = list.filter((e) => e.person === personFilter)
     if (dateFrom) list = list.filter((e) => (e.end_date || e.entry_date || '') >= dateFrom)
-    if (dateTo) list = list.filter((e) => (e.entry_date || '') <= dateTo)
+    if (dateTo) list = list.filter((e) => (e.end_date || e.entry_date || '') <= dateTo)
     /* 최근에 작성·수정한 순 (승인대기가 바로 보이도록) */
     return list.slice().sort((a, b) => {
       const ca = String(a.created_at || '')

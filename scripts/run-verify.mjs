@@ -8,8 +8,9 @@ import { execFileSync } from 'node:child_process'
 import { readFileSync, existsSync, mkdtempSync, readdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, basename } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
-const ROOT = new URL('..', import.meta.url).pathname
+const ROOT = fileURLToPath(new URL('..', import.meta.url))
 
 const env = {}
 for (const file of ['.env', '.env.production', '.env.local']) {
@@ -32,19 +33,24 @@ const outDir = mkdtempSync(join(tmpdir(), 'bzen-verify-'))
 const files = readdirSync(join(ROOT, 'scripts')).filter((f) => /^verify-.*\.mjs$/.test(f)).sort()
 let bad = 0
 
+/* Windows에서는 확장자 없는 esbuild 스크립트를 직접 spawn할 수 없어 node로 실행합니다 */
+const ESBUILD_BIN = join(ROOT, 'node_modules/esbuild/bin/esbuild')
+const ESBUILD_CMD = process.platform === 'win32' ? process.execPath : ESBUILD_BIN
+const esbuildArgs = (args) => (process.platform === 'win32' ? [ESBUILD_BIN, ...args] : args)
+
 for (const file of files) {
   const out = join(outDir, basename(file))
   process.stdout.write(`\n=== ${file} ===\n`)
   try {
     execFileSync(
-      join(ROOT, 'node_modules/esbuild/bin/esbuild'),
-      [
+      ESBUILD_CMD,
+      esbuildArgs([
         join(ROOT, 'scripts', file),
         '--bundle', '--platform=node', '--format=esm', '--loader:.js=jsx',
         `--define:import.meta.env=${JSON.stringify(viteEnv)}`,
         `--define:process.env.NODE_ENV=${JSON.stringify('development')}`,
         `--outfile=${out}`, '--log-level=error',
-      ],
+      ]),
       { stdio: 'inherit', cwd: ROOT },
     )
   } catch {

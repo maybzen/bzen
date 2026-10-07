@@ -1,8 +1,34 @@
 import { auditEntries, checkEntryDraft, normalizeParty, findBrokenText, checkVat, summarizeAudit } from '../src/lib/validate'
 import fs from 'fs'
+import { fileURLToPath } from 'url'
+import path from 'path'
 
-const D = '/private/var/folders/xv/lqrg0xyn1x7b6qlj09fmzfzm0000gn/T/opencode/audit/'
-const entries = JSON.parse(fs.readFileSync(D + 'db_entries.json', 'utf8'))
+const HERE = path.dirname(fileURLToPath(import.meta.url))
+/* 실제 장부 fixture: 환경변수 > 리포지토리 fixtures > (구)Mac 절대경로 순으로 찾고,
+   없으면 합성 데이터로 코드 경로만 점검합니다 (다른 PC에서도 실행되게) */
+function loadEntries() {
+  const candidates = [
+    process.env.BZEN_AUDIT_FIXTURE,
+    path.join(HERE, 'fixtures', 'db_entries.json'),
+    '/private/var/folders/xv/lqrg0xyn1x7b6qlj09fmzfzm0000gn/T/opencode/audit/db_entries.json',
+  ].filter(Boolean)
+  for (const p of candidates) {
+    try {
+      const rows = JSON.parse(fs.readFileSync(p, 'utf8'))
+      console.log(`fixture: ${p} (${rows.length}건)`)
+      return rows
+    } catch {
+      /* 다음 후보 */
+    }
+  }
+  console.log('fixture 없음 → 합성 데이터로 점검합니다')
+  return [
+    { id: 'e1', entry_type: 'opex', entry_date: '2026-05-26', counterparty: '택시회사', category: '여비교통비', supply_amount: 7527, vat_amount: 753, total_amount: 8280, description: '택시', memo: '', project_id: '' },
+    { id: 'e2', entry_type: 'opex', entry_date: '2026-09-30', counterparty: 'BPEX 부산항시설관리센터', category: '기타운영비', supply_amount: 100000, vat_amount: 10000, total_amount: 110000, description: '', memo: '', project_id: '' },
+    { id: 'e3', entry_type: 'opex', entry_date: '2026-09-30', counterparty: '웨이브통신_김미하', category: '통신비', supply_amount: 50000, vat_amount: 5000, total_amount: 55000, description: '', memo: '', project_id: '' },
+  ]
+}
+const entries = loadEntries()
 
 console.log('대상:', entries.length, '건')
 console.log('')
