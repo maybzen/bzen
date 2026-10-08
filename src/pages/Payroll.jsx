@@ -1128,6 +1128,8 @@ function PayrollImportModal({ open, onClose, onDone, ym, defaultProjectId, exist
       setError('')
       setSrcKind(null)
       setPayDate(`${ym}-10`)
+      setManualName('')
+      setManualPay('')
     }
   }, [open, ym ])
 
@@ -1198,6 +1200,49 @@ function PayrollImportModal({ open, onClose, onDone, ym, defaultProjectId, exist
     if (srcKind === 'pdf' && /^\d{4}-\d{2}-\d{2}$/.test(v || '')) {
       setRows((rs) => rs.map((r) => ({ ...r, entry_date: v })))
     }
+  }
+
+  /* 미리보기 직접 추가 (PDF에서 빠진 사람용) */
+  const [manualName, setManualName] = useState('')
+  const [manualPay, setManualPay] = useState('')
+  const addManualRow = () => {
+    const name = String(manualName || '').replace(/\s+/g, '')
+    const pay = Math.round(Number(String(manualPay ?? '').replace(/[^0-9.-]/g, '')) || 0)
+    if (!name) {
+      toast.error('성명을 입력해 주세요.')
+      return
+    }
+    if (pay <= 0) {
+      toast.error('급여를 입력해 주세요.')
+      return
+    }
+    const inMonth = (rows || []).some((r) => String(r.counterparty || '').trim() === name)
+    if (existingNames.has(name) || inMonth) {
+      toast.error(`"${name}" 님은 이미 등록되어 있어 건너뜁니다.`)
+      return
+    }
+    setRows((rs) => [
+      ...rs,
+      {
+        entry_type: 'opex',
+        source: 'manual',
+        entry_date: /^\d{4}-\d{2}-\d{2}$/.test(payDate || '') ? payDate : `${ym}-10`,
+        counterparty: name,
+        category: '인건비',
+        description: `${Number(String(ym).slice(5))}월 급여`,
+        supply_amount: pay,
+        vat_amount: 0,
+        memo: '직접 추가',
+        project_id: defaultProjectId,
+        created_by: userId,
+      },
+    ])
+    setManualName('')
+    setManualPay('')
+    toast.success(`"${name}" 님을 추가했습니다.`)
+  }
+  const removeRow = (row) => {
+    setRows((rs) => rs.filter((r) => r !== row))
   }
 
   const submit = async () => {
@@ -1301,6 +1346,7 @@ function PayrollImportModal({ open, onClose, onDone, ym, defaultProjectId, exist
                     <th className="th">성명</th>
                     <th className="th">구분</th>
                     <th className="th text-right">급여</th>
+                    <th className="th w-10" />
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-ink-100">
@@ -1317,6 +1363,16 @@ function PayrollImportModal({ open, onClose, onDone, ym, defaultProjectId, exist
                         })()}
                       </td>
                       <td className="td num py-2 text-xs">{formatKRW(row.supply_amount)}</td>
+                      <td className="td py-2 text-xs">
+                        <button
+                          type="button"
+                          onClick={() => removeRow(row)}
+                          className="rounded-md p-1 text-ink-400 transition hover:bg-rose-50 hover:text-loss"
+                          aria-label={`${row.counterparty} 빼기`}
+                        >
+                          <Icon name="close" size={14} />
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -1335,6 +1391,28 @@ function PayrollImportModal({ open, onClose, onDone, ym, defaultProjectId, exist
             description="엑셀에서 CSV(쉼표로 분리)로 저장한 뒤 올리면 됩니다."
           />
         )}
+
+        <div className="rounded-lg border border-dashed border-ink-300 p-3">
+          <p className="text-xs font-bold text-ink-700">빠진 사람 직접 추가</p>
+          <p className="mt-0.5 text-[11px] text-ink-500">PDF에서 못 읽은 분은 여기서 성명·급여를 적어 추가하세요.</p>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <input
+              className="input w-28 py-1.5 text-xs"
+              value={manualName}
+              onChange={(e) => setManualName(e.target.value)}
+              placeholder="성명"
+            />
+            <AmountInput
+              className="input w-32 py-1.5 text-right text-xs"
+              value={manualPay}
+              onChange={(e) => setManualPay(e.target.value)}
+              placeholder="급여(원)"
+            />
+            <button type="button" className="btn-ghost px-2.5 py-1.5 text-xs" onClick={addManualRow}>
+              + 추가
+            </button>
+          </div>
+        </div>
       </div>
     </Modal>
   )
