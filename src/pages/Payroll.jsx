@@ -740,6 +740,8 @@ function SlipModal({ open, onClose, onSaved, entry, ym, initial, reportRows, pro
   const [checked, setChecked] = useState({})
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  /* 임의 추가정산액 행 [{label, amount}] */
+  const [extraLines, setExtraLines] = useState([])
   /* 장부 함께 수정 (상세 통합) */
   const [book, setBook] = useState({ entry_date: '', description: '', project_id: '' })
   const [atts, setAtts] = useState([])
@@ -766,6 +768,13 @@ function SlipModal({ open, onClose, onSaved, entry, ym, initial, reportRows, pro
     // 저장된 명세서가 없으면 본인 지출 합계를 지출결의에 미리 넣습니다.
     if (!initial && !base.expense_pay && mineTotal) base.expense_pay = mineTotal
     setForm(base)
+    setExtraLines(
+      Array.isArray(initial?.extra_ded)
+        ? initial.extra_ded
+            .filter((r) => r && (String(r.label || '').trim() || Number(r.amount) || 0))
+            .map((r) => ({ label: String(r.label || '').trim(), amount: Math.round(Number(r.amount) || 0) }))
+        : [],
+    )
     const next = {}
     for (const r of mine) next[r.id] = true
     setChecked(next)
@@ -786,7 +795,8 @@ function SlipModal({ open, onClose, onSaved, entry, ym, initial, reportRows, pro
   }, [mine, coded, checked])
 
   const payTotal = slipTotal(form, PAY_FIELDS)
-  const dedTotal = slipTotal(form, DED_FIELDS) + slipTotal(form, SETTLE_FIELDS)
+  const extraTotal = (extraLines || []).reduce((a, r) => a + (Math.round(Number(r?.amount) || 0)), 0)
+  const dedTotal = slipTotal(form, DED_FIELDS) + slipTotal(form, SETTLE_FIELDS) + extraTotal
   const net = payTotal - dedTotal
   const expensePay = Number(form.expense_pay) || 0
   // 우리 회사는 지출결의를 급여에 포함해서 줍니다. 지결은 별도 행으로 잡히므로
@@ -803,7 +813,8 @@ function SlipModal({ open, onClose, onSaved, entry, ym, initial, reportRows, pro
     // 명세서 항목을 하나도 안 적었으면 적요·지급일·프로젝트만 고치고 금액은 그대로 둡니다
     // (빈 명세서 저장으로 장부 0원 덮어쓰기 방지)
     const hasBreakdown =
-      [...PAY_FIELDS, ...DED_FIELDS, ...SETTLE_FIELDS].some((f) => Number(form[f.key]) || 0) || initial
+      [...PAY_FIELDS, ...DED_FIELDS, ...SETTLE_FIELDS].some((f) => Number(form[f.key]) || 0) ||
+      extraTotal !== 0 || initial
     if (!hasBreakdown) {
       if (negativeBook) return
       setSaving(true)
@@ -834,6 +845,9 @@ function SlipModal({ open, onClose, onSaved, entry, ym, initial, reportRows, pro
         ...Object.fromEntries(
           [...PAY_FIELDS, ...DED_FIELDS, ...SETTLE_FIELDS].map((f) => [f.key, Number(form[f.key]) || 0]),
         ),
+        extra_ded: (extraLines || [])
+          .filter((r) => r && (String(r.label || '').trim() || Number(r.amount) || 0))
+          .map((r) => ({ label: String(r.label || '').trim(), amount: Math.round(Number(r.amount) || 0) })),
       }
       try {
         await upsertSlip(slipRow, userId)
@@ -842,6 +856,7 @@ function SlipModal({ open, onClose, onSaved, entry, ym, initial, reportRows, pro
         if (!/column .* does not exist|42703|schema cache|Could not find/i.test(String(slipErr?.message || ''))) throw slipErr
         const { ...noSettle } = slipRow
         for (const f of SETTLE_FIELDS) delete noSettle[f.key]
+        delete noSettle.extra_ded
         await upsertSlip(noSettle, userId)
         toast.info('정산액은 DB 추가 후 저장됩니다. SQL 1회 실행해 주세요.')
       }
@@ -1078,6 +1093,44 @@ function SlipModal({ open, onClose, onSaved, entry, ym, initial, reportRows, pro
                   />
                 </label>
               ))}
+              {(extraLines || []).map((r, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <input
+                    className="input min-w-0 flex-1 py-1 text-xs"
+                    value={r.label}
+                    onChange={(e) =>
+                      setExtraLines((ls) => ls.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)))
+                    }
+                    placeholder="항목명 (예: 건강보험 추가정산액)"
+                  />
+                  <AmountInput
+                    className="input w-32 shrink-0 py-1 text-right text-xs"
+                    value={r.amount ?? 0}
+                    onChange={(e) =>
+                      setExtraLines((ls) =>
+                        ls.map((x, j) =>
+                          j === i ? { ...x, amount: Math.round(Number(String(e.target.value).replace(/[^0-9.-]/g, '')) || 0) } : x,
+                        ),
+                      )
+                    }
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setExtraLines((ls) => ls.filter((_, j) => j !== i))}
+                    className="shrink-0 rounded-md p-1 text-ink-400 transition hover:bg-rose-50 hover:text-loss"
+                    aria-label="행 삭제"
+                  >
+                    <Icon name="close" size={14} />
+                  </button>
+                </div>
+              ))}
+              <button
+                type="button"
+                onClick={() => setExtraLines((ls) => [...ls, { label: '', amount: 0 }])}
+                className="self-start text-xs font-bold text-brand-700 hover:underline"
+              >
+                + 추가정산액 행 추가
+              </button>
             </div>
           </div>
         </div>
