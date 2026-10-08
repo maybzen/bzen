@@ -6,7 +6,8 @@ import { useToast } from '../components/Toast'
 import { InlineAlert, LoadingBlock, PageHeader } from '../components/ui'
 import { useAuth } from '../auth/AuthContext'
 import { useStaffPermissions } from '../lib/permissions'
-import { listAttachments, listEntries, uploadAttachment } from '../lib/api'
+import { listAttachments, listEntries, listProfiles, listProjects, uploadAttachment } from '../lib/api'
+import EntryFormModal from '../components/EntryFormModal'
 import { downloadTextFile, toCSV } from '../lib/csv'
 import { formatKRW, todayISO } from '../lib/format'
 import {
@@ -24,6 +25,7 @@ import {
   setTaxDone,
   toggleTaxCheck,
   vatEstimateByFiling,
+  withholdingPaidByMonth,
 } from '../lib/tax'
 
 const FILTER_TABS = [
@@ -67,18 +69,36 @@ function DeadlineCard({
   uploading,
   onUploadInsurance,
   onOpenInsuranceFiles,
+  paid,
+  onRegisterPay,
 }) {
   const type = TAX_TYPES[deadline.type]
   const done = isDone(state, deadline.id)
   const prior = isPrior(deadline.due)
 
-  /* 원천세는 납부확인만: 펼침·체크리스트 없이 한 줄로 */
+  /* 원천세는 장부 납부액 표시 + 납부 등록 (장부에 없으면 0원) */
   if (deadline.type === 'withholding') {
     return (
       <div className={`card flex items-center gap-3 px-4 py-2.5 ${done || prior ? 'opacity-75' : ''}`}>
         <span className="w-20 shrink-0 text-xs font-semibold text-ink-500">{deadline.period}</span>
-        <span className="min-w-0 flex-1 truncate text-sm text-ink-800">납부기한 {deadline.due}</span>
+        <span className="min-w-0 flex-1 truncate text-sm text-ink-800">
+          납부기한 {deadline.due}
+          <span className="ml-1.5 font-num font-bold tabular-nums text-ink-900">
+            {paid && paid.total ? `${formatKRW(paid.total)}원` : '미등록'}
+          </span>
+          {paid && paid.count > 1 ? (
+            <span className="ml-1 text-[11px] text-ink-400">{paid.count}건 합계</span>
+          ) : null}
+        </span>
         {statusChip(deadline, state, today)}
+        <button
+          type="button"
+          onClick={() => onRegisterPay(deadline)}
+          className="shrink-0 rounded-lg p-1.5 text-ink-400 transition hover:bg-brand-50 hover:text-brand-700"
+          title="납부 등록 (장부에 기록)"
+        >
+          <Icon name="plus" size={16} strokeWidth={2.4} />
+        </button>
         <button
           type="button"
           onClick={() => onToggleDone(deadline.id, !done)}
@@ -208,18 +228,22 @@ function DeadlineCard({
 }
 
 export default function Tax() {
-  const { profile, user } = useAuth()
+  const { profile, user, isAdmin } = useAuth()
   const toast = useToast()
   const thisYear = Number(todayISO().slice(0, 4))
   const [year, setYear] = useState(thisYear)
   const [loading, setLoading] = useState(true)
   const [entries, setEntries] = useState([])
+  const [projects, setProjects] = useState([])
+  const [profiles, setProfiles] = useState([])
   const [state, setState] = useState(() => loadTaxState())
   const [openId, setOpenId] = useState(null)
   const [taxFilter, setTaxFilter] = useState('all')
   const [attachmentsByEntry, setAttachmentsByEntry] = useState({})
   const [uploading, setUploading] = useState(false)
   const [viewerFiles, setViewerFiles] = useState(null)
+  const [payTarget, setPayTarget] = useState(null)
+  const [reloadKey, setReloadKey] = useState(0)
   const today = todayISO()
 
   useEffect(() => {
@@ -232,11 +256,15 @@ export default function Tax() {
     Promise.all([
       listEntries({ from: `${year - 1}-01-01`, to: `${year - 1}-12-31` }),
       listEntries({ from: `${year}-01-01`, to: `${year}-12-31` }),
+      listProjects().catch(() => []),
+      listProfiles().catch(() => []),
     ])
-      .then(([prev, cur]) => {
+      .then(([prev, cur, projectRows, profileRows]) => {
         if (!mounted) return
         const all = [...(prev || []), ...(cur || [])]
         setEntries(all)
+        setProjects(projectRows || [])
+        setProfiles(profileRows || [])
         const insIds = all.filter((e) => e.counterparty === '국민건강보험공단').map((e) => e.id)
         listAttachments(insIds)
           .then((files) => {
@@ -259,11 +287,14 @@ export default function Tax() {
     return () => {
       mounted = false
     }
-  }, [year, toast])
+  }, [year, reloadKey, toast])
 
   const deadlines = useMemo(() => buildTaxCalendar(year), [year])
   const upcoming = useMemo(() => getUpcoming(deadlines, today, state), [deadlines, today, state])
   const vatRows = useMemo(() => vatEstimateByFiling(entries, year), [entries, year])
+  /* 원천세 납부월별 장부 합계 (납부기한 달 키) */
+  const paidMap = useMemo(() => withholdingPaidByMonth(entries), [entries])
+  const paidOf = (deadline) => paidMap.get(String(deadline.due || '').slice(0, 7)) || null
   const scheduleList = useMemo(() => deadlines.filter((d) => matchTaxFilter(d, taxFilter)), [deadlines, taxFilter])
   const currentSchedule = useMemo(() => scheduleList.filter((d) => d.due >= today), [scheduleList, today])
   const pastSchedule = useMemo(() => scheduleList.filter((d) => d.due < today), [scheduleList, today])
@@ -397,6 +428,8 @@ export default function Tax() {
                   onToggleCheck={toggleCheck}
                   onToggleDone={toggleDone}
                   onExport={exportFiling}
+                  paid={paidOf(d)}
+                  onRegisterPay={setPayTarget}
                   {...insuranceProps(d)}
                 />
               ))
@@ -462,7 +495,7 @@ export default function Tax() {
               </div>
             </div>
             {(taxFilter === 'all' || taxFilter === 'withholding') && (
-              <p className="text-xs text-ink-500">원천세(매월 10일)는 납부확인 체크만으로 충분합니다.</p>
+              <p className="text-xs text-ink-500">원천세(매월 10일)는 + 버튼으로 납부를 등록하면 금액이 표시됩니다. 국세·지방세 합산입니다.</p>
             )}
             {currentSchedule.map((d) => (
               <DeadlineCard
@@ -475,6 +508,8 @@ export default function Tax() {
                 onToggleCheck={toggleCheck}
                 onToggleDone={toggleDone}
                 onExport={exportFiling}
+                paid={paidOf(d)}
+                onRegisterPay={setPayTarget}
                 {...insuranceProps(d)}
               />
             ))}
@@ -502,6 +537,8 @@ export default function Tax() {
                       onToggleCheck={toggleCheck}
                       onToggleDone={toggleDone}
                       onExport={exportFiling}
+                      paid={paidOf(d)}
+                      onRegisterPay={setPayTarget}
                       {...insuranceProps(d)}
                     />
                   ))}
@@ -522,6 +559,33 @@ export default function Tax() {
         onClose={() => setViewerFiles(null)}
         attachments={viewerFiles || []}
         title="고지서 PDF"
+      />
+
+      {/* 원천세 납부 등록: 장부에 세금과공과로 기록됩니다 (급여관리 세금·원천징수에 함께 집계) */}
+      <EntryFormModal
+        open={Boolean(payTarget)}
+        onClose={() => setPayTarget(null)}
+        onSaved={() => {
+          setPayTarget(null)
+          setReloadKey((k) => k + 1)
+        }}
+        entryType="opex"
+        source="manual"
+        initial={
+          payTarget
+            ? {
+                entry_date: today,
+                counterparty: '세무서',
+                category: '세금과공과',
+                description: `${payTarget.period} 원천세`,
+                memo: '원천징수',
+              }
+            : null
+        }
+        projects={projects}
+        profiles={profiles}
+        isAdmin={isAdmin}
+        userId={user?.id}
       />
     </div>
   )

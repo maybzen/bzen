@@ -123,6 +123,32 @@ export function buildTaxCalendar(year) {
   return list.sort((a, b) => (a.due < b.due ? -1 : 1))
 }
 
+/* 원천세·지방소득세 납부분 장부 행인지 (월별 납부액 집계용).
+   세금과공과 중 세무관서 납부분만 봅니다.
+   부가세·법인세·관세·4대보험·선납 accrual(대체 기표 예정)은 제외 */
+export function isWithholdingPayment(e) {
+  if (e?.category !== '세금과공과') return false
+  const t = `${e.counterparty || ''} ${e.description || ''} ${e.memo || ''}`
+  if (/부가세|법인세|관세|4대보험|건강보험|국민연금|고용보험|산재보험|사회보험|대체/.test(t)) return false
+  if (/국세청|세무서|위택스|해운대구/.test(t)) return true
+  return /원천|지방세|소득세/.test(t) && /납부|고지서/.test(t)
+}
+
+/** 납부월(YYYY-MM)별 원천세 납부액. 납부기한 달 키로 조회합니다 */
+export function withholdingPaidByMonth(entries) {
+  const map = new Map()
+  for (const e of entries || []) {
+    if (!isWithholdingPayment(e)) continue
+    const ym = String(e.entry_date || '').slice(0, 7)
+    if (!/^\d{4}-\d{2}$/.test(ym)) continue
+    const o = map.get(ym) || { total: 0, count: 0 }
+    o.total += Number(e.total_amount || 0)
+    o.count += 1
+    map.set(ym, o)
+  }
+  return map
+}
+
 /** YYYY-MM-DD 기준 일수 차이 (b - a) */
 export function dayDiff(a, b) {
   const ms = Date.parse(`${b}T00:00:00+09:00`) - Date.parse(`${a}T00:00:00+09:00`)
