@@ -78,6 +78,22 @@ function monthRange(ym) {
   return { from: `${ym}-01`, to: monthEnd(new Date(y, m - 1, 1)) }
 }
 
+/** 귀속월 드롭다운 (2025-01 ~ 다음 달). input[type=month] 대신 목록 선택으로. */
+export function monthOptions() {
+  const out = []
+  let [y, m] = [2025, 1]
+  const [ey, em] = shiftYm(todayISO().slice(0, 7), 1).split('-').map(Number)
+  while (y < ey || (y === ey && m <= em)) {
+    out.push(`${y}-${String(m).padStart(2, '0')}`)
+    m += 1
+    if (m > 12) {
+      m = 1
+      y += 1
+    }
+  }
+  return out.reverse()
+}
+
 const sumTotal = (rows) => (rows || []).reduce((a, e) => a + Number(e.total_amount || 0), 0)
 
 /* 명세서 항목 정의 (급여명세서 양식 그대로) */
@@ -901,8 +917,7 @@ function SlipModal({ open, onClose, onSaved, entry, ym, initial, reportRows, pro
             </label>
             <label className="flex flex-col gap-1 text-xs" title="이 달 급여관리에 집계됩니다. 바꾸면 적요의 ○월 급여도 함께 바뀝니다.">
               <span className="font-semibold text-ink-600">귀속월</span>
-              <input
-                type="month"
+              <select
                 className="input py-1 text-xs"
                 value={attrMonth({ entry_date: book.entry_date || entry?.entry_date, description: book.description, memo: '' }) || ym}
                 onChange={(e) => {
@@ -917,7 +932,18 @@ function SlipModal({ open, onClose, onSaved, entry, ym, initial, reportRows, pro
                     return { ...b, description: next }
                   })
                 }}
-              />
+              >
+                {(() => {
+                  const cur = attrMonth({ entry_date: book.entry_date || entry?.entry_date, description: book.description, memo: '' }) || ym
+                  const opts = monthOptions()
+                  const list = opts.includes(cur) ? opts : [cur, ...opts]
+                  return list.map((o) => (
+                    <option key={o} value={o}>
+                      {o.slice(0, 4)}년 {Number(o.slice(5))}월
+                    </option>
+                  ))
+                })()}
+              </select>
             </label>
             <label className="flex flex-col gap-1 text-xs sm:col-span-3">
               <span className="font-semibold text-ink-600">적요</span>
@@ -1380,12 +1406,17 @@ function PayrollImportModal({ open, onClose, onDone, ym, defaultProjectId, exist
           </label>
           <label className="flex items-center gap-1.5 text-xs font-semibold text-ink-600" title="적요 ○월 급여의 기준월. 지급일과 다를 수 있습니다">
             귀속월
-            <input
-              type="month"
+            <select
               className="input w-auto py-1 text-xs"
               value={attrYm}
               onChange={(e) => setAttrYm(e.target.value)}
-            />
+            >
+              {monthOptions().map((o) => (
+                <option key={o} value={o}>
+                  {o.slice(0, 4)}년 {Number(o.slice(5))}월
+                </option>
+              ))}
+            </select>
           </label>
         </div>
 
