@@ -1157,7 +1157,8 @@ function PayrollImportModal({ open, onClose, onDone, ym, defaultProjectId, exist
     const buf = await file.arrayBuffer()
     const { parsed, meta } = await parsePayrollPdf(buf.slice(0), { payDate, ym })
     applyParsed(parsed, 'pdf')
-    toast.success(`${file.name} · ${meta.pages}쪽에서 ${meta.people}명을 읽었습니다. 지급일(${payDate}) 확인 후 등록하세요.`)
+    if (meta.payDate && meta.payDate !== payDate) setPayDate(meta.payDate)
+    toast.success(`${file.name} · ${meta.pages}쪽에서 ${meta.people}명을 읽었습니다. 지급일(${meta.payDate || payDate}) 확인 후 등록하세요.`)
   }
 
   const takeFile = async (file) => {
