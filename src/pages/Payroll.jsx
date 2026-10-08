@@ -1115,14 +1115,35 @@ function PayrollImportModal({ open, onClose, onDone, ym, defaultProjectId, exist
   const [skipped, setSkipped] = useState([])
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
+  const [parsing, setParsing] = useState(false)
+  const [dragging, setDragging] = useState(false)
+  const [srcKind, setSrcKind] = useState(null)
+  /* PDF에는 일자 열이 없어 지급일을 따로 받습니다 (기본 10일) */
+  const [payDate, setPayDate] = useState(`${ym}-10`)
 
   useEffect(() => {
     if (!open) {
       setRows([])
       setSkipped([])
       setError('')
+      setSrcKind(null)
+      setPayDate(`${ym}-10`)
     }
-  }, [open ])
+  }, [open, ym ])
+
+  const applyParsed = (parsed, kind) => {
+    if (parsed.length < 2) throw new Error('데이터 행이 없습니다.')
+    const { rows: out, skipped: skip } = buildPayrollRows(parsed, {
+      existingNames,
+      defaultProjectId,
+      userId,
+      ym,
+    })
+    if (!out.length && !skip.length) throw new Error('등록할 행을 찾지 못했습니다.')
+    setRows(out)
+    setSkipped(skip)
+    setSrcKind(kind)
+  }
 
   const downloadTemplate = () => {
     downloadTextFile(
@@ -1131,30 +1152,50 @@ function PayrollImportModal({ open, onClose, onDone, ym, defaultProjectId, exist
     )
   }
 
-  const handleFile = async (e) => {
-    const file = e.target.files?.[0]
-    e.target.value = ''
+  const handlePdfFile = async (file) => {
+    const { parsePayrollPdf } = await import('../lib/payrollPdf')
+    const buf = await file.arrayBuffer()
+    const { parsed, meta } = await parsePayrollPdf(buf.slice(0), { payDate, ym })
+    applyParsed(parsed, 'pdf')
+    toast.success(`${file.name} · ${meta.pages}쪽에서 ${meta.people}명을 읽었습니다. 지급일(${payDate}) 확인 후 등록하세요.`)
+  }
+
+  const takeFile = async (file) => {
     if (!file) return
+    if (file.size > 20 * 1024 * 1024) {
+      setError('파일은 20MB 이하만 올릴 수 있습니다.')
+      return
+    }
     setError('')
+    setParsing(true)
     try {
-      const text = await file.text()
-      const parsed = parseCSV(text)
-      if (parsed.length < 2) throw new Error('데이터 행이 없습니다.')
-
-      const { rows: out, skipped: skip } = buildPayrollRows(parsed, {
-        existingNames,
-        defaultProjectId,
-        userId,
-        ym,
-      })
-
-      if (!out.length && !skip.length) throw new Error('등록할 행을 찾지 못했습니다.')
-      setRows(out)
-      setSkipped(skip)
+      const lower = String(file.name || '').toLowerCase()
+      if (lower.endsWith('.pdf')) await handlePdfFile(file)
+      else {
+        const text = await file.text()
+        applyParsed(parseCSV(text), 'csv')
+      }
     } catch (err) {
       setRows([])
       setSkipped([])
+      setSrcKind(null)
       setError(err.message)
+    } finally {
+      setParsing(false)
+    }
+  }
+
+  const handleFile = async (e) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    await takeFile(file)
+  }
+
+  /* 지급일 변경: PDF로 읽은 행들의 일자만 바꿉니다 */
+  const changePayDate = (v) => {
+    setPayDate(v)
+    if (srcKind === 'pdf' && /^\d{4}-\d{2}-\d{2}$/.test(v || '')) {
+      setRows((rs) => rs.map((r) => ({ ...r, entry_date: v })))
     }
   }
 
@@ -1192,16 +1233,41 @@ function PayrollImportModal({ open, onClose, onDone, ym, defaultProjectId, exist
       }
     >
       <div className="flex flex-col gap-4">
-        <div className="flex flex-wrap items-center gap-2">
+        <div
+          className={`flex flex-wrap items-center gap-2 rounded-xl border-2 border-dashed p-3 transition ${
+            dragging ? 'border-brand-500 bg-brand-50/60' : 'border-ink-200'
+          }`}
+          onDragOver={(e) => {
+            e.preventDefault()
+            setDragging(true)
+          }}
+          onDragLeave={() => setDragging(false)}
+          onDrop={(e) => {
+            e.preventDefault()
+            setDragging(false)
+            takeFile(e.dataTransfer?.files?.[0])
+          }}
+        >
           <label className="btn-ghost cursor-pointer">
             <Icon name="upload" size={16} />
-            CSV 파일 선택
-            <input type="file" accept=".csv,text/csv" className="hidden" onChange={handleFile} />
+            {parsing ? '읽는 중…' : 'CSV·PDF 선택 또는 끌어놓기'}
+            <input type="file" accept=".csv,.pdf,text/csv,application/pdf" className="hidden" onChange={handleFile} />
           </label>
           <button type="button" className="btn-ghost" onClick={downloadTemplate}>
             <Icon name="download" size={16} />
             양식 다운로드
           </button>
+          {srcKind === 'pdf' ? (
+            <label className="flex items-center gap-1.5 text-xs font-semibold text-ink-600">
+              지급일
+              <input
+                type="date"
+                className="input w-auto py-1 text-xs"
+                value={payDate}
+                onChange={(e) => changePayDate(e.target.value)}
+              />
+            </label>
+          ) : null}
         </div>
 
         <div className="rounded-lg border border-ink-200 bg-ink-50/60 p-3.5 text-xs leading-relaxed text-ink-600">
@@ -1210,6 +1276,7 @@ function PayrollImportModal({ open, onClose, onDone, ym, defaultProjectId, exist
           <p className="mt-2 font-semibold text-ink-700">선택 열</p>
           <p>적요(없으면 ○월 급여), 메모</p>
           <p className="mt-2">항목은 인건비, 귀속은 비젠공통(관리)으로 자동 지정됩니다. 부가세는 0원입니다.</p>
+          <p className="mt-2">세무사무실 급여대장 PDF도 그대로 올리면 됩니다 (스캔본 제외). PDF는 일자 열이 없어 위 지급일로 들어갑니다.</p>
         </div>
 
         {error ? <p className="text-sm font-medium text-loss">{error}</p> : null}
