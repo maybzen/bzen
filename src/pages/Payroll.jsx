@@ -899,7 +899,27 @@ function SlipModal({ open, onClose, onSaved, entry, ym, initial, reportRows, pro
                 onChange={(e) => setBook((b) => ({ ...b, entry_date: e.target.value }))}
               />
             </label>
-            <label className="flex flex-col gap-1 text-xs sm:col-span-2">
+            <label className="flex flex-col gap-1 text-xs" title="이 달 급여관리에 집계됩니다. 바꾸면 적요의 ○월 급여도 함께 바뀝니다.">
+              <span className="font-semibold text-ink-600">귀속월</span>
+              <input
+                type="month"
+                className="input py-1 text-xs"
+                value={attrMonth({ entry_date: book.entry_date || entry?.entry_date, description: book.description, memo: '' }) || ym}
+                onChange={(e) => {
+                  const v = e.target.value
+                  if (!/^\d{4}-\d{2}$/.test(v || '')) return
+                  const label = `${Number(v.slice(5))}월 급여`
+                  setBook((b) => {
+                    const cur = String(b.description || '')
+                    const next = /(\d{4}\s*년\s*)?\d{1,2}\s*월\s*급여/.test(cur)
+                      ? cur.replace(/(\d{4}\s*년\s*)?\d{1,2}\s*월\s*급여/, label)
+                      : (cur ? `${label} · ${cur}` : label)
+                    return { ...b, description: next }
+                  })
+                }}
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-xs sm:col-span-3">
               <span className="font-semibold text-ink-600">적요</span>
               <input
                 className="input py-1 text-xs"
