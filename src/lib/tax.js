@@ -134,16 +134,22 @@ export function isWithholdingPayment(e) {
   return /원천|지방세|소득세/.test(t) && /납부|고지서/.test(t)
 }
 
-/** 납부월(YYYY-MM)별 원천세 납부액. 납부기한 달 키로 조회합니다 */
+/** 납부월(YYYY-MM)별 원천세 납부액. 납부기한 달 키로 조회합니다.
+    국세(소득세)와 지방세(특별징수분, 소득세의 10%)를 나눠 담습니다.
+    매달 같이 나오는 쌍(예: 8월분 국세 841,390 + 지방 84,100) 확인용 */
 export function withholdingPaidByMonth(entries) {
   const map = new Map()
   for (const e of entries || []) {
     if (!isWithholdingPayment(e)) continue
     const ym = String(e.entry_date || '').slice(0, 7)
     if (!/^\d{4}-\d{2}$/.test(ym)) continue
-    const o = map.get(ym) || { total: 0, count: 0 }
-    o.total += Number(e.total_amount || 0)
+    const t = `${e.counterparty || ''} ${e.description || ''} ${e.memo || ''}`
+    const amt = Number(e.total_amount || 0)
+    const o = map.get(ym) || { total: 0, count: 0, national: 0, local: 0 }
+    o.total += amt
     o.count += 1
+    if (/지방/.test(t)) o.local += amt
+    else o.national += amt
     map.set(ym, o)
   }
   return map

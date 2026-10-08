@@ -31,9 +31,9 @@ import {
 const FILTER_TABS = [
   { key: 'all', label: '전체' },
   { key: 'vat', label: '부가세' },
-  { key: 'withholding', label: '원천세' },
+  { key: 'withholding', label: '원천세+지방(매월)' },
   { key: 'insurance', label: '4대보험' },
-  { key: 'corp', label: '법인세·지방세' },
+  { key: 'corp', label: '법인세+지방(연1회)' },
 ]
 
 function matchTaxFilter(deadline, filter) {
@@ -76,7 +76,8 @@ function DeadlineCard({
   const done = isDone(state, deadline.id)
   const prior = isPrior(deadline.due)
 
-  /* 원천세는 장부 납부액 표시 + 납부 등록 (장부에 없으면 0원) */
+  /* 원천세는 장부 납부액 표시 + 납부 등록 (장부에 없으면 0원).
+     매달 같이 나오는 국세(소득세)+지방세(특별징수분) 쌍으로 보여줍니다 */
   if (deadline.type === 'withholding') {
     return (
       <div className={`card flex items-center gap-3 px-4 py-2.5 ${done || prior ? 'opacity-75' : ''}`}>
@@ -86,8 +87,11 @@ function DeadlineCard({
           <span className="ml-1.5 font-num font-bold tabular-nums text-ink-900">
             {paid && paid.total ? `${formatKRW(paid.total)}원` : '미등록'}
           </span>
-          {paid && paid.count > 1 ? (
-            <span className="ml-1 text-[11px] text-ink-400">{paid.count}건 합계</span>
+          {paid && paid.total ? (
+            <span className="ml-1 text-[11px] text-ink-400">
+              국세 {formatKRW(paid.national)}·지방 {formatKRW(paid.local)}
+              {paid.count > 2 ? ` · ${paid.count}건` : ''}
+            </span>
           ) : null}
         </span>
         {statusChip(deadline, state, today)}
@@ -463,7 +467,10 @@ export default function Tax() {
               </div>
             </div>
             {(taxFilter === 'all' || taxFilter === 'withholding') && (
-              <p className="text-xs text-ink-500">원천세(매월 10일)는 + 버튼으로 납부를 등록하면 금액이 표시됩니다. 국세·지방세 합산입니다.</p>
+              <p className="text-xs text-ink-500">원천세(매월 10일)는 + 버튼으로 납부를 등록하면 금액이 표시됩니다. 매달 같이 나오는 국세(소득세)+지방세(특별징수분) 합산입니다.</p>
+            )}
+            {taxFilter === 'corp' && (
+              <p className="text-xs text-ink-500">법인세 확정(3/31)과 지방소득세(4/30)는 연 1회 세트입니다. 매달 나가는 지방세(특별징수분)는 원천세 행에 포함됩니다.</p>
             )}
             {currentSchedule.map((d) => (
               <DeadlineCard
