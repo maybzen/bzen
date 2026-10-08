@@ -235,19 +235,37 @@ export default function EntryFormModal({
   /* 저장 전 경고를 확인해야 하는 단계인가 */
   const needConfirm = warnings.length > 0 && !forceSave
 
-  const onPickFiles = (e) => {
-    const picked = Array.from(e.target.files || [])
+  const ACCEPT_EXTS = ['pdf', 'hwp', 'hwpx', 'xls', 'xlsx', 'doc', 'docx', 'csv', 'txt', 'zip']
+  const acceptFile = (file) => {
+    if (String(file?.type || '').startsWith('image/')) return true
+    const ext = String(file?.name || '').split('.').pop().toLowerCase()
+    return ACCEPT_EXTS.includes(ext)
+  }
+
+  const addFiles = (list) => {
+    const picked = Array.from(list || [])
     const accepted = []
     for (const file of picked) {
       if (file.size > MAX_FILE) {
         toast.error(`"${file.name}" 은(는) 20MB 를 넘어 제외했습니다.`)
         continue
       }
+      if (!acceptFile(file)) {
+        toast.error(`"${file.name}" 은(는) 올릴 수 있는 형식이 아닙니다.`)
+        continue
+      }
       accepted.push(file)
     }
-    setFiles((prev) => [...prev, ...accepted])
+    if (accepted.length) setFiles((prev) => [...prev, ...accepted])
+  }
+
+  const onPickFiles = (e) => {
+    addFiles(e.target.files)
     e.target.value = ''
   }
+
+  /* 바탕화면 등에서 끌어다 놓기 */
+  const [dragOver, setDragOver] = useState(false)
 
   const removeExisting = (file) => {
     setRemoved((prev) => [...prev, file])
@@ -709,10 +727,28 @@ export default function EntryFormModal({
         </div>
 
         <Field label="증빙 파일" hint="영수증·세금계산서 등을 첨부할 수 있습니다. (파일당 최대 20MB)">
-          <div className="flex flex-col gap-2">
-            <label className="flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-ink-300 bg-white px-4 py-3.5 text-sm font-semibold text-ink-600 transition hover:border-brand-400 hover:bg-brand-50/40">
+          <div
+            className="flex flex-col gap-2"
+            onDragOver={(e) => {
+              e.preventDefault()
+              setDragOver(true)
+            }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={(e) => {
+              e.preventDefault()
+              setDragOver(false)
+              addFiles(e.dataTransfer?.files)
+            }}
+          >
+            <label
+              className={`flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed px-4 py-3.5 text-sm font-semibold transition ${
+                dragOver
+                  ? 'border-brand-500 bg-brand-50 text-brand-700'
+                  : 'border-ink-300 bg-white text-ink-600 hover:border-brand-400 hover:bg-brand-50/40'
+              }`}
+            >
               <Icon name="upload" size={16} />
-              파일 선택
+              {dragOver ? '여기에 놓으세요' : '파일 선택 또는 끌어다 놓기'}
               <input
                 type="file"
                 multiple

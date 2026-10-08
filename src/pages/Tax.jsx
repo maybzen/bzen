@@ -404,38 +404,6 @@ export default function Tax() {
         <LoadingBlock />
       ) : (
         <>
-          {/* 1. 임박한 신고 */}
-          <section className="flex flex-col gap-3">
-            <h2 className="text-sm font-bold text-ink-900">
-              챙겨야 할 신고
-              <span className="ml-1.5 font-medium text-ink-500">
-                {upcoming.length ? `${upcoming.length}건` : '없음'}
-              </span>
-            </h2>
-            {!upcoming.length ? (
-              <InlineAlert tone="success">
-                <strong>다 챙겼습니다.</strong> 앞으로 60일 안에 마감되는 신고가 없습니다.
-              </InlineAlert>
-            ) : (
-              upcoming.map((d) => (
-                <DeadlineCard
-                  key={d.id}
-                  deadline={d}
-                  state={state}
-                  today={today}
-                  open={openId === d.id}
-                  onToggleOpen={() => setOpenId((v) => (v === d.id ? null : d.id))}
-                  onToggleCheck={toggleCheck}
-                  onToggleDone={toggleDone}
-                  onExport={exportFiling}
-                  paid={paidOf(d)}
-                  onRegisterPay={setPayTarget}
-                  {...insuranceProps(d)}
-                />
-              ))
-            )}
-          </section>
-
           {/* 2. 부가세 예상 */}
           <section className="card overflow-hidden">
             <header className="flex flex-wrap items-center justify-between gap-2 border-b border-ink-200 px-4 py-3.5">
@@ -475,7 +443,7 @@ export default function Tax() {
             </p>
           </section>
 
-          {/* 3. 연간 일정 */}
+          {/* 1. 연간 전체 일정 */}
           <section className="flex flex-col gap-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <h2 className="text-sm font-bold text-ink-900">{year}년 전체 일정</h2>
@@ -545,6 +513,39 @@ export default function Tax() {
                 </div>
               </details>
             ) : null}
+          </section>
+
+          {/* 3. 챙겨야 할 신고 (4대보험 자동이체 제외) */}
+          <section className="flex flex-col gap-3">
+            <h2 className="text-sm font-bold text-ink-900">
+              챙겨야 할 신고
+              <span className="ml-1.5 font-medium text-ink-500">
+                {upcoming.length ? `${upcoming.length}건` : '없음'}
+              </span>
+            </h2>
+            <p className="text-xs text-ink-500">4대보험(급여일 자동이체)은 제외됩니다.</p>
+            {!upcoming.length ? (
+              <InlineAlert tone="success">
+                <strong>다 챙겼습니다.</strong> 앞으로 60일 안에 마감되는 신고가 없습니다.
+              </InlineAlert>
+            ) : (
+              upcoming.map((d) => (
+                <DeadlineCard
+                  key={d.id}
+                  deadline={d}
+                  state={state}
+                  today={today}
+                  open={openId === d.id}
+                  onToggleOpen={() => setOpenId((v) => (v === d.id ? null : d.id))}
+                  onToggleCheck={toggleCheck}
+                  onToggleDone={toggleDone}
+                  onExport={exportFiling}
+                  paid={paidOf(d)}
+                  onRegisterPay={setPayTarget}
+                  {...insuranceProps(d)}
+                />
+              ))
+            )}
           </section>
 
           <p className="pb-2 text-center text-xs text-ink-400">

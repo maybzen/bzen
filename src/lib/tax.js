@@ -174,9 +174,11 @@ export function checkProgress(state, deadline) {
   return { done, total: docs.length }
 }
 
-/** 임박(앞으로 60일) + 최근 마감(지난 14일, 미완료만). 인수인계 이전분 제외 */
+/** 임박(앞으로 60일) + 최근 마감(지난 14일, 미완료만). 인수인계 이전분 제외.
+    4대보험은 급여일 자동이체라 챙길 목록에서 뺍니다 (전체 일정에서는 확인 가능) */
 export function getUpcoming(deadlines, today = todayISO(), state = null) {
   return deadlines.filter((d) => {
+    if (d.type === 'insurance') return false
     if (isPrior(d.due)) return false
     if (isDone(state, d.id)) return false
     const n = dayDiff(today, d.due)
