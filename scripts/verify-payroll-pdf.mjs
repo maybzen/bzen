@@ -4,7 +4,7 @@
  */
 import { __testables } from '../src/lib/payrollPdf.js'
 
-const { groupRows, blockName, blockPay, docDates, numOf, norm } = __testables
+const { groupRows, blockName, rowName, blockPay, docDates, numOf, norm } = __testables
 
 let failed = 0
 function check(label, actual, expected) {
@@ -52,6 +52,12 @@ for (let i = 0; i < rows.length; i += 1) {
 check('인원·실지급액', out, [['이보람', 4142900], ['김혜린', 2557130]])
 check('이름 공백 처리', norm('박 은 영'), '박은영')
 check('금액 파싱', numOf('2,557,130'), 2557130)
+// 글자 쪼개짐·순서 변형에도 사람 줄 찾기
+check('rowName 기본', rowName(['31', '이보람', '4,742,400']), '이보람')
+check('rowName 쪼개짐', rowName(['31', '이', '보', '람', '4,742,400']), '이보람')
+check('rowName 헤더 제외', rowName(['사원번호', '성 명', '기본급']), '')
+check('rowName 입사일줄 제외', rowName(['2023-02-01', '과장']), '')
+check('rowName 합계 제외', rowName(['합계', '28,039,573']), '')
 
 console.log(failed ? `\n실패 ${failed}건` : '\n전부 통과')
 process.exit(failed ? 1 : 0)

@@ -48,7 +48,7 @@ function groupRows(items) {
   const rows = []
   for (const p of pts) {
     const last = rows[rows.length - 1]
-    if (last && Math.abs(last.y - p.y) <= 3) last.cells.push(p)
+    if (last && Math.abs(last.y - p.y) <= 5) last.cells.push(p)
     else rows.push({ y: p.y, cells: [p] })
   }
   const out = []
@@ -66,15 +66,29 @@ const isSumRow = (cells) => {
   return !joined || /합계|총계|소계/.test(joined)
 }
 
-/* 블록 첫 줄: [사원번호, 성명, ...] */
+/* 헤더·설명문에 쓰이는 단어 (사람 줄에서 나오면 안 됨) */
+const HEADER_WORDS = /기본급|직책수당|국민연금|건강보험|고용보험|장기요양|소득세|차인지급액|지급합계|공제합계|인적사항|사원번호|입사일|퇴사일|직급|부서|급여대장|귀속|지급|영수인|공제/
+
+/* 사람 줄 찾기: 한글 이름 + 사원번호(숫자)가 같은 줄에 있고, 헤더 단어가 없을 때.
+ * (PDF에서 글자가 쪼개져 나와도 줄 전체를 붙여서 찾으므로 안전) */
+function rowName(cells) {
+  if (!Array.isArray(cells)) return ''
+  const joined = norm(cells.join(''))
+  if (!joined || HEADER_WORDS.test(joined)) return ''
+  const hasNo = cells.some((c) => isEmpNo(c))
+  if (!hasNo) return ''
+  const m = joined.match(/[가-힣]{2,5}/)
+  return m ? m[0] : ''
+}
+
+/* 예전 엄격형 (하위 호환) */
 function blockName(cells) {
   if (!Array.isArray(cells) || cells.length < 2) return ''
   const first = String(cells[0] || '').trim()
   const second = String(cells[1] || '').trim()
   if (isEmpNo(first) && isName(second)) return norm(second)
-  // 번호 없이 이름만 있는 변형: 첫 칸이 이름이면 인정
   if (isName(first) && !/\d/.test(first)) return norm(first)
-  return ''
+  return rowName(cells)
 }
 
 /* 블록 마지막 줄의 마지막 숫자 = 차인지급액(실지급액) */
@@ -148,7 +162,14 @@ export async function parsePayrollPdf(buffer, { payDate = '', ym = '' } = {}) {
       out.push([useDate, name, String(pay), attrLabel, ''])
     }
     if (!out.length) {
-      throw new Error('급여 표를 찾지 못했습니다 (사원번호·성명 블록 필요). 세무사무실 양식이 다르면 엑셀(CSV)로 받아 올리세요.')
+      const sample = allRows
+        .map((cells) => (cells || []).join(' | '))
+        .filter((t) => t.trim())
+        .slice(0, 6)
+        .join('\n')
+      throw new Error(
+        `급여 표를 찾지 못했습니다 (사원번호·성명 줄 필요). 읽힌 앞부분:\n${sample || '(빈 페이지)'}`,
+      )
     }
     return {
       parsed: [['일자', '성명', '급여', '적요', '메모'], ...out],
@@ -169,4 +190,4 @@ export async function parsePayrollPdf(buffer, { payDate = '', ym = '' } = {}) {
 }
 
 /* 단위 테스트용 (scripts/verify-payroll-pdf.mjs) */
-export const __testables = { groupRows, blockName, blockPay, docDates, numOf, norm }
+export const __testables = { groupRows, blockName, rowName, blockPay, docDates, numOf, norm }
