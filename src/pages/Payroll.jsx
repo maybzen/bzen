@@ -792,6 +792,29 @@ function SlipModal({ open, onClose, onSaved, entry, ym, initial, reportRows, pro
 
   const submit = async (e) => {
     e.preventDefault()
+    // 명세서 항목을 하나도 안 적었으면 적요·지급일·프로젝트만 고치고 금액은 그대로 둡니다
+    // (빈 명세서 저장으로 장부 0원 덮어쓰기 방지)
+    const hasBreakdown =
+      [...PAY_FIELDS, ...DED_FIELDS].some((f) => Number(form[f.key]) || 0) || initial
+    if (!hasBreakdown) {
+      if (negativeBook) return
+      setSaving(true)
+      setError('')
+      try {
+        await updateEntry(entry.id, {
+          entry_date: book.entry_date || entry.entry_date,
+          description: String(book.description || '').trim() || entry.description,
+          project_id: book.project_id || null,
+        })
+        toast.success('장부 정보만 수정했습니다 (금액 유지). 명세서는 비어 있어 저장하지 않았습니다.')
+        onSaved?.()
+      } catch (err) {
+        setError(err.message)
+      } finally {
+        setSaving(false)
+      }
+      return
+    }
     if (negativeBook && !window.confirm(`장부 급여분이 음수(${formatKRW(bookAmount)}원)입니다. 선결제 취소·정산이 맞으면 확인을 눌러 저장하세요.`)) return
     setSaving(true)
     setError('')
