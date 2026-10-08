@@ -1120,6 +1120,8 @@ function PayrollImportModal({ open, onClose, onDone, ym, defaultProjectId, exist
   const [srcKind, setSrcKind] = useState(null)
   /* PDF에는 일자 열이 없어 지급일을 따로 받습니다 (기본 10일) */
   const [payDate, setPayDate] = useState(`${ym}-10`)
+  /* 수기 적요의 귀속월 (기본 보는 달). 10/10 지급 9월분이면 9월로 고르세요 */
+  const [attrYm, setAttrYm] = useState(ym)
 
   useEffect(() => {
     if (!open) {
@@ -1128,6 +1130,7 @@ function PayrollImportModal({ open, onClose, onDone, ym, defaultProjectId, exist
       setError('')
       setSrcKind(null)
       setPayDate(`${ym}-10`)
+      setAttrYm(ym)
       setManualName('')
       setManualPay('')
     }
@@ -1139,7 +1142,7 @@ function PayrollImportModal({ open, onClose, onDone, ym, defaultProjectId, exist
       existingNames,
       defaultProjectId,
       userId,
-      ym,
+      ym: attrYm || ym,
     })
     if (!out.length && !skip.length) throw new Error('등록할 행을 찾지 못했습니다.')
     setRows(out)
@@ -1157,7 +1160,7 @@ function PayrollImportModal({ open, onClose, onDone, ym, defaultProjectId, exist
   const handlePdfFile = async (file) => {
     const { parsePayrollPdf } = await import('../lib/payrollPdf')
     const buf = await file.arrayBuffer()
-    const { parsed, meta } = await parsePayrollPdf(buf.slice(0), { payDate, ym })
+    const { parsed, meta } = await parsePayrollPdf(buf.slice(0), { payDate, ym: attrYm || ym })
     applyParsed(parsed, 'pdf')
     if (meta.payDate && meta.payDate !== payDate) setPayDate(meta.payDate)
     toast.success(`${file.name} · ${meta.pages}쪽에서 ${meta.people}명을 읽었습니다. 지급일(${meta.payDate || payDate}) 확인 후 등록하세요.`)
@@ -1229,7 +1232,7 @@ function PayrollImportModal({ open, onClose, onDone, ym, defaultProjectId, exist
         entry_date: /^\d{4}-\d{2}-\d{2}$/.test(payDate || '') ? payDate : `${ym}-10`,
         counterparty: name,
         category: '인건비',
-        description: `${Number(String(ym).slice(5))}월 급여`,
+        description: `${Number(String(attrYm || ym).slice(5))}월 급여`,
         supply_amount: pay,
         vat_amount: 0,
         memo: '직접 추가',
@@ -1264,7 +1267,7 @@ function PayrollImportModal({ open, onClose, onDone, ym, defaultProjectId, exist
         entry_date: entryDate,
         counterparty: n,
         category: '인건비',
-        description: `${Number(String(ym).slice(5))}월 급여`,
+        description: `${Number(String(attrYm || ym).slice(5))}월 급여`,
         supply_amount: 0,
         vat_amount: 0,
         memo: '직접 작성',
@@ -1346,17 +1349,24 @@ function PayrollImportModal({ open, onClose, onDone, ym, defaultProjectId, exist
             <Icon name="download" size={16} />
             양식 다운로드
           </button>
-          {srcKind === 'pdf' ? (
-            <label className="flex items-center gap-1.5 text-xs font-semibold text-ink-600">
-              지급일
-              <input
-                type="date"
-                className="input w-auto py-1 text-xs"
-                value={payDate}
-                onChange={(e) => changePayDate(e.target.value)}
-              />
-            </label>
-          ) : null}
+          <label className="flex items-center gap-1.5 text-xs font-semibold text-ink-600">
+            지급일
+            <input
+              type="date"
+              className="input w-auto py-1 text-xs"
+              value={payDate}
+              onChange={(e) => changePayDate(e.target.value)}
+            />
+          </label>
+          <label className="flex items-center gap-1.5 text-xs font-semibold text-ink-600" title="적요 ○월 급여의 기준월. 지급일과 다를 수 있습니다">
+            귀속월
+            <input
+              type="month"
+              className="input w-auto py-1 text-xs"
+              value={attrYm}
+              onChange={(e) => setAttrYm(e.target.value)}
+            />
+          </label>
         </div>
 
         <div className="rounded-lg border border-ink-200 bg-ink-50/60 p-3.5 text-xs leading-relaxed text-ink-600">
