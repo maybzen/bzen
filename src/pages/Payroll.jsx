@@ -1244,13 +1244,56 @@ function PayrollImportModal({ open, onClose, onDone, ym, defaultProjectId, exist
   const removeRow = (row) => {
     setRows((rs) => rs.filter((r) => r !== row))
   }
+  const setRowPay = (row, v) => {
+    const pay = Math.round(Number(String(v ?? '').replace(/[^0-9.-]/g, '')) || 0)
+    setRows((rs) => rs.map((r) => (r === row ? { ...r, supply_amount: pay } : r)))
+  }
+  /* 내부 직원 명단 불러오기 (금액은 직접 입력) */
+  const loadStaffRows = () => {
+    const inRows = new Set((rows || []).map((r) => String(r.counterparty || '').trim()))
+    const entryDate = /^\d{4}-\d{2}-\d{2}$/.test(payDate || '') ? payDate : `${ym}-10`
+    const added = []
+    for (const name of staffNames || []) {
+      const n = String(name || '').trim()
+      if (!n || inRows.has(n) || existingNames.has(n)) continue
+      const kind = kindOf ? kindOf(n) : (staffNames.has(n) ? '내부' : '외부·단기')
+      if (kind !== '내부') continue
+      added.push({
+        entry_type: 'opex',
+        source: 'manual',
+        entry_date: entryDate,
+        counterparty: n,
+        category: '인건비',
+        description: `${Number(String(ym).slice(5))}월 급여`,
+        supply_amount: 0,
+        vat_amount: 0,
+        memo: '직접 작성',
+        project_id: defaultProjectId,
+        created_by: userId,
+      })
+    }
+    if (!added.length) {
+      toast.info('추가할 내부 직원이 없습니다 (이미 있거나 등록됨).')
+      return
+    }
+    setRows((rs) => [...rs, ...added])
+    toast.success(`${added.length}명을 불러왔습니다. 금액을 입력하세요.`)
+  }
 
   const submit = async () => {
+    const valid = (rows || []).filter((r) => Number(r.supply_amount || 0) > 0)
+    if (!valid.length) {
+      setError('등록할 금액이 없습니다. 급여를 입력해 주세요.')
+      return
+    }
+    if (valid.length !== rows.length) {
+      toast.info(`금액 없는 ${rows.length - valid.length}건은 빼고 등록합니다.`)
+    }
     setSaving(true)
     try {
-      await createEntries(rows)
+      await createEntries(valid.map((r) => ({ ...r, vat_amount: 0 })))
       toast.success(
-        `${rows.length}건이 등록되었습니다.${skipped.length ? ` (이미 등록된 ${skipped.length}건 건너뜀)` : ''}`,
+        `${valid.length}건이 등록되었습니다.${skipped.length ? ` (이미 등록된 ${skipped.length}건 건너뜀)` : ''}`,
       )
       onDone?.()
     } catch (err) {
@@ -1362,7 +1405,13 @@ function PayrollImportModal({ open, onClose, onDone, ym, defaultProjectId, exist
                           return <span className="chip bg-amber-50 text-amber-700">단기·외부</span>
                         })()}
                       </td>
-                      <td className="td num py-2 text-xs">{formatKRW(row.supply_amount)}</td>
+                      <td className="td num py-2 text-xs">
+                        <AmountInput
+                          className="input w-28 py-1 text-right text-xs"
+                          value={row.supply_amount ?? 0}
+                          onChange={(e) => setRowPay(row, e.target.value)}
+                        />
+                      </td>
                       <td className="td py-2 text-xs">
                         <button
                           type="button"
@@ -1387,14 +1436,19 @@ function PayrollImportModal({ open, onClose, onDone, ym, defaultProjectId, exist
         ) : (
           <EmptyState
             icon="upload"
-            title="파일을 선택해 주세요"
-            description="엑셀에서 CSV(쉼표로 분리)로 저장한 뒤 올리면 됩니다."
+            title="파일을 선택하거나 직접 작성하세요"
+            description="CSV·PDF를 올리거나, 아래에서 내부 직원을 불러와 금액을 적으면 됩니다."
           />
         )}
 
         <div className="rounded-lg border border-dashed border-ink-300 p-3">
-          <p className="text-xs font-bold text-ink-700">빠진 사람 직접 추가</p>
-          <p className="mt-0.5 text-[11px] text-ink-500">PDF에서 못 읽은 분은 여기서 성명·급여를 적어 추가하세요.</p>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs font-bold text-ink-700">빠진 사람 직접 추가 · 수기 작성</p>
+            <button type="button" className="btn-ghost px-2.5 py-1.5 text-xs" onClick={loadStaffRows}>
+              내부 직원 불러오기
+            </button>
+          </div>
+          <p className="mt-0.5 text-[11px] text-ink-500">파일 없이 명세서 보고 직접 적어도 됩니다. 금액은 미리보기에서 고칠 수 있습니다.</p>
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <input
               className="input w-28 py-1.5 text-xs"
