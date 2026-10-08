@@ -91,14 +91,31 @@ function blockName(cells) {
   return rowName(cells)
 }
 
-/* 블록 마지막 줄의 마지막 숫자 = 차인지급액(실지급액) */
+/* 블록 마지막 줄의 마지막 숫자 = 차인지급액(실지급액).
+ * PDF에 따라 금액이 글자 단위로 쪼개져 나오므로('+4', ',', '142' …),
+ * 오른쪽 끝에서 숫자 조각을 이어붙여 복원합니다.
+ * 단, 옆 칸의 지급합계까지 합쳐지지 않게, 조각(짧거나 쉼표 포함)일 때만 이어갑니다. */
 function blockPay(cells) {
   if (!Array.isArray(cells)) return 0
+  let run = ''
   for (let i = cells.length - 1; i >= 0; i -= 1) {
-    const n = numOf(cells[i])
-    if (n > 0) return n
+    const t = String(cells[i] ?? '')
+    if (!t.trim()) continue
+    const core = t.trim()
+    const m = core.match(/([0-9,]+)$/)
+    if (!m) {
+      if (run) break
+      return 0
+    }
+    if (!run) {
+      run = m[1]
+      continue
+    }
+    // 이미 숫자를 모으는 중: 왼쪽 칸이 온전한 큰 숫자면 지급합계이므로 중단
+    if (!(m[1] === core && /^[0-9,]{1,3}$/.test(core) && (core.includes(',') || run.includes(',')))) break
+    run = m[1] + run
   }
-  return 0
+  return numOf(run)
 }
 
 function docDates(allRows) {
