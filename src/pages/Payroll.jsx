@@ -112,13 +112,13 @@ const DED_FIELDS = [
   { key: 'ded_income', label: '소득세' },
   { key: 'ded_local_income', label: '지방소득세' },
 ]
-/* 정산액 (연말정산·보험 정산. 공제에 합산됩니다) */
+/* 추가정산액 (연말정산·보험 정산. 공제 목록에 함께 표시, 합산됩니다) */
 const SETTLE_FIELDS = [
-  { key: 'ded_income_settle', label: '소득세 정산', hint: '연말정산' },
-  { key: 'ded_health_settle', label: '건강보험 정산' },
-  { key: 'ded_care_settle', label: '장기요양 정산' },
-  { key: 'ded_pension_settle', label: '국민연금 정산' },
-  { key: 'ded_employment_settle', label: '고용보험 정산' },
+  { key: 'ded_pension_settle', label: '국민연금 추가정산액' },
+  { key: 'ded_health_settle', label: '건강보험 추가정산액' },
+  { key: 'ded_employment_settle', label: '고용보험 추가정산액' },
+  { key: 'ded_care_settle', label: '장기요양 추가정산액' },
+  { key: 'ded_income_settle', label: '소득세 추가정산액', hint: '연말정산' },
 ]
 const slipTotal = (slip, fields) => fields.reduce((a, f) => a + (Number(slip?.[f.key]) || 0), 0)
 
@@ -787,7 +787,6 @@ function SlipModal({ open, onClose, onSaved, entry, ym, initial, reportRows, pro
 
   const payTotal = slipTotal(form, PAY_FIELDS)
   const dedTotal = slipTotal(form, DED_FIELDS) + slipTotal(form, SETTLE_FIELDS)
-  const settleTotal = slipTotal(form, SETTLE_FIELDS)
   const net = payTotal - dedTotal
   const expensePay = Number(form.expense_pay) || 0
   // 우리 회사는 지출결의를 급여에 포함해서 줍니다. 지결은 별도 행으로 잡히므로
@@ -1064,11 +1063,14 @@ function SlipModal({ open, onClose, onSaved, entry, ym, initial, reportRows, pro
             </div>
           </div>
           <div className="rounded-lg border border-ink-200 p-3.5">
-            <p className="mb-2 text-xs font-bold text-ink-700">공제항목 (합계 {formatKRW(dedTotal - settleTotal)}원)</p>
+            <p className="mb-2 text-xs font-bold text-ink-700">공제항목 (합계 {formatKRW(dedTotal)}원)</p>
             <div className="flex flex-col gap-2">
-              {DED_FIELDS.map((f) => (
+              {[...DED_FIELDS, ...SETTLE_FIELDS].map((f) => (
                 <label key={f.key} className="flex items-center justify-between gap-2 text-xs">
-                  <span className="shrink-0 font-semibold text-ink-600">{f.label}</span>
+                  <span className="shrink-0 font-semibold text-ink-600">
+                    {f.label}
+                    {f.hint ? <span className="ml-1 font-normal text-ink-400">{f.hint}</span> : null}
+                  </span>
                   <AmountInput
                     className="input w-32 py-1 text-right text-xs"
                     value={form[f.key] ?? 0}
@@ -1077,25 +1079,6 @@ function SlipModal({ open, onClose, onSaved, entry, ym, initial, reportRows, pro
                 </label>
               ))}
             </div>
-          </div>
-        </div>
-
-        <div className="rounded-lg border border-ink-200 p-3.5">
-          <p className="mb-2 text-xs font-bold text-ink-700">정산액 (합계 {formatKRW(settleTotal)}원 · 공제에 합산)</p>
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            {SETTLE_FIELDS.map((f) => (
-              <label key={f.key} className="flex items-center justify-between gap-2 text-xs">
-                <span className="shrink-0 font-semibold text-ink-600">
-                  {f.label}
-                  {f.hint ? <span className="ml-1 font-normal text-ink-400">{f.hint}</span> : null}
-                </span>
-                <AmountInput
-                  className="input w-32 py-1 text-right text-xs"
-                  value={form[f.key] ?? 0}
-                  onChange={setNum(f.key)}
-                />
-              </label>
-            ))}
           </div>
         </div>
 
