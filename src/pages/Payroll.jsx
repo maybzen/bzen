@@ -805,8 +805,7 @@ function SlipModal({ open, onClose, onSaved, entry, ym, initial, reportRows, pro
   const projectNameOf = (id) => (projects || []).find((p) => p.id === id)?.name || ''
   // 음수 저장(선결제 취소·정산)은 허용하되 확인을 거칩니다. 귀속월 이동도 경고합니다.
   const negativeBook = bookAmount < 0
-  const bookYm = String(book.entry_date || entry?.entry_date || '').slice(0, 7)
-  const movedYm = bookYm && bookYm !== ym
+  // 음수 저장(선결제 취소·정산)은 허용하되 확인을 거칩니다.
 
   const submit = async (e) => {
     e.preventDefault()
@@ -1080,7 +1079,7 @@ function SlipModal({ open, onClose, onSaved, entry, ym, initial, reportRows, pro
           <div className="rounded-lg border border-ink-200 p-3.5">
             <p className="mb-2 text-xs font-bold text-ink-700">공제항목 (합계 {formatKRW(dedTotal)}원)</p>
             <div className="flex flex-col gap-2">
-              {[...DED_FIELDS, ...SETTLE_FIELDS].map((f) => (
+              {DED_FIELDS.map((f) => (
                 <label key={f.key} className="flex items-center justify-between gap-2 text-xs">
                   <span className="shrink-0 font-semibold text-ink-600">
                     {f.label}
@@ -1143,11 +1142,6 @@ function SlipModal({ open, onClose, onSaved, entry, ym, initial, reportRows, pro
           {negativeBook ? (
             <span className="mt-1 block font-bold text-loss">
               음수입니다 — 선결제 취소·정산이 맞는지 확인하고 저장하세요.
-            </span>
-          ) : null}
-          {movedYm ? (
-            <span className="mt-1 block font-bold text-amber-700">
-              지급일이 {bookYm}로 바뀌어 귀속월({ym})과 다릅니다. 의도한 게 맞는지 확인하세요.
             </span>
           ) : null}
         </div>
