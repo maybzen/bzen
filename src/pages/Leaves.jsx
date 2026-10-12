@@ -829,6 +829,8 @@ function InfoBox({ label, value }) {
 function LeaveFormModal({ open, onClose, onSaved, personOptions, userId, isAdmin, defaultPerson, lockPerson, rows, initial }) {
   const toast = useToast()
   const [saving, setSaving] = useState(false)
+  /* 자동계산기가 마지막으로 넣은 문구 (다시 계산하면 그 부분만 교체) */
+  const autoMemoRef = useRef('')
   const [form, setForm] = useState({
     entry_date: todayKST(),
     end_date: todayKST(),
@@ -843,6 +845,7 @@ function LeaveFormModal({ open, onClose, onSaved, personOptions, userId, isAdmin
 
   useEffect(() => {
     if (!open) return
+    autoMemoRef.current = ''
     if (initial?.id) {
       setForm({
         entry_date: initial.entry_date || todayKST(),
@@ -884,7 +887,8 @@ function LeaveFormModal({ open, onClose, onSaved, personOptions, userId, isAdmin
   const projected = currentRemain + (form.direction === '발생' ? Number(form.days || 0) : -Number(form.days || 0))
 
   /* 주말출근 → 대휴 자동 계산 (출근~퇴근 시간으로 계산, 4시간 이상 1일 · 미만 0.5일).
-     퇴근이 출근보다 빠르면 익일 새벽 퇴근(밤샘)으로 봅니다 */
+     퇴근이 출근보다 빠르면 익일 새벽 퇴근(밤샘)으로 봅니다.
+     사유 칸에 직접 쓴 글은 유지하고 계산 결과만 덧붙입니다 */
   const applyWeekend = () => {
     const toMin = (t) => {
       const m = /^(\d{1,2}):(\d{2})$/.exec(String(t || ''))
@@ -905,13 +909,22 @@ function LeaveFormModal({ open, onClose, onSaved, personOptions, userId, isAdmin
       return
     }
     const h = Math.round((mins / 60) * 10) / 10
-    setForm((f) => ({
-      ...f,
-      leave_type: '대휴',
-      direction: '발생',
-      days: String(h >= 4 ? 1 : 0.5),
-      memo: `주말출근 ${form.weekendStart}~${overnight ? '익일' : ''}${form.weekendEnd} (${h}시간)`,
-    }))
+    const autoMemo = `주말출근 ${form.weekendStart}~${overnight ? '익일' : ''}${form.weekendEnd} (${h}시간)`
+    setForm((f) => {
+      const prev = autoMemoRef.current
+      let memo = f.memo || ''
+      if (!memo.trim()) memo = autoMemo
+      else if (prev && memo.includes(prev)) memo = memo.replace(prev, autoMemo)
+      else if (!memo.includes(autoMemo)) memo = `${memo} · ${autoMemo}`
+      autoMemoRef.current = autoMemo
+      return {
+        ...f,
+        leave_type: '대휴',
+        direction: '발생',
+        days: String(h >= 4 ? 1 : 0.5),
+        memo,
+      }
+    })
     toast.success(h >= 4 ? '대휴 1일이 계산되었습니다.' : '대휴 0.5일이 계산되었습니다.')
   }
 
@@ -1078,7 +1091,7 @@ function LeaveFormModal({ open, onClose, onSaved, personOptions, userId, isAdmin
             />
           </Field>
         </div>
-        <Field label="사유">
+        <Field label="사유" hint="직접 적는 칸입니다. 아래 계산기와 별개로 유지됩니다">
           <input
             className="input"
             placeholder="예: 하계휴가, 주말출근 09:00~14:00"
@@ -1101,9 +1114,12 @@ function LeaveFormModal({ open, onClose, onSaved, personOptions, userId, isAdmin
           </div>
         ) : null}
 
-        <div className="rounded-lg border border-ink-200 bg-ink-50/60 p-3.5">
-          <p className="text-xs font-bold text-ink-700">주말출근 대휴 계산</p>
-          <p className="mt-0.5 text-[11px] text-ink-500">출근~퇴근 입력 → 4시간 이상 1일 · 미만 0.5일 · 익일 새벽 퇴근(밤샘)도 됩니다</p>
+        <div className="rounded-lg border-2 border-dashed border-brand-200 bg-brand-50/40 p-3.5">
+          <p className="text-xs font-bold text-brand-800">주말출근 자동계산기</p>
+          <p className="mt-0.5 text-[11px] text-ink-500">
+            시간 입력 후 자동 입력 → 위 구분·일수에 반영되고, 사유 칸 뒤에 계산 결과가 덧붙습니다.
+            직접 쓴 사유는 지워지지 않습니다. 4시간 이상 1일 · 미만 0.5일 · 익일 새벽 퇴근(밤샘)도 됩니다
+          </p>
           <div className="mt-2 flex items-center gap-2">
             <input
               type="time"
