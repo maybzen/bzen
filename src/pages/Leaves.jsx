@@ -829,6 +829,8 @@ function InfoBox({ label, value }) {
 function LeaveFormModal({ open, onClose, onSaved, personOptions, userId, isAdmin, defaultPerson, lockPerson, rows, initial }) {
   const toast = useToast()
   const [saving, setSaving] = useState(false)
+  /* 관리자도 기본은 승인대기로 올립니다. 확정분만 체크하면 바로 승인 */
+  const [approveNow, setApproveNow] = useState(false)
   /* 자동계산기가 마지막으로 넣은 문구 (다시 계산하면 그 부분만 교체) */
   const autoMemoRef = useRef('')
   const [form, setForm] = useState({
@@ -846,6 +848,7 @@ function LeaveFormModal({ open, onClose, onSaved, personOptions, userId, isAdmin
   useEffect(() => {
     if (!open) return
     autoMemoRef.current = ''
+    setApproveNow(false)
     if (initial?.id) {
       setForm({
         entry_date: initial.entry_date || todayKST(),
@@ -955,6 +958,7 @@ function LeaveFormModal({ open, onClose, onSaved, personOptions, userId, isAdmin
         onSaved()
         return
       }
+      const status = isAdmin && approveNow ? '승인' : '요청'
       await createLeaveEntry(
         {
           entry_date: form.entry_date,
@@ -964,11 +968,11 @@ function LeaveFormModal({ open, onClose, onSaved, personOptions, userId, isAdmin
           direction: form.direction,
           days,
           memo: form.memo.trim(),
-          status: isAdmin ? '승인' : '요청',
+          status,
         },
         userId,
       )
-      toast.success(isAdmin ? '등록되었습니다.' : '승인 요청되었습니다. 대표 승인 후 반영됩니다.')
+      toast.success(status === '승인' ? '등록되었습니다.' : '승인 요청되었습니다. 대표 승인 후 반영됩니다.')
       onSaved()
     } catch (e) {
       toast.error(e.message)
@@ -985,15 +989,27 @@ function LeaveFormModal({ open, onClose, onSaved, personOptions, userId, isAdmin
       subtitle={
         initial?.id
           ? '결재 상태는 그대로 두고 내용만 고칩니다.'
-          : isAdmin ? '발생과 사용을 기록하면 잔여가 자동 계산됩니다.' : '등록하면 대표 승인 후 잔여에 반영됩니다.'
+          : '등록하면 승인대기로 올라갑니다. 확정분은 아래 바로 승인을 체크하세요.'
       }
       footer={
         <>
+          {isAdmin && !initial?.id ? (
+            <label className="mr-auto flex cursor-pointer items-center gap-1.5 text-xs font-semibold text-ink-600">
+              <input
+                type="checkbox"
+                className="h-3.5 w-3.5 accent-brand-600"
+                checked={approveNow}
+                onChange={(e) => setApproveNow(e.target.checked)}
+                disabled={saving}
+              />
+              바로 승인
+            </label>
+          ) : null}
           <button type="button" className="btn-ghost" onClick={onClose} disabled={saving}>
             취소
           </button>
           <button type="button" className="btn-primary" onClick={submit} disabled={saving}>
-            {saving ? '저장 중…' : initial?.id ? '저장' : isAdmin ? '등록' : '승인 요청'}
+            {saving ? '저장 중…' : initial?.id ? '저장' : isAdmin && approveNow ? '등록' : '승인 요청'}
           </button>
         </>
       }
