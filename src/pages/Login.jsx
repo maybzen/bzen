@@ -7,6 +7,14 @@ import { useAuth } from '../auth/AuthContext'
 import { callAdminFn, getSetupStatus } from '../lib/api'
 import { APP_NAME, COMPANY_EN, DEFAULT_COMPANY } from '../lib/constants'
 
+/** 이메일이 없는 임시계정용 내부 도메인. 아이디만 치면 이 도메일을 붙여 로그인합니다 */
+export const STAFF_ID_DOMAIN = 'bzen.local'
+
+export function resolveLoginId(input) {
+  const v = String(input || '').trim().toLowerCase()
+  return v.includes('@') ? v : `${v}@${STAFF_ID_DOMAIN}`
+}
+
 export default function Login() {
   const { signIn, signUp, user } = useAuth()
   const toast = useToast()
@@ -51,7 +59,8 @@ export default function Login() {
     setError('')
     setBusy(true)
     try {
-      await signIn(email, password)
+      /* 이메일이 아니어도 됩니다 (임시계정은 아이디만 입력 → 내부 도메인 자동 연결) */
+      await signIn(resolveLoginId(email), password)
       navigate('/dashboard', { replace: true })
     } catch (err) {
       setError(err.message)
@@ -64,6 +73,8 @@ export default function Login() {
     e.preventDefault()
     setError('')
     if (!fullName.trim()) return setError('이름을 입력해 주세요.')
+    /* 직접 가입은 실제 이메일이 필요합니다 (아이디 로그인은 관리자가 만든 임시계정만) */
+    if (!String(email || '').includes('@')) return setError('가입은 이메일 주소로 해주세요.')
     if (password.length < 6) return setError('비밀번호는 6자 이상이어야 합니다.')
     if (password !== confirm) return setError('비밀번호가 서로 다릅니다.')
 
@@ -94,6 +105,7 @@ export default function Login() {
   const handleSetup = async (e) => {
     e.preventDefault()
     setError('')
+    if (!String(email || '').includes('@')) return setError('관리자 계정은 이메일 주소로 만들어주세요.')
     if (password.length < 6) return setError('비밀번호는 6자 이상이어야 합니다.')
     if (password !== confirm) return setError('비밀번호가 서로 다릅니다.')
     if (!fullName.trim()) return setError('이름을 입력해 주세요.')
@@ -229,13 +241,13 @@ export default function Login() {
                   </Field>
                 ) : null}
 
-                <Field label="이메일" required>
+                <Field label="아이디 또는 이메일" required>
                   <input
-                    type="email"
+                    type="text"
                     className="input"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="name@company.co.kr"
+                    placeholder="shine 또는 name@company.co.kr"
                     autoComplete="username"
                     required
                   />

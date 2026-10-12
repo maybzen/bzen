@@ -203,6 +203,9 @@ export default function Members() {
     if (nicknameSupported) {
       base.nickname = String(patch.nickname ?? p.nickname ?? '').trim()
     }
+    if (positionSupported) {
+      base.position = String(patch.position ?? p.position ?? '').trim()
+    }
     if (cardCodeSupported) {
       base.card_code = String(patch.card_code ?? p.card_code ?? '').trim().toUpperCase()
     }
@@ -225,6 +228,7 @@ export default function Members() {
           delete fallback.employment_type
           delete fallback.nickname
           delete fallback.card_code
+          delete fallback.position
           const saved = await updateProfile(p.id, fallback)
           setProfiles((rows) => rows.map((r) => (r.id === p.id ? { ...r, ...saved } : r)))
           cancelRow(p.id)
@@ -339,6 +343,7 @@ export default function Members() {
   const celebrateSupported = useMemo(() => profiles.some((p) => p && 'birth_celebrate' in p), [profiles])
   const externalSupported = useMemo(() => profiles.some((p) => p && 'employment_type' in p), [profiles])
   const nicknameSupported = useMemo(() => profiles.some((p) => p && 'nickname' in p), [profiles])
+  const positionSupported = useMemo(() => profiles.some((p) => p && 'position' in p), [profiles])
   const cardCodeSupported = useMemo(() => profiles.some((p) => p && 'card_code' in p), [profiles])
 
   const totalPay = useMemo(() => Object.values(payByName).reduce((a, v) => a + v, 0), [payByName])
@@ -447,6 +452,7 @@ export default function Members() {
                       <th className="th">구분</th>
                       <th className="th">닉네임 / 코드</th>
                       <th className="th">부서</th>
+                      <th className="th">직함</th>
                       <th className="th">연락처</th>
                       <th className="th">입사일</th>
                       <th className="th">근속</th>
@@ -542,6 +548,18 @@ export default function Members() {
                               onChange={(e) => setCell(p.id, { department: e.target.value })}
                               placeholder="부서"
                             />
+                          </td>
+                          <td className="td">
+                            {p._external ? (
+                              <span className="text-ink-300">—</span>
+                            ) : (
+                              <input
+                                className="input w-20 py-1 text-xs"
+                                value={work.position || ''}
+                                onChange={(e) => setCell(p.id, { position: e.target.value })}
+                                placeholder="직함"
+                              />
+                            )}
                           </td>
                           <td className="td">
                             <input

@@ -14,6 +14,9 @@ import { aliasRoot } from '../lib/aliases'
 
 const MAX_FILE = 20 * 1024 * 1024
 
+/** 운영비 등록에서 고를 수 있는 법인카드 (뒤 4자리). 분실·교체된 카드는 제외합니다 */
+export const ENTRY_CARDS = ['2381', '3842']
+
 function toNumber(value) {
   const n = Number(String(value ?? '').replace(/[^0-9.-]/g, ''))
   return Number.isFinite(n) ? Math.round(n) : 0
@@ -87,8 +90,12 @@ export default function EntryFormModal({
   const [error, setError] = useState('')
   /* 경고를 확인하고 "그래도 저장"을 누른 뒤에야 실제 저장이 진행됩니다 */
   const [forceSave, setForceSave] = useState(false)
-  /* 자금관리에 등록된 법인카드 목록 (결제수단=카드 선택 시) */
+  /* 자금관리에 등록된 법인카드 목록 (결제수단=카드 선택 시, 등록용 2종만) */
   const [fundCards, setFundCards] = useState([])
+  /* 운영비 신규 등록에서 개인지결로 전환 (지출결의로 저장) */
+  const [asReport, setAsReport] = useState(false)
+  const canToggleReport = entryType === 'opex' && source === 'manual' && !initial?.id
+  const formIsReport = isReport || asReport
   /* 중복·표기 대조용 장부 전체 (관리자만 조회 가능) */
   const ledger = useLedgerIndex({ enabled: open })
 
@@ -150,10 +157,15 @@ export default function EntryFormModal({
   useEffect(() => {
     if (!open) return
     listFundRows('fund_cards')
-      .then((rows) => setFundCards((rows || []).filter((c) => c.is_active !== false)))
+      .then((rows) =>
+        setFundCards(
+          (rows || []).filter((c) => c.is_active !== false && ENTRY_CARDS.includes(cardLast4(c.number))),
+        ),
+      )
       .catch(() => setFundCards([]))
     setError('')
     setForceSave(false)
+    setAsReport(false)
     setFiles([])
     setRemoved([])
     setTotalDraft('')
@@ -279,7 +291,7 @@ export default function EntryFormModal({
 
     if (!form.entry_date) return setError('일자를 선택해 주세요.')
     if (supply === 0 && vat === 0) return setError('금액을 입력해 주세요. (카드 취소건은 음수로 입력)')
-    if (isReport && !form.requester_id && !userId) return setError('지출자를 선택해 주세요.')
+    if (formIsReport && !form.requester_id && !userId) return setError('지출자를 선택해 주세요.')
     // 장부 대조 데이터가 아직 없으면 잠깐 기다렸다가 검사합니다 (중복 경고를 놓치지 않기 위해).
     // 8초 안에 안 오면 입력값 자체의 문제(깨진 텍스트·부가세·비목)만으로 판단하고 진행합니다.
     // 직원은 경고 없이 바로 저장합니다.
@@ -313,7 +325,7 @@ export default function EntryFormModal({
     try {
       const payload = {
         entry_type: entryType,
-        source,
+        source: asReport ? 'expense_report' : source,
         doc_no: form.doc_no.trim(),
         entry_date: form.entry_date,
         project_id: form.project_id || null,
@@ -324,10 +336,10 @@ export default function EntryFormModal({
         vat_amount: vat,
         payment_method: form.payment_method,
         memo: withMemoCard(
-          withMemoUser(form.memo, form.card_user),
-          form.payment_method === '카드' ? form.card_label : '',
+          withMemoUser(form.memo, formIsReport ? '' : form.card_user),
+          form.payment_method === '카드' && !formIsReport ? form.card_label : '',
         ),
-        requester_id: isReport ? form.requester_id || userId : form.requester_id || null,
+        requester_id: formIsReport ? form.requester_id || userId : form.requester_id || null,
         // 등록자(작성자) 수정은 기존 내역만. 관리자가 바꿀 수 있고, 입사 전 자료 정정용입니다.
         // 신규 등록은 RLS가 created_by = 로그인 계정으로 강제하므로 키를 보내지 않습니다.
         ...(isAdmin && initial?.id ? { created_by: form.author_id || null } : {}),
@@ -357,7 +369,7 @@ export default function EntryFormModal({
         }
       }
 
-      toast.success(initial?.id ? '수정되었습니다.' : `${isReport ? '지출결의' : meta.label}이(가) 등록되었습니다.`)
+      toast.success(initial?.id ? '수정되었습니다.' : `${formIsReport ? '지출결의' : meta.label}이(가) 등록되었습니다.`)
       setForceSave(false)
       onSaved?.(record, uploaded)
       onClose?.()
@@ -369,8 +381,8 @@ export default function EntryFormModal({
   }
 
   const title = initial?.id
-    ? `${isReport ? '지출결의' : meta.label} 수정`
-    : isReport
+    ? `${formIsReport ? '지출결의' : meta.label} 수정`
+    : formIsReport
       ? '지출결의 등록'
       : `${meta.label} 등록`
 
@@ -380,7 +392,7 @@ export default function EntryFormModal({
       onClose={saving ? undefined : onClose}
       title={title}
       subtitle={
-        isReport
+        formIsReport
           ? '사용 내역과 증빙을 기록합니다.'
           : `${meta.label} 건을 장부에 기록합니다.`
       }
@@ -440,12 +452,45 @@ export default function EntryFormModal({
           </div>
         ) : null}
 
+        {canToggleReport ? (
+          <div className="flex flex-col gap-1.5 rounded-lg border border-ink-200 bg-ink-50/60 px-3.5 py-3">
+            <div className="inline-flex gap-1 rounded-lg bg-white p-1 shadow-sm">
+              <button
+                type="button"
+                onClick={() => setAsReport(false)}
+                className={`flex-1 rounded-md px-3 py-1.5 text-xs font-bold transition ${
+                  !asReport ? 'bg-brand-600 text-white' : 'text-ink-500 hover:text-ink-800'
+                }`}
+              >
+                운영비로 등록
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setFields((f) => ({ ...f, card_user: '', card_label: '' }))
+                  setAsReport(true)
+                }}
+                className={`flex-1 rounded-md px-3 py-1.5 text-xs font-bold transition ${
+                  asReport ? 'bg-brand-600 text-white' : 'text-ink-500 hover:text-ink-800'
+                }`}
+              >
+                개인지결로 등록
+              </button>
+            </div>
+            <p className="text-[11px] text-ink-500">
+              {asReport
+                ? '지출결의로 저장됩니다 (지출자 기준 집계). 카드 이용자 입력은 숨겨집니다.'
+                : '회사 비용은 운영비, 개인이 먼저 쓴 돈은 개인지결로 등록하세요.'}
+            </p>
+          </div>
+        ) : null}
+
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Field label="일자" required>
             <input type="date" className="input" value={form.entry_date} onChange={set('entry_date')} required />
           </Field>
 
-          {isReport ? (
+          {formIsReport ? (
             <Field label="프로젝트" hint="프로젝트별 손익에 반영됩니다.">
               <select className="input" value={form.project_id} onChange={set('project_id')}>
                 <option value="">선택 없음</option>
@@ -633,7 +678,7 @@ export default function EntryFormModal({
         </div>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <Field label={isReport ? '지출자' : '작성자'} hint={isReport ? '지출결의를 올린 사람입니다.' : undefined}>
+          <Field label={formIsReport ? '지출자' : '작성자'} hint={formIsReport ? '지출결의를 올린 사람입니다.' : undefined}>
             {isAdmin ? (
               <select
                 className="input"
@@ -672,7 +717,7 @@ export default function EntryFormModal({
             </Field>
           ) : null}
 
-          <Field label={isReport ? '지출수단' : '결제수단'}>
+          <Field label={formIsReport ? '지출수단' : '결제수단'}>
             <select className="input" value={form.payment_method} onChange={set('payment_method')}>
               <option value="">선택 안 함</option>
               {PAYMENT_METHODS.map((m) => (
@@ -683,7 +728,7 @@ export default function EntryFormModal({
             </select>
           </Field>
 
-          {form.payment_method === '카드' ? (
+          {form.payment_method === '카드' && !formIsReport ? (
             <Field
               label="사용 카드"
               hint="나중에 같은 내역을 카드 파일로 올리면 중복으로 자동 제외됩니다"
@@ -707,7 +752,7 @@ export default function EntryFormModal({
             </Field>
           ) : null}
 
-          {entryType === 'opex' || entryType === 'purchase' ? (
+          {(entryType === 'opex' || entryType === 'purchase') && !formIsReport ? (
             <Field label="카드 이용자" hint="여러 명이면 체크, 목록에 없으면 기타에 직접 입력">
               <CardUserSelect
                 value={form.card_user}

@@ -10,7 +10,7 @@ import { AttachmentModal } from '../components/Attachments'
 import { useToast } from '../components/Toast'
 import { ConfirmDialog, EmptyState, InlineAlert, LoadingBlock, SegmentedControl, StatCard } from '../components/ui'
 import { useAuth } from '../auth/AuthContext'
-import { isStaffVisible, staffIdsFromProfiles } from '../lib/permissions'
+import { isStaffVisible, staffIdsFromProfiles, useFinanceView } from '../lib/permissions'
 import { ENTRY_META, PROJECT_STATUS } from '../lib/constants'
 import { contractSplit, formatDateHuman, formatKRW, formatPercent, monthLabel, normalizeVendorName } from '../lib/format'
 import { groupByMonth, summarize } from '../lib/summary'
@@ -26,8 +26,10 @@ const TABS = [
 export default function ProjectDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { isAdmin, user } = useAuth()
+  const { isAdmin, user, profile } = useAuth()
   const toast = useToast()
+  /* 프로젝트 금액 열람: 관리자 + 설정에서 허용한 직원 */
+  const canSeeMoney = useFinanceView(profile, isAdmin)
 
   const [loading, setLoading] = useState(true)
   const [project, setProject] = useState(null)
@@ -338,7 +340,7 @@ export default function ProjectDetail() {
       </div>
 
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-        {isAdmin ? (
+        {canSeeMoney ? (
           <>
             <StatCard label="순매출액" value={stats.revenue} tone="sale" icon="trending-up" hint="공급가액 기준" />
             <StatCard label="매출원가" value={stats.cogs} tone="purchase" icon="cart" hint="매입" />
@@ -365,7 +367,7 @@ export default function ProjectDetail() {
         )}
       </div>
 
-      {isAdmin && csplit.total > 0 ? (
+      {canSeeMoney && csplit.total > 0 ? (
         <div className="card p-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="text-sm font-bold text-ink-800">계약 대비 순매출</p>
@@ -388,7 +390,7 @@ export default function ProjectDetail() {
         </div>
       ) : null}
 
-      {isAdmin && monthly.length ? (
+      {canSeeMoney && monthly.length ? (
         <section className="card overflow-hidden">
           <header className="border-b border-ink-200 px-4 py-3.5">
             <h2 className="text-sm font-bold text-ink-900">월별 손익</h2>

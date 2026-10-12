@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex,nofollow">
+<title>비젠 인트라넷 — 연습용 빈 깡통 홈페이지 (관리자·직원 매뉴얼 겸용)</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--brand:#2148e6;--green:#0f9d58;--ink:#0d1526;--line:#e2e6ed}
+body{font-family:'Malgun Gothic','Apple SD Gothic Neo',Pretendard,sans-serif;background:#f1f4f8;color:#1e2433;font-size:14.5px;line-height:1.7}
+.app{display:flex;min-height:100vh}
+aside{width:264px;background:#0d1526;color:#c3cad6;position:fixed;inset:0 auto 0 0;display:flex;flex-direction:column;z-index:20}
+.brand{padding:18px;display:flex;gap:10px;align-items:center;border-bottom:1px solid rgba(255,255,255,.08)}
+.brand .logo{width:38px;height:38px;border-radius:11px;background:linear-gradient(135deg,#3663f6,#1a309e);color:#fff;font-weight:900;display:flex;align-items:center;justify-content:center;font-size:14px}
+.brand b{color:#fff;font-size:13px;display:block}.brand small{font-size:10.5px;color:#96a0b0}
+.nav{flex:1;overflow-y:auto;padding:10px}
+.nav .g{font-size:10px;font-weight:800;letter-spacing:.12em;color:#6b7688;padding:12px 10px 5px}
+.nav button{display:flex;width:100%;gap:10px;align-items:center;background:none;border:0;color:#c3cad6;font-size:13.5px;font-weight:600;padding:9px 11px;border-radius:9px;cursor:pointer;text-align:left}
+.nav button:hover{background:rgba(255,255,255,.06);color:#fff}
+.nav button.on{background:#2148e6;color:#fff}
+.nav button.hide{display:none}
+.nav .lock{margin-left:auto;font-size:10px;background:rgba(255,255,255,.12);border-radius:99px;padding:1px 8px}
+.side-foot{padding:14px;border-top:1px solid rgba(255,255,255,.1);font-size:11px;color:#96a0b0}
+main{flex:1;margin-left:264px;min-width:0}
+header.top{position:sticky;top:0;z-index:10;background:rgba(255,255,255,.9);backdrop-filter:blur(6px);border-bottom:1px solid var(--line);padding:10px 22px;display:flex;gap:10px;align-items:center}
+.role{display:flex;background:#eef1f7;border-radius:99px;padding:3px}
+.role button{border:0;background:none;padding:6px 16px;border-radius:99px;font-weight:800;font-size:13px;cursor:pointer;color:#555}
+.role button.on{background:#0d1526;color:#fff}
+.role button.on.staff{background:#0f9d58}
+.wrap{max-width:1080px;margin:0 auto;padding:26px 22px 90px}
+.cover{background:linear-gradient(135deg,#101736,#1d3faa 65%,#0f9d58 130%);color:#fff;border-radius:16px;padding:34px 30px}
+.cover .tag{display:inline-block;border:1px solid rgba(255,255,255,.4);border-radius:99px;padding:3px 13px;font-size:12px;font-weight:800;background:rgba(255,255,255,.12)}
+.cover h1{font-size:26px;margin:12px 0 6px}.cover p{opacity:.88;font-size:13.5px}
+.badges{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.badges span{background:rgba(255,255,255,.15);border-radius:8px;padding:4px 11px;font-size:12px;font-weight:700}
+.sec{background:#fff;border:1px solid var(--line);border-radius:14px;padding:24px;margin:18px 0;box-shadow:0 1px 2px rgba(13,21,38,.05)}
+.sec h2{font-size:19px;border-left:6px solid var(--brand);padding-left:11px;margin-bottom:4px}
+.sec.green h2{border-color:var(--green)}
+.sec .sub{color:#6b7688;font-size:12.5px;margin:2px 0 12px}
+h3{font-size:14.5px;color:#1a37c4;margin:16px 0 6px}.green h3{color:#0b6b3d}
+ol.step,ul.step{margin:6px 0 6px 20px}ol.step li,ul.step li{margin:5px 0}
+table{width:100%;border-collapse:collapse;font-size:13px;margin:10px 0}
+th,td{border:1px solid var(--line);padding:7px 9px;text-align:left}th{background:#f4f6fb}
+.warn{background:#fff8e6;border:1px solid #f0c94a;border-radius:10px;padding:11px 13px;font-size:13px;margin:10px 0}
+.tip{background:#eef4ff;border:1px solid #b9cdf7;border-radius:10px;padding:11px 13px;font-size:13px;margin:10px 0}
+.mock{border:1px solid #d5dbe8;border-radius:12px;overflow:hidden;margin:12px 0}
+.mock .bar{background:#101736;color:#fff;font-size:12px;padding:8px 13px;font-weight:700}
+.mock .body{padding:14px;font-size:12.5px;background:#fff}
+.btn{display:inline-block;border-radius:8px;padding:5px 12px;font-size:12px;font-weight:800;margin:2px;background:#eef1f7;color:#333;border:1px solid var(--line)}
+.btn.pri{background:#2148e6;color:#fff;border-color:#2148e6}
+.btn.grn{background:#0f9d58;color:#fff;border-color:#0f9d58}
+.real{margin:12px 0;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#fff}
+.real figcaption{font-size:12px;font-weight:800;background:#0d1526;color:#fff;padding:7px 13px}
+.real img{width:100%;display:block}
+.real .note{font-size:11.5px;color:#6b7688;padding:8px 13px;border-top:1px solid var(--line)}
+.empty{border:1px dashed #b9cdf7;border-radius:10px;background:#f8faff;padding:16px;text-align:center;color:#6b7688;font-size:12.5px;margin:10px 0}
+.kbd{display:inline-block;background:#0d1526;color:#fff;border-radius:6px;padding:1px 8px;font-size:11.5px;font-weight:700}
+.perm{font-size:11px;font-weight:800;border-radius:99px;padding:2px 10px;background:#eef4ff;color:#1a37c4}
+.perm.admin{background:#101736;color:#fff}.perm.staff{background:#e7f7ee;color:#0b6b3d}
+.page{display:none}.page.on{display:block;animation:fade .2s ease}
+@keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1}}
+.toc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin:12px 0}
+.toc-grid button{border:1px solid var(--line);background:#fff;border-radius:10px;padding:9px;font-size:12.5px;font-weight:700;cursor:pointer}
+.toc-grid button:hover{border-color:var(--brand);color:var(--brand)}
+@media(max-width:960px){aside{display:none}main{margin-left:0}}
+@media print{aside,header.top,.noprint{display:none}main{margin:0}.sec{break-inside:avoid}}
+</style>
+</head>
+<body>
+<div class="app">
+<aside>
+  <div class="brand"><div class="logo">BZ</div><div><b>(주)비젠커뮤니케이션</b><small>BZen Communication · 인트라넷 (연습용)</small></div></div>
+  <div class="nav" id="nav"></div>
+  <div class="side-foot">연습용 빈 깡통 · 저장 안 됨<br>실사이트와 같은 메뉴 구성 · v2026-10-12</div>
+</aside>
+<main>
+<header class="top">
+  <strong id="cur">연습 홈</strong>
+  <span style="flex:1"></span>
+  <div class="role noprint">
+    <button id="rAdmin" class="on" onclick="setRole('admin')">관리자 보기</button>
+    <button id="rStaff" onclick="setRole('staff')">직원 보기</button>
+  </div>
+</header>
+<div class="wrap">
+
+<div class="cover">
+  <span class="tag">TRAINING · 빈 깡통 홈페이지 + 이용 매뉴얼</span>
+  <h1>비젠 인트라넷 연습용 홈페이지</h1>
+  <p>실제 사이트와 <b>똑같은 메뉴·똑같은 순서</b>의 빈 껍데기입니다. 숫자는 0건, 저장은 안 됩니다.<br>위 <span class="kbd">관리자 보기 / 직원 보기</span>를 누르면 메뉴가 바뀌는 것도 실사이트와 동일합니다.</p>
+  <div class="badges"><span>메뉴 18개 전체 수록</span><span>실화면 이미지는 변형 없이 그대로</span><span>인쇄 → PDF 교육자료로 사용 가능</span></div>
+</div>
+
+<div class="sec noprint"><h2>0. 먼저 보기 — 역할별 메뉴 지도</h2>
+<p class="sub">버튼을 누르면 해당 메뉴 설명으로 이동합니다. ★ = 관리자 전용</p>
+<div class="toc-grid" id="toc"></div>
+<div class="tip"><b>관리자:</b> 18개 전부 보임. <b>직원:</b> 설정 + 공통권한(기본: 지출결의·운영비·프로젝트·거래처·휴무대장)에 허용된 메뉴만 보임. 대시보드·구성원·급여관리·계정관리·자금관리·휴지통은 직원에게 안 보임.</div>
+</div>
+
+<!-- ============ HOME ============ -->
+<div class="page on" id="p-home">
+<div class="sec"><h2>연습 방법 (3분)</h2>
+<ol class="step">
+<li>위에서 <b>관리자 보기</b> → 왼쪽 메뉴 18개가 다 보이는지 확인.</li>
+<li><b>직원 보기</b>로 전환 → 메뉴가 5~6개로 줄어드는지 확인 (실사이트와 동일).</li>
+<li>왼쪽 메뉴를 순서대로 클릭 → 각 화면의 <b>따라하기</b>대로 빈 표에 가상으로 입력해 보기.</li>
+<li>실화면(회색 박스 사진)은 <b>원본 그대로</b> — 숫자·이름만 마스킹됨. 변형·합성 없음.</li>
+</ol>
+<div class="warn"><b>회계 규칙 요약:</b> 금액은 <b>공급가액+부가세 분리 입력 → 합계 자동</b>. 손익 = 순매출액(공급가액) − 매입 = 매출총이익 − 운영비 = 영업이익. 부가세는 손익 제외. 프로젝트 손익은 <b>직접 입력 금지, 장부 지정 시 자동 집계</b>. 급여는 <b>귀속월(일한 달)</b> 기준. 지출결의는 승인절차 없는 기록 전용.</div>
+</div>
+</div>
+
+<!-- 각 메뉴 페이지들은 JS로 생성 -->
+<div id="pages"></div>
+
+<div class="sec"><h2>전 메뉴 실캡처 체크리스트</h2>
+<p class="sub">이미 확보된 6장은 원본 그대로 삽입됨. 나머지는 아래 순서대로 캡처해서 교체하면 됨.</p>
+<table><tr><th>상태</th><th>메뉴</th><th>파일</th></tr>
+<tr><td>✅ 있음</td><td>대시보드(관리자)</td><td>img/real-admin-dashboard.png</td></tr>
+<tr><td>✅ 있음</td><td>매출</td><td>img/real-admin-sales.png</td></tr>
+<tr><td>✅ 있음</td><td>계정관리</td><td>img/real-admin-users.png</td></tr>
+<tr><td>✅ 있음</td><td>직원 메뉴·대시보드·지출결의</td><td>img/real-staff-*.png (3장)</td></tr>
+<tr><td>☐ 필요</td><td>매입·운영비·수금·프로젝트·거래처·고정비·구성원·급여·휴무·세금·보고서·자금·휴지통·설정</td><td>실사이트에서 같은 구도로 캡처 → 숫자 마스킹만 → 파일 추가</td></tr></table>
+<div class="tip">캡처 요령: ① 테스트 데이터 2~3건 입력 ② 기간은 '이번 달' ③ 개인정보·금액 마스킹(블러)만 하고 <b>레이아웃·색·버튼은 절대 수정 금지</b> ④ PNG 저장 후 이 파일의 <span class="kbd">&lt;img&gt;</span> 경로만 교체.</div>
+</div>
+
+</div>
+</main>
+</div>
+
+<script>
+const IMG = "../이용매뉴얼/img/";
+const MENUS = [
+{id:"dashboard", g:"장부", label:"대시보드", adminOnly:false, perm:null, real:[IMG+"real-admin-dashboard.png",IMG+"real-staff-dashboard.png"],
+ desc:"회사 전체 숫자를 요약해 보여줍니다. (관리자 전용 — 직원은 내 지출결의 요약만)",
+ steps:["상단 기간 선택: 이번 달·지난 달·이번 분기·분기선택·올해·직접선택","카드 확인: 순매출액·매입·운영비·영업이익·부가세 납부예상","12개월 추이 → 프로젝트별 수익 → 최근 지출결의 → 데이터점검 순서로 읽기"],
+ who:"관리자: 전체 확인. 직원: 메뉴 자체가 안 보임 (공통권한과 무관).",
+ mock:"카드 4개(순매출액/매출총이익/영업이익/부가세예상) + 12개월 추이 그래프 자리 + 프로젝트별 수익 표(빈칸) + 최근 지출결의 5건(빈칸)"},
+{id:"sales", g:"장부", label:"매출", perm:"sales", desc:"계약·용역 매출 기록. 프로젝트를 지정하면 손익에 자동 반영.",
+ steps:["[매출 등록] → 일자·거래처·항목(용역/제작/광고대행/유지보수/라이선스)·적요","공급가액+부가세 분리 입력 (합계 자동) → 프로젝트 지정 → 증빙 첨부(20MB) → 저장","엑셀 분량은 [CSV 일괄등록] → 양식 다운로드 → 일자·공급가액 필수 작성 후 업로드"],
+ who:"관리자: 전체 등록·수정·삭제. 직원: 허용 시 조회 + 본인분만 수정.",
+ real:[IMG+"real-admin-sales.png"], mock:"요약카드(공급가액합계/부가세합계/합계금액/건수) + 필터(기간·검색·프로젝트·담당자) + 빈 표 0건"},
+{id:"purchases", g:"장부", label:"매입", perm:"purchases", desc:"외주비·상품매입 등 원가성 지출. 매출총이익(순매출−매입)에 직접 반영.",
+ steps:["[매입 등록] → 일자·거래처·항목(외주용역비/원재료비/상품매입/운반비/장비구입)·적요","공급가액+부가세 입력 → 프로젝트 지정(원가 귀속) → 저장"],
+ who:"관리자 전체. 직원 허용 시 조회.",
+ mock:"매출 화면과 동일 구조의 빈 표 0건"},
+{id:"collections", g:"장부", label:"수금관리", perm:"collections", desc:"프로젝트 계약금 대비 입금액 관리. 수금률·미수금 확인.",
+ steps:["프로젝트 선택 → [입금 등록] → 입금일·금액·비고 입력","수금률 = 입금합계 ÷ 계약금(공급가액 기준) 확인"],
+ who:"관리자 전체. 직원 허용 시 조회.",
+ mock:"프로젝트별 계약금·입금합계·미수금·수금률 빈 표"},
+{id:"expenses", g:"장부", label:"운영비", perm:"expenses", desc:"인건비·임차료·통신비 등 고정 운영비용. 영업이익(매출총이익−운영비)에 반영.",
+ steps:["생길 때 바로 [운영비 등록] (모아서 입력 금지)","항목 선택 시 한줄 설명 확인 → 공급가액+부가세 → 프로젝트(비젠공통(관리) 등) 지정"],
+ who:"관리자 전체. 직원은 기본권한에 포함(본인분 입력).",
+ mock:"빈 표 0건 + 항목 드롭다운 18종 자리"},
+{id:"expense-reports", g:"장부", label:"지출결의", perm:"expense-reports", desc:"직원이 쓴 비용을 증빙과 함께 기록. 승인절차 없음. 직원 첫 화면.",
+ steps:["[등록] → 일자(쓴 날짜)·적요(예: 고객사 미팅 교통비)·공급가액+부가세","영수증 사진 첨부(금액·날짜·상호 보이게) → [저장] 끝","급여에 포함해 지급됨. 장부 급여분은 실지급액−지출결의로 기록(중복방지)"],
+ who:"전 직원 기본 메뉴. 내 글만 수정·삭제.",
+ real:[IMG+"real-staff-expense.png"], mock:"빈 표 + [지출결의 등록] 버튼"},
+{id:"projects", g:"사업", label:"프로젝트", perm:"projects", desc:"프로젝트 마스터. 장부에서 지정하면 손익 자동 집계. 직접 입력란 없음.",
+ steps:["[프로젝트 등록]을 먼저 (계약금액·기간·담당자·상태: 예정/제안서/진행중/보류/완료/미진행)","카드 클릭 → 월별 손익·거래내역 확인","연도는 고르는 기준, 카드 금액은 항상 전체기간 합계"],
+ who:"등록·수정: 직원도 가능. 삭제: 관리자만.",
+ mock:"프로젝트 카드 0개 (빈 상태)"},
+{id:"partners", g:"사업", label:"거래처", perm:"partners", desc:"거래처 마스터 + 담당자·서류(사업자등록증·통장사본) 관리.",
+ steps:["검색 → [거래처 등록] → 구분(인력·음향·무대 등 12종 자동추천 확인)","서류 첨부 → 미리보기 확인. 중복은 합치기"],
+ who:"등록·수정: 직원 가능. 서류삭제: 관리자만.",
+ mock:"거래처 빈 목록"},
+{id:"fixed-costs", g:"사업", label:"고정비", perm:"fixed", desc:"매달 비슷하게 나가는 비용 자동 감지 (3개월 이상 쌓이면).",
+ steps:["월 평균·감지 개월 확인 → 클릭하면 운영비 내역으로 이동"],
+ who:"관리자·허용된 직원 조회.",
+ mock:"감지된 고정비 없음 (빈 상태)"},
+{id:"members", g:"인사관리", label:"구성원 ★", adminOnly:true, desc:"내부·외부협력·외부단기 인력 대장. 근속·생일 자동계산.",
+ steps:["인라인 편집 → [수정중 N건 일괄저장]","구분 변경(내부/외부협력/외부단기)은 여기서만"],
+ who:"관리자 전용.",
+ mock:"구성원 빈 표"},
+{id:"payroll", g:"인사관리", label:"급여관리 ★", adminOnly:true, desc:"급여대장 CSV 업로드 → 귀속월(일한 달) 기준 집계. 인별 명세서 저장 시 장부 자동보정.",
+ steps:["급여대장 CSV 올리기 → 귀속월 확인","인별 명세서 저장 → 장부 급여분 자동보정(실지급액−지결)","지급일 기준 현금흐름은 장부·대시보드에서 별도 확인"],
+ who:"관리자 전용.",
+ mock:"급여월 선택 + 빈 대장"},
+{id:"leaves", g:"인사관리", label:"휴무대장", perm:"leaves", desc:"연차·월차·대휴·동계휴가·보건휴가 발생과 사용 기록.",
+ steps:["[휴무 등록] → 종류·날짜·사유 → 저장 → 승인/반려 확인","주말출근 신청 → 날짜·출근·퇴근 입력 → 대휴 자동계산(4시간↑ 1일·미만 0.5일)","연차 매년 1/1 자동부여(입사일 기준), 1년 미만은 매월 월차 1일"],
+ who:"전 직원 기본. 내 휴무만 보임 (관리자는 전체).",
+ mock:"잔여현황 + 빈 내역"},
+{id:"tax", g:"세금·정산", label:"세금관리", perm:"tax", desc:"부가세·원천세·4대보험·법인세 체크리스트. 입력일 기준(원천세=지급월 기준).",
+ steps:["연도 선택 → 유형탭 → 체크·토글","4대보험 고지서 업로드·CSV 지원","부가세 예상 = 매출세액 − 매입세액(매입+운영비)"],
+ who:"관리자 전체. 직원 허용 시 조회.",
+ mock:"연도 선택 + 4개 탭 빈 체크리스트"},
+{id:"reports", g:"세금·정산", label:"보고서", perm:"reports", desc:"손익 보고서. 임원 보고용 인쇄/PDF·CSV.",
+ steps:["기간 선택 → 요약 확인 → [요약CSV/상세CSV]·[인쇄/PDF]","사이드바는 인쇄에서 제외됨"],
+ who:"관리자 전체. 직원 허용 시 출력.",
+ mock:"요약 표 빈 상태 + 버튼 3개"},
+{id:"users", g:"관리", label:"계정관리 ★", adminOnly:true, desc:"직원 계정 생성·승인·권한·비밀번호 관리.",
+ steps:["[+ 계정 추가] → 이름·이메일·비밀번호·역할(직원)·부서 → 저장","가입신청분은 [승인대기] → 행 [수정] → 사용함 체크","개별권한: 행 [수정] → 메뉴 토글 (공통권한과 합집합)","비밀번호 분실 → 행 [비밀번호 변경]으로 직접 재설정"],
+ who:"관리자 전용. 마지막 관리자 1명은 권한·삭제 불가.",
+ real:[IMG+"real-admin-users.png"], mock:"이름·역할·상태 빈 목록 + 행버튼 [수정][비밀번호 변경][삭제]"},
+{id:"funds", g:"관리", label:"자금관리 ★", adminOnly:true, desc:"계좌·대출·카드 현황 + 잔고 스냅샷. 법인카드 파일업로드→분류→일괄등록.",
+ steps:["자금현황 [잔고 기록] (같은 날짜는 덮어씀)","법인카드 탭: 파일업로드 → 분류(이용자코드·항목추천 확인) → [일괄등록]","카드번호 뒤4자리 마스킹"],
+ who:"관리자 전용.",
+ mock:"계좌·대출·카드 빈 표 + 잔고 그래프 자리"},
+{id:"trash", g:"관리", label:"휴지통 ★", adminOnly:true, desc:"삭제한 장부·프로젝트 보관. 복원·영구삭제.",
+ steps:["장부·프로젝트 탭 → [복원]·[영구삭제]","삭제 버튼은 전부 휴지통 이동이라 바로 안 사라짐. 영구삭제는 되돌릴 수 없음"],
+ who:"관리자 전용.",
+ mock:"빈 휴지통"},
+{id:"settings", g:"관리", label:"설정", base:true, desc:"내 정보·비밀번호·회사 정보 + 직원 공통권한.",
+ steps:["이름·부서·전화 수정 → 저장","비밀번호 변경·로그아웃","(관리자) 회사 정보 변경 — 재배포 불필요","(관리자) 직원 공통권한 토글 저장"],
+ who:"전원. 공통권한 설정은 관리자만.",
+ mock:"내 정보 폼 + 회사 정보 폼 + 권한 토글 자리"},
+];
+
+let role = "admin";
+function isVisible(m){
+  if(role==="admin") return true;
+  if(m.base) return true;
+  if(m.adminOnly) return false;
+  if(m.perm) return ["expense-reports","expenses","partners","projects","leaves"].includes(m.perm);
+  return false;
+}
+function setRole(r){
+  role=r;
+  document.getElementById("rAdmin").className = r==="admin"?"on":"";
+  document.getElementById("rStaff").className = r==="staff"?"on staff":"";
+  render();
+}
+function render(){
+  const nav=document.getElementById("nav"), toc=document.getElementById("toc");
+  nav.innerHTML=""; toc.innerHTML="";
+  const groups=["장부","사업","인사관리","세금·정산","관리"];
+  // 홈 버튼
+  const hb=document.createElement("button"); hb.textContent="⌂ 연습 홈"; hb.onclick=()=>show("home");
+  nav.appendChild(hb);
+  groups.forEach(g=>{
+    const t=document.createElement("div"); t.className="g"; t.textContent=g; nav.appendChild(t);
+    MENUS.filter(m=>m.g===g).forEach(m=>{
+      const b=document.createElement("button");
+      b.innerHTML=(m.label)+(m.adminOnly?' <span class="lock">★</span>':"");
+      if(!isVisible(m)) b.classList.add("hide");
+      b.id="n-"+m.id; b.onclick=()=>show(m.id);
+      nav.appendChild(b);
+      const t2=document.createElement("button"); t2.textContent=(m.adminOnly?"★ ":"")+m.label;
+      if(!isVisible(m)) t2.style.display="none";
+      t2.onclick=()=>show(m.id); toc.appendChild(t2);
+    });
+  });
+  document.querySelectorAll(".page").forEach(p=>p.classList.remove("on"));
+  const cur=document.getElementById("cur");
+  // pages container build once
+  buildPages();
+  document.querySelectorAll(".page").forEach(p=>p.classList.remove("on"));
+  const target = window._cur && (window._cur==="home"||MENUS.some(m=>m.id===window._cur)) ? window._cur : "home";
+  document.getElementById("p-"+target)?.classList.add("on");
+  document.querySelectorAll("#nav button").forEach(b=>b.classList.remove("on"));
+  if(target!=="home") document.getElementById("n-"+target)?.classList.add("on");
+  const m = MENUS.find(x=>x.id===target);
+  cur.textContent = target==="home" ? ("연습 홈 ("+(role==="admin"?"관리자":"직원")+")") : m.label + (role==="staff"?" (직원 보기)":"");
+}
+function buildPages(){
+  const box=document.getElementById("pages");
+  if(box.dataset.built) return; box.dataset.built="1";
+  MENUS.forEach(m=>{
+    const d=document.createElement("div"); d.className="page"; d.id="p-"+m.id;
+    const isA = m.adminOnly ? '<span class="perm admin">관리자 전용</span>' : (m.perm?'<span class="perm">직원 권한: '+m.perm+'</span>':'<span class="perm staff">전원</span>');
+    let realHtml="";
+    (m.real||[]).forEach((src,i)=>{
+      realHtml+='<figure class="real"><figcaption>실화면 '+ (i+1) +' — 원본 그대로 (변형 없음)</figcaption><img src="'+src+'" alt="'+m.label+' 실화면" onerror="this.parentNode.style.display=\'none\'"><div class="note">경로: '+src.replace("../","")+' · 숫자·이름 마스킹된 원본 PNG를 그대로 표시. 이 페이지를 인쇄하면 매뉴얼 그림이 됩니다.</div></figure>';
+    });
+    if(!m.real){
+      realHtml+='<div class="empty">실캡처 미등록 — 실사이트에서 이 화면을 캡처해 <b>이용매뉴얼/img/real-'+m.id+'.png</b> 로 저장하면 자동 표시됩니다.<br>그 전까지는 아래 빈 깡통으로 연습하세요.</div>';
+    }
+    d.innerHTML='<div class="sec"><h2>'+m.label+' <small style="font-size:12px;color:#888">('+m.g+')</small></h2><p class="sub">'+m.desc+'</p>'
+    +'<p>'+isA+' <span style="font-size:12px;color:#666">'+m.who+'</span></p>'
+    +'<h3>따라하기</h3><ol class="step">'+m.steps.map((s,i)=>'<li><b>'+(i+1)+'.</b> '+s+'</li>').join("")+'</ol>'
+    +'<h3>빈 깡통 화면 (저장 안 됨 · 연습용)</h3><div class="mock"><div class="bar">● ● ● &nbsp;'+m.label+' — 연습용 (0건)</div><div class="body">'
+    +'<span class="btn pri">+ '+(m.label)+' 등록</span> <span class="btn">CSV 내보내기</span> <span class="btn">CSV 일괄등록</span>'
+    +'<div class="empty">'+m.mock+'<br>※ 실사이트는 여기에 실제 데이터가 표시됩니다. 연습용은 항상 비어 있습니다.</div>'
+    +'</div></div>'
+    +'<h3>실화면 (원본 이미지 그대로)</h3>'+realHtml
+    +'<div class="noprint" style="margin-top:8px"><button class="btn" onclick="show(\'home\')">← 연습 홈</button></div></div>';
+    box.appendChild(d);
+  });
+}
+function show(id){ window._cur=id; render(); window.scrollTo({top:0}); }
+render();
+</script>
+</body>
+</html>

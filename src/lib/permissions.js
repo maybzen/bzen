@@ -46,8 +46,11 @@ function getStaffSettings() {
           s?.staff_overrides && typeof s.staff_overrides === 'object' && !Array.isArray(s.staff_overrides)
             ? s.staff_overrides
             : {},
+        financeViewers: Array.isArray(s?.finance_viewers)
+          ? s.finance_viewers.filter((v) => typeof v === 'string')
+          : [],
       }))
-      .catch(() => ({ global: [], overrides: {} }))
+      .catch(() => ({ global: [], overrides: {}, financeViewers: [] }))
   }
   return cached
 }
@@ -115,4 +118,21 @@ export function useStaffPermissions(profile) {
     global: settings?.global || [],
     loading: settings === null,
   }
+}
+
+/** 프로젝트 금액 열람 여부 (관리자 + 설정에서 허용한 직원) */
+export function useFinanceView(profile, isAdmin) {
+  const [viewers, setViewers] = useState(null)
+  useEffect(() => {
+    let mounted = true
+    getStaffSettings().then((s) => {
+      if (mounted) setViewers(Array.isArray(s?.financeViewers) ? s.financeViewers : [])
+    })
+    return () => {
+      mounted = false
+    }
+  }, [])
+  if (isAdmin) return true
+  if (!profile?.id || !viewers) return false
+  return viewers.includes(profile.id)
 }

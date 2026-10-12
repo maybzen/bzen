@@ -7,6 +7,7 @@ import { ProfitBar } from '../components/Charts'
 import { useToast } from '../components/Toast'
 import { AmountInput, ConfirmDialog, EmptyState, Field, InlineAlert, LoadingBlock, Modal, PageHeader, SegmentedControl, StatCard } from '../components/ui'
 import { useAuth } from '../auth/AuthContext'
+import { useFinanceView } from '../lib/permissions'
 import { PROJECT_STATUS } from '../lib/constants'
 import { contractSplit, formatDateHuman, formatKRW, formatPercent, normalizeVendorName } from '../lib/format'
 import { buildPnl, groupByProject, summarize } from '../lib/summary'
@@ -91,8 +92,10 @@ function PnlGrid({ pnl, achieved, contractAmount, showContract, bare = false }) 
 }
 
 export default function Projects() {
-  const { isAdmin, user } = useAuth()
+  const { isAdmin, user, profile } = useAuth()
   const toast = useToast()
+  /* 프로젝트 금액 열람: 관리자 + 설정에서 허용한 직원 */
+  const canSeeMoney = useFinanceView(profile, isAdmin)
 
   const [loading, setLoading] = useState(true)
   const [projects, setProjects] = useState([])
@@ -353,7 +356,7 @@ export default function Projects() {
           icon="folder"
           hint={yearFilter ? `${yearFilter}년` : '전체 연도'}
         />
-        {isAdmin ? (
+        {canSeeMoney ? (
           <>
             <StatCard label="순매출액" value={totalsSale} tone="sale" icon="trending-up" hint={basisHint} />
             <StatCard label="매출총이익" value={totalsGross} tone={totalsGross >= 0 ? 'profit' : 'loss'} icon="chart" hint={totals.revenue ? `매출총이익률 ${formatPercent(totals.grossMargin)}` : '매출 없음'} />
@@ -376,7 +379,7 @@ export default function Projects() {
       <div className="card overflow-hidden">
         <div className="flex flex-col gap-3 border-b border-ink-200 px-4 py-3.5">
           <div className="flex flex-wrap items-center gap-2">
-            {isAdmin ? (
+            {canSeeMoney ? (
               <SegmentedControl
                 size="sm"
                 value={viewTab}
@@ -455,7 +458,7 @@ export default function Projects() {
         </div>
       </div>
 
-      {isAdmin && viewTab === 'agency' ? (
+      {canSeeMoney && viewTab === 'agency' ? (
         agencyRows.length ? (
           <div className="flex flex-col gap-4">
             <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -600,6 +603,7 @@ export default function Projects() {
                   row={row}
                   status={status}
                   isAdmin={isAdmin}
+                  canSeeMoney={canSeeMoney}
                   managerName={managerName(project.manager_id)}
                   onEdit={() => {
                     setEditing(project)
@@ -674,14 +678,14 @@ export default function Projects() {
                   achieved={achieved}
                   contractAmount={incl ? csplit.total : csplit.supply}
                   showContract
-                  bare={!isAdmin}
+                  bare={!canSeeMoney}
                 />
 
-                {!isAdmin ? null : (
+                {canSeeMoney ? (
                   <div className="mt-3">
                     <ProfitBar value={Math.abs(row.profit)} max={maxSale} tone={row.profit >= 0 ? 'profit' : 'loss'} />
                   </div>
-                )}
+                ) : null}
 
                 <div className="mt-3 flex items-center justify-between text-xs text-ink-500">
                   <span>
@@ -1016,7 +1020,7 @@ function AgencyDealModal({ partners, userId, initial = null, onClose, onSaved })
   )
 }
 
-function ProposalCard({ project, row, status, isAdmin, managerName, onEdit, onDelete }) {  /* 제안서·미진행도 손익은 장부에서 자동 계산합니다.
+function ProposalCard({ project, row, status, isAdmin, canSeeMoney, managerName, onEdit, onDelete }) {  /* 제안서·미진행도 손익은 장부에서 자동 계산합니다.
      제안 준비에 쓴 부대비용은 잡히고 매출은 없으므로 영업이익이 그대로(-) 손실이 됩니다.
      매출이 없으면 이익률은 산출할 수 없어 '—'로 둡니다. */
   const pnl = buildPnl(row?.sale, row?.purchase, row?.opex)
@@ -1074,7 +1078,7 @@ function ProposalCard({ project, row, status, isAdmin, managerName, onEdit, onDe
             {project.contract_amount > 0 ? formatKRW(project.contract_amount) : '—'}
           </dd>
         </div>
-        {isAdmin ? (
+        {canSeeMoney ? (
           <>
             <div>
               <dt className="text-[11px] font-semibold text-ink-500">매출총이익</dt>
@@ -1109,7 +1113,7 @@ function ProposalCard({ project, row, status, isAdmin, managerName, onEdit, onDe
       {row.count ? (
         <p className="mt-2 text-[11px] text-ink-500">
           장부 {row.count}건 기준
-          {isAdmin ? (
+          {canSeeMoney ? (
             <>
               {' '}· 순매출 {formatKRW(pnl.revenue)}원 − 매출원가 {formatKRW(pnl.cogs)}원 − 경비{' '}
               {formatKRW(pnl.expense)}원

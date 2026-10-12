@@ -6,7 +6,7 @@ import { useAuth } from '../auth/AuthContext'
 import { EXTERNAL_PARTNER_DEFAULT, ROLE_LABEL } from '../lib/constants'
 import { PERM_DEFS, PERM_LABEL } from '../lib/permissions'
 import { formatDateHuman } from '../lib/format'
-import { callAdminFn, createExternalMember, getSettings, listProfiles, updateSettings } from '../lib/api'
+import { callAdminFn, createExternalMember, getSettings, listProfiles, updateProfile, updateSettings } from '../lib/api'
 
 const EMPTY = {
   full_name: '',
@@ -14,6 +14,7 @@ const EMPTY = {
   password: '',
   role: 'staff',
   department: '',
+  position: '',
   phone: '',
   menus: [],
 }
@@ -81,7 +82,7 @@ export default function Users() {
     const q = search.trim().toLowerCase()
     const list = q
       ? profiles.filter((p) =>
-          [p.full_name, p.email, p.department].some((v) => String(v || '').toLowerCase().includes(q)),
+          [p.full_name, p.email, p.department, p.position].some((v) => String(v || '').toLowerCase().includes(q)),
         )
       : profiles.slice()
     // 관리자 먼저(가입순), 다음 직원(가입순)
@@ -107,6 +108,7 @@ export default function Users() {
       password: '',
       role: profile.role || 'staff',
       department: profile.department || '',
+      position: profile.position || '',
       phone: profile.phone || '',
       menus: overrides[profile.id] || [],
     })
@@ -128,6 +130,12 @@ export default function Users() {
           phone: form.phone,
           role: form.role,
         })
+        /* 직함은 엣지함수를 거치지 않고 직접 저장합니다 */
+        try {
+          await updateProfile(editing.id, { position: form.position.trim() })
+        } catch (posErr) {
+          toast.error(`직함 저장에 실패했습니다: ${posErr.message}`)
+        }
         if (hasOverridesColumn) {
           try {
             const validIds = new Set([...profiles.map((p) => p.id), editing.id])
@@ -148,7 +156,7 @@ export default function Users() {
         toast.success('계정 정보가 수정되었습니다.')
         if (editing.id === user?.id) await refreshProfile()
       } else {
-        await callAdminFn({
+        const created = await callAdminFn({
           action: 'create',
           email: form.email,
           password: form.password,
@@ -157,6 +165,13 @@ export default function Users() {
           department: form.department,
           phone: form.phone,
         })
+        if (form.position.trim() && created?.user_id) {
+          try {
+            await updateProfile(created.user_id, { position: form.position.trim() })
+          } catch (posErr) {
+            toast.error(`직함 저장에 실패했습니다: ${posErr.message}`)
+          }
+        }
         toast.success('계정이 추가되었습니다.')
       }
       setFormOpen(false)
@@ -286,6 +301,9 @@ export default function Users() {
                   <tr key={profile.id} className="transition hover:bg-ink-50/60">
                     <td className="td font-semibold text-ink-900">
                       {profile.full_name || '(이름 없음)'}
+                      {profile.position ? (
+                        <span className="ml-1.5 font-normal text-ink-500">{profile.position}</span>
+                      ) : null}
                       {profile.id === user?.id ? (
                         <span className="ml-1.5 chip bg-brand-50 text-brand-700">나</span>
                       ) : null}
@@ -513,6 +531,15 @@ export default function Users() {
               value={form.department}
               onChange={(e) => setForm((f) => ({ ...f, department: e.target.value }))}
               placeholder="예: 경영지원"
+            />
+          </Field>
+
+          <Field label="직함">
+            <input
+              className="input"
+              value={form.position}
+              onChange={(e) => setForm((f) => ({ ...f, position: e.target.value }))}
+              placeholder="예: 팀장, 대리, 과장"
             />
           </Field>
 

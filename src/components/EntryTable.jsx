@@ -81,16 +81,9 @@ export default function EntryTable({
 
   const editable = bulkEdit && canEdit && typeof onSaveRow === 'function'
 
-  /* 직원 id 집합: 지출결의 출처가 비어도 지출자가 직원이면 직원 입력분으로 봅니다 */
-  const staffIdSet = useMemo(
-    () => new Set((profiles || []).filter((p) => p && p.id && p.role !== 'admin').map((p) => p.id)),
-    [profiles],
-  )
-  const isReportRow = (entry) => {
-    if (!entry) return false
-    if (entry.source === 'expense_report') return true
-    return Boolean(entry.requester_id && staffIdSet.has(entry.requester_id))
-  }
+  /* 지출결의 여부: 저장된 출처(source)로만 판단합니다.
+     작성자·이용자 코드 추측 판정은 쓰지 않습니다 (법카 공용 사용·다인 이용과 충돌) */
+  const isReportRow = (entry) => Boolean(entry && entry.source === 'expense_report')
 
   const hlSet = useMemo(() => new Set((highlightIds || []).map(String)), [highlightIds])
 
