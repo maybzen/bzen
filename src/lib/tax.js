@@ -136,20 +136,44 @@ export function isWithholdingPayment(e) {
 
 /** 납부월(YYYY-MM)별 원천세 납부액. 납부기한 달 키로 조회합니다.
     국세(소득세)와 지방세(특별징수분, 소득세의 10%)를 나눠 담습니다.
-    매달 같이 나오는 쌍(예: 8월분 국세 841,390 + 지방 84,100) 확인용 */
+    매달 같이 나오는 쌍(예: 8월분 국세 841,390 + 지방 84,100) 확인용.
+    적요·메모의 "N월분"을 귀속월로 먼저 보고 (늦은 납부 대응),
+    없으면 납부일 기준으로 둡니다 */
+export function withholdingDueYm(e) {
+  const text = `${e.description || ''} ${e.memo || ''}`
+  const payYm = String(e.entry_date || '').slice(0, 7)
+  const m = text.match(/(\d{1,2})\s*월분/)
+  const y = Number(String(e.entry_date || '').slice(0, 4))
+  if (m && y && /^\d{4}-\d{2}$/.test(payYm)) {
+    let mm = Number(m[1]) + 1
+    let yy = y
+    if (mm > 12) {
+      mm = 1
+      yy += 1
+    }
+    const dueYm = `${yy}-${String(mm).padStart(2, '0')}`
+    const diff =
+      (Number(dueYm.slice(0, 4)) - Number(payYm.slice(0, 4))) * 12 +
+      (Number(dueYm.slice(5)) - Number(payYm.slice(5)))
+    if (diff >= -4 && diff <= 1) return dueYm
+  }
+  return payYm
+}
+
 export function withholdingPaidByMonth(entries) {
   const map = new Map()
   for (const e of entries || []) {
     if (!isWithholdingPayment(e)) continue
-    const ym = String(e.entry_date || '').slice(0, 7)
+    const ym = withholdingDueYm(e)
     if (!/^\d{4}-\d{2}$/.test(ym)) continue
     const t = `${e.counterparty || ''} ${e.description || ''} ${e.memo || ''}`
     const amt = Number(e.total_amount || 0)
-    const o = map.get(ym) || { total: 0, count: 0, national: 0, local: 0 }
+    const o = map.get(ym) || { total: 0, count: 0, national: 0, local: 0, rows: [] }
     o.total += amt
     o.count += 1
     if (/지방/.test(t)) o.local += amt
     else o.national += amt
+    o.rows.push(e)
     map.set(ym, o)
   }
   return map

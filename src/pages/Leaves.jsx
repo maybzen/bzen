@@ -196,9 +196,21 @@ export default function Leaves() {
 
   const [formOpen, setFormOpen] = useState(false)
   const [presetPerson, setPresetPerson] = useState('')
+  const [editingEntry, setEditingEntry] = useState(null)
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const [detailPerson, setDetailPerson] = useState(null)
+  /* 수정 가능 여부: 관리자는 전부, 직원은 본인 요청(승인대기)만 */
+  const canEditRow = (e) => {
+    if (!e) return false
+    if (isAdmin) return true
+    return e.person === ownName && e.status === '요청'
+  }
+  const openEdit = (entry) => {
+    setEditingEntry(entry)
+    setPresetPerson('')
+    setFormOpen(true)
+  }
   const [removing, setRemoving] = useState(null)
   const [busy, setBusy] = useState(false)
   const grantedRef = useRef({})
@@ -380,7 +392,7 @@ export default function Leaves() {
         ) : (
           <span className="chip bg-brand-50 text-brand-700">내 휴무만 표시됩니다</span>
         )}
-        <button type="button" className="btn-primary" onClick={() => { setPresetPerson(isAdmin ? '' : ownName); setFormOpen(true) }}>
+        <button type="button" className="btn-primary" onClick={() => { setPresetPerson(isAdmin ? '' : ownName); setEditingEntry(null); setFormOpen(true) }}>
           <Icon name="plus" size={16} />
           휴무 등록
         </button>
@@ -502,6 +514,7 @@ export default function Leaves() {
                       <th className="th text-right">일수</th>
                       <th className="th">사유</th>
                       <th className="th">결재</th>
+                      <th className="th w-14">수정</th>
                       {isAdmin ? <th className="th w-14">삭제</th> : null}
                     </tr>
                   </thead>
@@ -513,7 +526,7 @@ export default function Leaves() {
                         <td className="td">{e.leave_type}</td>
                         <td className="td">{directionChip(e.direction)}</td>
                         <td className="td num font-semibold">{fmtDays(e.days)}</td>
-                        <td className="td max-w-[220px] truncate text-ink-500">{e.memo}</td>
+                        <td className="td max-w-[220px] truncate text-ink-500" title={e.memo || ''}>{e.memo}</td>
                         <td className="td">
                           {isAdmin ? (
                             <StatusToggle status={e.status} busy={busy} onChange={(next) => decide(e, next)} />
@@ -530,6 +543,20 @@ export default function Leaves() {
                                 </button>
                               ) : null}
                             </span>
+                          )}
+                        </td>
+                        <td className="td">
+                          {canEditRow(e) ? (
+                            <button
+                              type="button"
+                              onClick={() => openEdit(e)}
+                              className="rounded-lg p-1.5 text-ink-400 transition hover:bg-brand-50 hover:text-brand-700"
+                              title="수정"
+                            >
+                              <Icon name="pencil" size={15} />
+                            </button>
+                          ) : (
+                            <span className="text-xs text-ink-300">—</span>
                           )}
                         </td>
                         {isAdmin ? (
@@ -563,11 +590,16 @@ export default function Leaves() {
 
       <LeaveFormModal
         open={formOpen}
-        onClose={() => setFormOpen(false)}
+        onClose={() => {
+          setFormOpen(false)
+          setEditingEntry(null)
+        }}
         onSaved={() => {
           setFormOpen(false)
+          setEditingEntry(null)
           setReloadKey((k) => k + 1)
         }}
+        initial={editingEntry}
         personOptions={personOptions}
         userId={user?.id}
         isAdmin={isAdmin}
@@ -581,8 +613,14 @@ export default function Leaves() {
         onRegister={(p) => {
           setDetailPerson(null)
           setPresetPerson(p)
+          setEditingEntry(null)
           setFormOpen(true)
         }}
+        onEdit={(entry) => {
+          setDetailPerson(null)
+          openEdit(entry)
+        }}
+        canEditRow={canEditRow}
         rows={rows}
         profiles={profiles}
         isAdmin={isAdmin}
@@ -604,7 +642,7 @@ export default function Leaves() {
 
 /* ------------------------- 직원별 상세 ------------------------- */
 
-function PersonModal({ person, onClose, onRegister, rows, profiles, isAdmin, busy, onDecide }) {
+function PersonModal({ person, onClose, onRegister, onEdit, canEditRow, rows, profiles, isAdmin, busy, onDecide }) {
   const profile = useMemo(
     () => (profiles || []).find((p) => p.full_name === person),
     [profiles, person],
@@ -726,6 +764,7 @@ function PersonModal({ person, onClose, onRegister, rows, profiles, isAdmin, bus
                       <th className="th text-right">잔여</th>
                       <th className="th">세부내역</th>
                       <th className="th">결재</th>
+                      <th className="th w-14">수정</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-ink-100">
@@ -736,12 +775,26 @@ function PersonModal({ person, onClose, onRegister, rows, profiles, isAdmin, bus
                         <td className="td num">{e.direction === '발생' ? fmtDays(e.days) : '—'}</td>
                         <td className="td num">{e.direction === '사용' ? fmtDays(e.days) : '—'}</td>
                         <td className="td num font-bold">{fmtDays(e.balance)}</td>
-                        <td className="td max-w-[180px] truncate text-ink-500">{e.memo}</td>
+                        <td className="td max-w-[180px] truncate text-ink-500" title={e.memo || ''}>{e.memo}</td>
                         <td className="td">
                           {isAdmin ? (
                             <StatusToggle status={e.status} busy={busy} onChange={(next) => onDecide(e, next)} />
                           ) : (
                             statusChip(e.status)
+                          )}
+                        </td>
+                        <td className="td">
+                          {canEditRow && canEditRow(e) ? (
+                            <button
+                              type="button"
+                              onClick={() => onEdit && onEdit(e)}
+                              className="rounded-lg p-1.5 text-ink-400 transition hover:bg-brand-50 hover:text-brand-700"
+                              title="수정"
+                            >
+                              <Icon name="pencil" size={15} />
+                            </button>
+                          ) : (
+                            <span className="text-xs text-ink-300">—</span>
                           )}
                         </td>
                       </tr>
@@ -773,7 +826,7 @@ function InfoBox({ label, value }) {
 
 /* --------------------------- 휴무 등록 --------------------------- */
 
-function LeaveFormModal({ open, onClose, onSaved, personOptions, userId, isAdmin, defaultPerson, lockPerson, rows }) {
+function LeaveFormModal({ open, onClose, onSaved, personOptions, userId, isAdmin, defaultPerson, lockPerson, rows, initial }) {
   const toast = useToast()
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState({
@@ -789,18 +842,31 @@ function LeaveFormModal({ open, onClose, onSaved, personOptions, userId, isAdmin
   })
 
   useEffect(() => {
-    if (open) {
-      setForm((f) => ({
-        ...f,
-        entry_date: todayKST(),
-        end_date: todayKST(),
-        person: lockPerson || defaultPerson || f.person || '',
+    if (!open) return
+    if (initial?.id) {
+      setForm({
+        entry_date: initial.entry_date || todayKST(),
+        end_date: initial.end_date || initial.entry_date || todayKST(),
+        person: initial.person || '',
+        leave_type: initial.leave_type || '연차',
+        direction: initial.direction || '사용',
+        days: String(initial.days ?? '1'),
+        memo: initial.memo || '',
         weekendStart: '',
         weekendEnd: '',
-      }))
+      })
+      return
     }
+    setForm((f) => ({
+      ...f,
+      entry_date: todayKST(),
+      end_date: todayKST(),
+      person: lockPerson || defaultPerson || f.person || '',
+      weekendStart: '',
+      weekendEnd: '',
+    }))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open])
+  }, [open, initial?.id])
 
   const set = (key, value) => setForm((f) => ({ ...f, [key]: value }))
 
@@ -858,6 +924,21 @@ function LeaveFormModal({ open, onClose, onSaved, personOptions, userId, isAdmin
     }
     setSaving(true)
     try {
+      if (initial?.id) {
+        /* 수정: 결재 상태는 그대로 두고 내용만 고칩니다 */
+        await updateLeaveEntry(initial.id, {
+          entry_date: form.entry_date,
+          end_date: form.end_date && form.end_date !== form.entry_date ? form.end_date : null,
+          person: form.person,
+          leave_type: form.leave_type,
+          direction: form.direction,
+          days,
+          memo: form.memo.trim(),
+        })
+        toast.success('수정되었습니다.')
+        onSaved()
+        return
+      }
       await createLeaveEntry(
         {
           entry_date: form.entry_date,
@@ -884,15 +965,19 @@ function LeaveFormModal({ open, onClose, onSaved, personOptions, userId, isAdmin
     <Modal
       open={open}
       onClose={saving ? undefined : onClose}
-      title="휴무 등록"
-      subtitle={isAdmin ? '발생과 사용을 기록하면 잔여가 자동 계산됩니다.' : '등록하면 대표 승인 후 잔여에 반영됩니다.'}
+      title={initial?.id ? '휴무 수정' : '휴무 등록'}
+      subtitle={
+        initial?.id
+          ? '결재 상태는 그대로 두고 내용만 고칩니다.'
+          : isAdmin ? '발생과 사용을 기록하면 잔여가 자동 계산됩니다.' : '등록하면 대표 승인 후 잔여에 반영됩니다.'
+      }
       footer={
         <>
           <button type="button" className="btn-ghost" onClick={onClose} disabled={saving}>
             취소
           </button>
           <button type="button" className="btn-primary" onClick={submit} disabled={saving}>
-            {saving ? '등록 중…' : isAdmin ? '등록' : '승인 요청'}
+            {saving ? '저장 중…' : initial?.id ? '저장' : isAdmin ? '등록' : '승인 요청'}
           </button>
         </>
       }

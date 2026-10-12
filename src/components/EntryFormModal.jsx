@@ -157,7 +157,8 @@ export default function EntryFormModal({
     setFiles([])
     setRemoved([])
     setTotalDraft('')
-    setTaxFree(false)
+    /* 세금 납부 등록처럼 세액이 없는 항목은 면세를 켠 채로 엽니다 */
+    setTaxFree(!initial?.id && Boolean(initial?.tax_free))
     if (initial) {
       setForm({
         doc_no: initial.doc_no || '',

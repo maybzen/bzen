@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import Icon from '../components/Icon'
 import { AttachmentModal } from '../components/Attachments'
 import { useToast } from '../components/Toast'
-import { InlineAlert, LoadingBlock, PageHeader } from '../components/ui'
+import { InlineAlert, LoadingBlock, Modal, PageHeader } from '../components/ui'
 import { useAuth } from '../auth/AuthContext'
 import { useStaffPermissions } from '../lib/permissions'
 import { listAttachments, listEntries, listProfiles, listProjects, uploadAttachment } from '../lib/api'
@@ -71,6 +71,7 @@ function DeadlineCard({
   onOpenInsuranceFiles,
   paid,
   onRegisterPay,
+  onShowPay,
 }) {
   const type = TAX_TYPES[deadline.type]
   const done = isDone(state, deadline.id)
@@ -84,9 +85,18 @@ function DeadlineCard({
         <span className="w-20 shrink-0 text-xs font-semibold text-ink-500">{deadline.period}</span>
         <span className="min-w-0 flex-1 truncate text-sm text-ink-800">
           납부기한 {deadline.due}
-          <span className="ml-1.5 font-num font-bold tabular-nums text-ink-900">
-            {paid && paid.total ? `${formatKRW(paid.total)}원` : '미등록'}
-          </span>
+          {paid && paid.total ? (
+            <button
+              type="button"
+              onClick={() => onShowPay(deadline)}
+              className="ml-1.5 font-num font-bold tabular-nums text-brand-700 hover:underline"
+              title="클릭하면 장부 내역 확인"
+            >
+              {formatKRW(paid.total)}원
+            </button>
+          ) : (
+            <span className="ml-1.5 font-num font-bold tabular-nums text-ink-300">미등록</span>
+          )}
           {paid && paid.total ? (
             <span className="ml-1 text-[11px] text-ink-400">
               국세 {formatKRW(paid.national)}·지방 {formatKRW(paid.local)}
@@ -247,6 +257,7 @@ export default function Tax() {
   const [uploading, setUploading] = useState(false)
   const [viewerFiles, setViewerFiles] = useState(null)
   const [payTarget, setPayTarget] = useState(null)
+  const [payDetailYm, setPayDetailYm] = useState('')
   const [reloadKey, setReloadKey] = useState(0)
   const today = todayISO()
 
@@ -485,6 +496,7 @@ export default function Tax() {
                 onExport={exportFiling}
                 paid={paidOf(d)}
                 onRegisterPay={setPayTarget}
+                onShowPay={(dl) => setPayDetailYm(String(dl.due || '').slice(0, 7))}
                 {...insuranceProps(d)}
               />
             ))}
@@ -514,6 +526,7 @@ export default function Tax() {
                       onExport={exportFiling}
                       paid={paidOf(d)}
                       onRegisterPay={setPayTarget}
+                      onShowPay={(dl) => setPayDetailYm(String(dl.due || '').slice(0, 7))}
                       {...insuranceProps(d)}
                     />
                   ))}
@@ -549,6 +562,7 @@ export default function Tax() {
                   onExport={exportFiling}
                   paid={paidOf(d)}
                   onRegisterPay={setPayTarget}
+                  onShowPay={(dl) => setPayDetailYm(String(dl.due || '').slice(0, 7))}
                   {...insuranceProps(d)}
                 />
               ))
@@ -569,7 +583,8 @@ export default function Tax() {
         title="고지서 PDF"
       />
 
-      {/* 원천세 납부 등록: 장부에 세금과공과로 기록됩니다 (급여관리 세금·원천징수에 함께 집계) */}
+      {/* 원천세 납부 등록: 장부에 세금과공과로 기록됩니다 (급여관리 세금·원천징수에 함께 집계).
+          세금은 부가세가 없으니 면세 체크가 켜진 채로 열립니다. 적요의 N월분(귀속월)이 다르면 고쳐주세요 */}
       <EntryFormModal
         open={Boolean(payTarget)}
         onClose={() => setPayTarget(null)}
@@ -587,6 +602,7 @@ export default function Tax() {
                 category: '세금과공과',
                 description: `${payTarget.period} 원천세`,
                 memo: '원천징수',
+                tax_free: true,
               }
             : null
         }
@@ -595,6 +611,53 @@ export default function Tax() {
         isAdmin={isAdmin}
         userId={user?.id}
       />
+
+      {/* 원천세 납부 내역: 합계를 누르면 어떤 장부 행인지 확인 */}
+      <Modal
+        open={Boolean(payDetailYm)}
+        onClose={() => setPayDetailYm('')}
+        title={payDetailYm ? `${payDetailYm} 원천세 납부 내역` : '원천세 납부 내역'}
+        subtitle={
+          payDetailYm && paidMap.get(payDetailYm)
+            ? `합계 ${formatKRW(paidMap.get(payDetailYm).total)}원 · 국세 ${formatKRW(paidMap.get(payDetailYm).national)}원 · 지방 ${formatKRW(paidMap.get(payDetailYm).local)}원`
+            : ''
+        }
+        size="lg"
+        footer={
+          <button type="button" className="btn-ghost" onClick={() => setPayDetailYm('')}>
+            닫기
+          </button>
+        }
+      >
+        {(paidMap.get(payDetailYm)?.rows || []).length ? (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[520px] border-collapse text-xs">
+              <thead className="bg-ink-50/70">
+                <tr>
+                  <th className="th">일자</th>
+                  <th className="th">거래처</th>
+                  <th className="th">적요</th>
+                  <th className="th">메모</th>
+                  <th className="th text-right">금액</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-ink-100">
+                {(paidMap.get(payDetailYm)?.rows || []).map((e) => (
+                  <tr key={e.id}>
+                    <td className="td whitespace-nowrap">{e.entry_date}</td>
+                    <td className="td">{e.counterparty || '—'}</td>
+                    <td className="td">{e.description || '—'}</td>
+                    <td className="td text-ink-500">{e.memo || '—'}</td>
+                    <td className="td num font-bold">{formatKRW(e.total_amount)}원</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="text-xs text-ink-500">내역이 없습니다.</p>
+        )}
+      </Modal>
     </div>
   )
 }
