@@ -5,7 +5,7 @@ import { useAuth } from '../auth/AuthContext'
 import { useToast } from './Toast'
 import { getSettings } from '../lib/api'
 import { useStaffPermissions } from '../lib/permissions'
-import { APP_NAME, COMPANY_EN, DEFAULT_COMPANY } from '../lib/constants'
+import { APP_NAME, APP_VERSION, COMPANY_EN, DEFAULT_COMPANY } from '../lib/constants'
 
 export const NAV = [
   { to: '/dashboard', label: '대시보드', icon: 'dashboard', base: true },
@@ -203,6 +203,7 @@ export default function Layout() {
         })}
       </div>
       <div ref={profileMenuRef} className="relative border-t border-white/10 px-4 py-4">
+        <p className="mb-2 text-[10px] font-medium tabular-nums text-ink-600">버전 {APP_VERSION}</p>
         {profileMenu ? (
           <>
             <button

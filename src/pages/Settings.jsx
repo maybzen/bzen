@@ -4,7 +4,7 @@ import Icon from '../components/Icon'
 import { useToast } from '../components/Toast'
 import { Field, InlineAlert, LoadingBlock, PageHeader, Spinner } from '../components/ui'
 import { useAuth } from '../auth/AuthContext'
-import { COMPANY_EN, ROLE_LABEL } from '../lib/constants'
+import { APP_VERSION, COMPANY_EN, ROLE_LABEL } from '../lib/constants'
 import { PERM_DEFS, STAFF_CORE_PERMS } from '../lib/permissions'
 import { formatDateHuman } from '../lib/format'
 import { callAdminFn, getSettings, updateProfile, updateSettings } from '../lib/api'
@@ -351,6 +351,7 @@ export default function Settings() {
             <Row label="권한" value={ROLE_LABEL[profile?.role] || '—'} />
             <Row label="계정 생성일" value={formatDateHuman(profile?.created_at)} />
             <Row label="서비스" value={`${COMPANY_EN} 회계관리 시스템`} />
+            <Row label="버전" value={APP_VERSION} />
             <Row label="데이터 저장소" value="Supabase (서울 리전)" />
           </dl>
 
