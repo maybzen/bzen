@@ -883,7 +883,8 @@ function LeaveFormModal({ open, onClose, onSaved, personOptions, userId, isAdmin
   }, [rows, form.person, form.leave_type])
   const projected = currentRemain + (form.direction === '발생' ? Number(form.days || 0) : -Number(form.days || 0))
 
-  /* 주말출근 → 대휴 자동 계산 (출근~퇴근 시간으로 계산, 4시간 이상 1일 · 미만 0.5일) */
+  /* 주말출근 → 대휴 자동 계산 (출근~퇴근 시간으로 계산, 4시간 이상 1일 · 미만 0.5일).
+     퇴근이 출근보다 빠르면 익일 새벽 퇴근(밤샘)으로 봅니다 */
   const applyWeekend = () => {
     const toMin = (t) => {
       const m = /^(\d{1,2}):(\d{2})$/.exec(String(t || ''))
@@ -891,11 +892,13 @@ function LeaveFormModal({ open, onClose, onSaved, personOptions, userId, isAdmin
       return Number(m[1]) * 60 + Number(m[2])
     }
     const s = toMin(form.weekendStart)
-    const e = toMin(form.weekendEnd)
+    let e = toMin(form.weekendEnd)
     if (s == null || e == null) {
       toast.error('출근·퇴근 시간을 입력해 주세요.')
       return
     }
+    const overnight = e <= s
+    if (overnight) e += 24 * 60
     const mins = e - s
     if (mins <= 0) {
       toast.error('퇴근 시간은 출근 시간보다 늦어야 합니다.')
@@ -907,7 +910,7 @@ function LeaveFormModal({ open, onClose, onSaved, personOptions, userId, isAdmin
       leave_type: '대휴',
       direction: '발생',
       days: String(h >= 4 ? 1 : 0.5),
-      memo: `주말출근 ${form.weekendStart}~${form.weekendEnd} (${h}시간)`,
+      memo: `주말출근 ${form.weekendStart}~${overnight ? '익일' : ''}${form.weekendEnd} (${h}시간)`,
     }))
     toast.success(h >= 4 ? '대휴 1일이 계산되었습니다.' : '대휴 0.5일이 계산되었습니다.')
   }
@@ -1100,7 +1103,7 @@ function LeaveFormModal({ open, onClose, onSaved, personOptions, userId, isAdmin
 
         <div className="rounded-lg border border-ink-200 bg-ink-50/60 p-3.5">
           <p className="text-xs font-bold text-ink-700">주말출근 대휴 계산</p>
-          <p className="mt-0.5 text-[11px] text-ink-500">출근~퇴근 입력 → 4시간 이상 1일 · 미만 0.5일</p>
+          <p className="mt-0.5 text-[11px] text-ink-500">출근~퇴근 입력 → 4시간 이상 1일 · 미만 0.5일 · 익일 새벽 퇴근(밤샘)도 됩니다</p>
           <div className="mt-2 flex items-center gap-2">
             <input
               type="time"
