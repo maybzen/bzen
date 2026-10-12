@@ -1107,7 +1107,7 @@ function LeaveFormModal({ open, onClose, onSaved, personOptions, userId, isAdmin
             />
           </Field>
         </div>
-        <Field label="사유" hint="세부내역(프로젝트·사유 등) 직접 작성란입니다. 아래 계산기와 별개로 유지됩니다">
+        <Field label="사유" hint="세부내역(프로젝트·사유 등) 직접 작성란입니다">
           <input
             className="input"
             placeholder="예: 하계휴가, 주말출근 09:00~14:00"

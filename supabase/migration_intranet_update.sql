@@ -11,6 +11,10 @@ alter table public.profiles
 alter table public.settings
   add column if not exists finance_viewers jsonb not null default '[]';
 
+-- 3) 직원 프로젝트 범위 ('all' 전체 | 'own' 담당만)
+alter table public.settings
+  add column if not exists project_scope text not null default 'all';
+
 -- 3) 회사명 표기 통일
 update public.settings set company_name = '(주)비젠커뮤니케이션' where id = 1;
 

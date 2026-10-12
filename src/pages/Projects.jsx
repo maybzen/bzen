@@ -7,7 +7,7 @@ import { ProfitBar } from '../components/Charts'
 import { useToast } from '../components/Toast'
 import { AmountInput, ConfirmDialog, EmptyState, Field, InlineAlert, LoadingBlock, Modal, PageHeader, SegmentedControl, StatCard } from '../components/ui'
 import { useAuth } from '../auth/AuthContext'
-import { useFinanceView } from '../lib/permissions'
+import { useFinanceView, useStaffPermissions } from '../lib/permissions'
 import { PROJECT_STATUS } from '../lib/constants'
 import { contractSplit, formatDateHuman, formatKRW, formatPercent, normalizeVendorName } from '../lib/format'
 import { buildPnl, groupByProject, summarize } from '../lib/summary'
@@ -96,6 +96,9 @@ export default function Projects() {
   const toast = useToast()
   /* 프로젝트 금액 열람: 관리자 + 설정에서 허용한 직원 */
   const canSeeMoney = useFinanceView(profile, isAdmin)
+  /* 담당 프로젝트만 보기 (직원용 설정). 담당자가 본인이 아니면 목록에서 뺍니다 */
+  const { projectScope } = useStaffPermissions(profile)
+  const scopedOwn = !isAdmin && projectScope === 'own'
 
   const [loading, setLoading] = useState(true)
   const [projects, setProjects] = useState([])
@@ -198,7 +201,10 @@ export default function Projects() {
   }, [load, reloadKey]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // 내부 귀속용(사내 공통)은 목록에서 숨기고 선택지에는 둡니다.
-  const visibleProjects = useMemo(() => projects.filter((p) => !p.is_hidden), [projects])
+  const visibleProjects = useMemo(
+    () => projects.filter((p) => !p.is_hidden && (!scopedOwn || p.manager_id === profile?.id)),
+    [projects, scopedOwn, profile?.id],
+  )
 
   /** 프로젝트별 활동 연도. 거래가 있는 연도 + 시작일 연도 + 종료일 연도. */
   const yearsByProject = useMemo(() => {
@@ -379,7 +385,7 @@ export default function Projects() {
       <div className="card overflow-hidden">
         <div className="flex flex-col gap-3 border-b border-ink-200 px-4 py-3.5">
           <div className="flex flex-wrap items-center gap-2">
-            {canSeeMoney ? (
+            {canSeeMoney && !scopedOwn ? (
               <SegmentedControl
                 size="sm"
                 value={viewTab}
@@ -458,7 +464,7 @@ export default function Projects() {
         </div>
       </div>
 
-      {canSeeMoney && viewTab === 'agency' ? (
+      {canSeeMoney && !scopedOwn && viewTab === 'agency' ? (
         agencyRows.length ? (
           <div className="flex flex-col gap-4">
             <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">

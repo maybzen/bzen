@@ -741,9 +741,11 @@ export default function EntryFormModal({
                 <option value="">선택 안 함</option>
                 {fundCards.map((c) => {
                   const last4 = cardLast4(c.number)
+                  /* "1500만원 한도" 같은 문구는 빼고 보여줍니다 */
+                  const shortName = String(c.name || '').replace(/\s*\d[\d,]*\s*만\s*원(\s*한도)?/g, '').trim()
                   return (
                     <option key={c.id} value={last4 ? `법카 ${last4}` : ''} disabled={!last4}>
-                      {c.issuer} {last4 ? `····${last4}` : ''} {c.name}
+                      {c.issuer} {last4 ? `····${last4}` : ''} {shortName}
                       {c.holder ? ` · ${c.holder}` : ''}
                     </option>
                   )
@@ -752,7 +754,7 @@ export default function EntryFormModal({
             </Field>
           ) : null}
 
-          {(entryType === 'opex' || entryType === 'purchase') && !formIsReport ? (
+          {(entryType === 'opex' || entryType === 'purchase') ? (
             <Field label="카드 이용자" hint="여러 명이면 체크, 목록에 없으면 기타에 직접 입력">
               <CardUserSelect
                 value={form.card_user}

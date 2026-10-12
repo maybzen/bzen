@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, Navigate, useNavigate, useParams } from 'react-router-dom'
 import EntryFormModal from '../components/EntryFormModal'
 import EntryTable from '../components/EntryTable'
 import PartnerFormModal from '../components/PartnerFormModal'
@@ -10,7 +10,7 @@ import { AttachmentModal } from '../components/Attachments'
 import { useToast } from '../components/Toast'
 import { ConfirmDialog, EmptyState, InlineAlert, LoadingBlock, SegmentedControl, StatCard } from '../components/ui'
 import { useAuth } from '../auth/AuthContext'
-import { isStaffVisible, staffIdsFromProfiles, useFinanceView } from '../lib/permissions'
+import { isStaffVisible, staffIdsFromProfiles, useFinanceView, useStaffPermissions } from '../lib/permissions'
 import { ENTRY_META, PROJECT_STATUS } from '../lib/constants'
 import { contractSplit, formatDateHuman, formatKRW, formatPercent, monthLabel, normalizeVendorName } from '../lib/format'
 import { groupByMonth, summarize } from '../lib/summary'
@@ -30,6 +30,9 @@ export default function ProjectDetail() {
   const toast = useToast()
   /* 프로젝트 금액 열람: 관리자 + 설정에서 허용한 직원 */
   const canSeeMoney = useFinanceView(profile, isAdmin)
+  /* 담당 프로젝트만 보기: 담당자가 본인이 아니면 목록으로 돌려보냅니다 */
+  const { projectScope } = useStaffPermissions(profile)
+  const scopedOwn = !isAdmin && projectScope === 'own'
 
   const [loading, setLoading] = useState(true)
   const [project, setProject] = useState(null)
@@ -278,6 +281,10 @@ export default function ProjectDetail() {
         />
       </div>
     )
+  }
+
+  if (scopedOwn && project.manager_id !== profile?.id) {
+    return <Navigate to="/projects" replace />
   }
 
   const status = PROJECT_STATUS[project.status] || PROJECT_STATUS.active

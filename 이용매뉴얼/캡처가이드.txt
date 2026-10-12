@@ -1,0 +1,34 @@
+비젠 인트라넷 매뉴얼용 실화면 캡처 가이드
+========================================
+원칙: 레이아웃·색·버튼은 절대 수정 금지. 숫자·이름 마스킹(블러)만 허용.
+파일명 규칙: real-<메뉴ID>.png → 이용매뉴얼/img/ 폴더에 저장
+다 모이면 PPT에 그대로 삽입됩니다.
+
+[완료] 이미 있는 6장
+- real-admin-dashboard.png (대시보드)
+- real-admin-sales.png (매출)
+- real-admin-users.png (계정관리)
+- real-staff-dashboard.png / real-staff-expense.png / real-staff-menu.png
+
+[필요] 관리자 PPT용 8장 (관리자 계정으로 접속)
+1. real-purchases.png   : 매입 장부 (기간 '이번 달', 테스트 2~3건 입력 상태)
+2. real-collections.png  : 수금관리 (프로젝트 1개 + 입금 1건 상태)
+3. real-expenses.png     : 운영비 장부 (테스트 2~3건 상태)
+4. real-projects.png     : 프로젝트 목록 (카드 2~3개 보이는 상태)
+5. real-funds.png        : 자금관리 (잔고 1건 기록된 상태)
+6. real-tax.png          : 세금관리 (연도 선택된 상태)
+7. real-reports.png      : 보고서 (기간 선택 + 요약표 보이는 상태)
+8. real-trash.png        : 휴지통 (테스트 1건 삭제 후 보이는 상태)
+   ※ real-settings.png  : 설정 화면 — 관리자/직원 공통으로 사용
+
+[필요] 직원 PPT용 3장 (직원 계정으로 접속)
+9.  real-staff-projects.png : 프로젝트 목록 (직원 화면)
+10. real-staff-leaves.png   : 휴무대장 ([휴무 등록] 버튼 보이는 상태)
+11. real-staff-settings.png : 설정 → 내 정보 화면
+
+캡처 요령
+1. 테스트 데이터 2~3건 입력 (실데이터와 구분되도록 '[테스트]' 접두 권장)
+2. 상단 기간은 '이번 달'로 통일
+3. 브라우저 폭 1400px 이상, 사이드바 포함 전체 캡처
+4. 캡처 후 테스트 데이터는 휴지통으로 삭제 (휴지통 캡처용 1건은 남김)
+5. PNG 저장 후 이 폴더에 넣고 연락 → PPT에 삽입

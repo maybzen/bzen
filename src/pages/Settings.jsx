@@ -6,12 +6,12 @@ import { useToast } from '../components/Toast'
 import { Field, InlineAlert, LoadingBlock, PageHeader, Spinner } from '../components/ui'
 import { useAuth } from '../auth/AuthContext'
 import { APP_NAME, APP_VERSION, COMPANY_EN, ROLE_LABEL } from '../lib/constants'
-import { PERM_DEFS, STAFF_CORE_PERMS } from '../lib/permissions'
+import { PERM_DEFS } from '../lib/permissions'
 import { formatDateHuman } from '../lib/format'
 import { callAdminFn, getSettings, listProfiles, updateProfile, updateSettings } from '../lib/api'
 
 export default function Settings() {
-  const { profile, isAdmin, realIsAdmin, staffView, setStaffView, refreshProfile, signOut, user } = useAuth()
+  const { profile, isAdmin, refreshProfile, signOut, user } = useAuth()
   const toast = useToast()
   const navigate = useNavigate()
 
@@ -26,6 +26,8 @@ export default function Settings() {
   const [staffPerms, setStaffPerms] = useState([])
   const [hasPermColumn, setHasPermColumn] = useState(true)
   const [savingPerms, setSavingPerms] = useState(false)
+  /* 직원은 담당 프로젝트만 보기 */
+  const [scopeOwn, setScopeOwn] = useState(false)
 
   /* 프로젝트 금액을 볼 수 있는 직원 id 목록 (관리자 외 예외) */
   const [staffList, setStaffList] = useState([])
@@ -61,6 +63,7 @@ export default function Settings() {
         if (Array.isArray(data.finance_viewers)) {
           setFinanceViewers(data.finance_viewers.filter((v) => typeof v === 'string'))
         }
+        setScopeOwn(data.project_scope === 'own')
       }
       setStaffList(profiles || [])
     } catch (error) {
@@ -123,7 +126,7 @@ export default function Settings() {
     e.preventDefault()
     setSavingPerms(true)
     try {
-      await updateSettings({ staff_permissions: staffPerms })
+      await updateSettings({ staff_permissions: staffPerms, project_scope: scopeOwn ? 'own' : 'all' })
       toast.success('직원 권한이 저장되었습니다. 직원은 다음 접속부터 적용됩니다.')
     } catch (error) {
       toast.error(error.message)
@@ -298,7 +301,7 @@ export default function Settings() {
               <h2 className="text-sm font-bold text-ink-900">직원 권한</h2>
               <p className="mt-0.5 text-xs text-ink-500">
                 전체 직원에게 공통으로 보여줄 추가 메뉴를 정합니다. 특정 직원에게만 더 보여주려면 계정관리에서
-                정하세요. 지출결의·운영비·거래처·프로젝트·휴무대장·설정은 항상 보이고, 계정관리는 항상 관리자 전용입니다.
+                정하세요. 체크를 모두 끄면 설정 메뉴만 보입니다.
               </p>
             </header>
             {loadingCompany ? (
@@ -311,22 +314,30 @@ export default function Settings() {
               </InlineAlert>
             ) : (
               <form onSubmit={savePerms} className="flex flex-col gap-2.5">
+                <label className="flex cursor-pointer items-center justify-between gap-3 rounded-lg border border-brand-200 bg-brand-50/50 px-3.5 py-2.5 transition hover:bg-brand-50">
+                  <span className="text-sm font-semibold text-ink-800">
+                    담당 프로젝트만 보기
+                    <span className="block text-[11px] font-normal text-ink-500">
+                      켜면 직원은 담당자가 본인인 프로젝트만 봅니다
+                    </span>
+                  </span>
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 accent-brand-600"
+                    checked={scopeOwn}
+                    onChange={(e) => setScopeOwn(e.target.checked)}
+                  />
+                </label>
                 {PERM_DEFS.map((perm) => (
                   <label
                     key={perm.key}
                     className="flex cursor-pointer items-center justify-between gap-3 rounded-lg border border-ink-200 px-3.5 py-2.5 transition hover:bg-ink-50/60"
                   >
-                    <span className="text-sm font-semibold text-ink-800">
-                      {perm.label}
-                      {STAFF_CORE_PERMS.includes(perm.key) ? (
-                        <span className="chip ml-1.5 bg-ink-100 text-ink-500">고정</span>
-                      ) : null}
-                    </span>
+                    <span className="text-sm font-semibold text-ink-800">{perm.label}</span>
                     <input
                       type="checkbox"
                       className="h-4 w-4 accent-brand-600"
-                      checked={staffPerms.includes(perm.key) || STAFF_CORE_PERMS.includes(perm.key)}
-                      disabled={STAFF_CORE_PERMS.includes(perm.key)}
+                      checked={staffPerms.includes(perm.key)}
                       onChange={() => togglePerm(perm.key)}
                     />
                   </label>
@@ -355,31 +366,6 @@ export default function Settings() {
           </section>
         ) : null}
 
-        {/* 직원 화면 미리보기 */}
-        {realIsAdmin ? (
-          <section className="card p-5">
-            <header className="mb-4">
-              <h2 className="text-sm font-bold text-ink-900">직원 화면으로 보기</h2>
-              <p className="mt-0.5 text-xs text-ink-500">
-                켜면 메뉴·권한·버튼이 직원 기준으로 보입니다. 실제 로그인과 DB 권한은 그대로입니다.
-              </p>
-            </header>
-            <label className="flex cursor-pointer items-center justify-between gap-3 rounded-lg border border-ink-200 px-3.5 py-2.5 transition hover:bg-ink-50/60">
-              <span className="text-sm font-semibold text-ink-800">직원 미리보기</span>
-              <input
-                type="checkbox"
-                className="h-4 w-4 accent-brand-600"
-                checked={staffView}
-                onChange={(e) => {
-                  setStaffView(e.target.checked)
-                  toast.info(e.target.checked ? '직원 화면으로 봅니다.' : '관리자 화면으로 돌아갑니다.')
-                  navigate('/dashboard', { replace: true })
-                }}
-              />
-            </label>
-          </section>
-        ) : null}
-
         {/* 시스템 정보 */}
         <section className="card p-5">
           <header className="mb-4">
@@ -391,7 +377,7 @@ export default function Settings() {
             <Row label="계정 생성일" value={formatDateHuman(profile?.created_at)} />
             <Row label="서비스" value={`${COMPANY_EN} ${APP_NAME}`} />
             <Row label="버전" value={APP_VERSION} />
-            <Row label="데이터 저장소" value="Supabase (서울 리전)" />
+            {isAdmin ? <Row label="데이터 저장소" value="Supabase (서울 리전)" /> : null}
           </dl>
 
           <div className="mt-5 flex flex-col gap-2">

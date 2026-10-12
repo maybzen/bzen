@@ -5,7 +5,7 @@ import Icon from './components/Icon'
 import { Spinner } from './components/ui'
 import { ToastProvider } from './components/Toast'
 import { AuthProvider, useAuth } from './auth/AuthContext'
-import { useStaffPermissions, STAFF_LANDING } from './lib/permissions'
+import { useStaffPermissions, staffLanding } from './lib/permissions'
 
 /**
  * 배포 직후 낡은 index.html이 이미 지워진 청크를 요청하면(404)
@@ -167,22 +167,23 @@ function Guard({ children, adminOnly = false, perm = null }) {
   if (!user) return <Navigate to="/login" replace state={{ from: location.pathname }} />
   if (!profile) return <Splash />
   if (!isActive) return <PendingApproval />
-  /* 직원 첫 화면은 지출결의 (대시보드 관리자 전용) */
-  const fallback = isAdmin ? '/dashboard' : STAFF_LANDING
+  /* 설정에서 메뉴를 끈 경우를 대비해 권한에 있는 첫 화면으로 보냅니다 */
+  if (!isAdmin && permsLoading) return <Splash />
+  const fallback = isAdmin ? '/dashboard' : staffLanding(perms)
   if (adminOnly && !isAdmin) return <Navigate to={fallback} replace />
   if (perm && !isAdmin) {
-    if (permsLoading) return <Splash />
     if (!perms.includes(perm)) return <Navigate to={fallback} replace />
   }
-  /* 직원 대시보드 직접 접근도 지출결의로 */
-  if (!isAdmin && location.pathname === '/dashboard') return <Navigate to={STAFF_LANDING} replace />
+  /* 직원 대시보드 직접 접근도 첫 화면으로 */
+  if (!isAdmin && location.pathname === '/dashboard') return <Navigate to={fallback} replace />
   return children
 }
 
 function HomeRedirect() {
-  const { loading, isAdmin } = useAuth()
-  if (loading) return <Splash />
-  return <Navigate to={isAdmin ? '/dashboard' : STAFF_LANDING} replace />
+  const { loading, isAdmin, profile } = useAuth()
+  const { perms, loading: permsLoading } = useStaffPermissions(profile)
+  if (loading || (!isAdmin && permsLoading)) return <Splash />
+  return <Navigate to={isAdmin ? '/dashboard' : staffLanding(perms)} replace />
 }
 
 export default function App() {
