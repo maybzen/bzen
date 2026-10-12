@@ -26,8 +26,6 @@ export default function Settings() {
   const [staffPerms, setStaffPerms] = useState([])
   const [hasPermColumn, setHasPermColumn] = useState(true)
   const [savingPerms, setSavingPerms] = useState(false)
-  /* 직원은 담당 프로젝트만 보기 */
-  const [scopeOwn, setScopeOwn] = useState(false)
 
   /* 프로젝트 금액을 볼 수 있는 직원 id 목록 (관리자 외 예외) */
   const [staffList, setStaffList] = useState([])
@@ -63,7 +61,6 @@ export default function Settings() {
         if (Array.isArray(data.finance_viewers)) {
           setFinanceViewers(data.finance_viewers.filter((v) => typeof v === 'string'))
         }
-        setScopeOwn(data.project_scope === 'own')
       }
       setStaffList(profiles || [])
     } catch (error) {
@@ -126,7 +123,7 @@ export default function Settings() {
     e.preventDefault()
     setSavingPerms(true)
     try {
-      await updateSettings({ staff_permissions: staffPerms, project_scope: scopeOwn ? 'own' : 'all' })
+      await updateSettings({ staff_permissions: staffPerms })
       toast.success('직원 권한이 저장되었습니다. 직원은 다음 접속부터 적용됩니다.')
     } catch (error) {
       toast.error(error.message)
@@ -314,20 +311,10 @@ export default function Settings() {
               </InlineAlert>
             ) : (
               <form onSubmit={savePerms} className="flex flex-col gap-2.5">
-                <label className="flex cursor-pointer items-center justify-between gap-3 rounded-lg border border-brand-200 bg-brand-50/50 px-3.5 py-2.5 transition hover:bg-brand-50">
-                  <span className="text-sm font-semibold text-ink-800">
-                    담당 프로젝트만 보기
-                    <span className="block text-[11px] font-normal text-ink-500">
-                      켜면 직원은 담당자가 본인인 프로젝트만 봅니다
-                    </span>
-                  </span>
-                  <input
-                    type="checkbox"
-                    className="h-4 w-4 accent-brand-600"
-                    checked={scopeOwn}
-                    onChange={(e) => setScopeOwn(e.target.checked)}
-                  />
-                </label>
+                <p className="rounded-lg bg-ink-50/70 px-3.5 py-2.5 text-[11px] leading-relaxed text-ink-500">
+                  프로젝트 담당자로 지정된 직원은 담당 프로젝트의 금액(계약·매출·이익)을 볼 수 있습니다.
+                  담당자 지정은 프로젝트 등록·수정창에서 합니다.
+                </p>
                 {PERM_DEFS.map((perm) => (
                   <label
                     key={perm.key}

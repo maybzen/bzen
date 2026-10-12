@@ -128,8 +128,6 @@ export function useStaffPermissions(profile) {
     perms: effectivePerms(settings, profile),
     /* 직원 미리보기용: 개인 추가분 제외한 전체 공통 권한 */
     global: settings?.global || [],
-    /* 담당 프로젝트만 보기 여부 */
-    projectScope: settings?.projectScope || 'all',
     loading: settings === null,
   }
 }

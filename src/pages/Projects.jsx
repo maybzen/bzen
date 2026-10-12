@@ -7,7 +7,7 @@ import { ProfitBar } from '../components/Charts'
 import { useToast } from '../components/Toast'
 import { AmountInput, ConfirmDialog, EmptyState, Field, InlineAlert, LoadingBlock, Modal, PageHeader, SegmentedControl, StatCard } from '../components/ui'
 import { useAuth } from '../auth/AuthContext'
-import { useFinanceView, useStaffPermissions } from '../lib/permissions'
+import { useFinanceView } from '../lib/permissions'
 import { PROJECT_STATUS } from '../lib/constants'
 import { contractSplit, formatDateHuman, formatKRW, formatPercent, normalizeVendorName } from '../lib/format'
 import { buildPnl, groupByProject, summarize } from '../lib/summary'
@@ -96,9 +96,8 @@ export default function Projects() {
   const toast = useToast()
   /* 프로젝트 금액 열람: 관리자 + 설정에서 허용한 직원 */
   const canSeeMoney = useFinanceView(profile, isAdmin)
-  /* 담당 프로젝트만 보기 (직원용 설정). 담당자가 본인이 아니면 목록에서 뺍니다 */
-  const { projectScope } = useStaffPermissions(profile)
-  const scopedOwn = !isAdmin && projectScope === 'own'
+  /* 담당 프로젝트는 담당자도 금액을 봅니다 (전체 목록은 모두에게 공개) */
+  const rowMoney = (project) => canSeeMoney || project?.manager_id === profile?.id
 
   const [loading, setLoading] = useState(true)
   const [projects, setProjects] = useState([])
@@ -202,8 +201,8 @@ export default function Projects() {
 
   // 내부 귀속용(사내 공통)은 목록에서 숨기고 선택지에는 둡니다.
   const visibleProjects = useMemo(
-    () => projects.filter((p) => !p.is_hidden && (!scopedOwn || p.manager_id === profile?.id)),
-    [projects, scopedOwn, profile?.id],
+    () => projects.filter((p) => !p.is_hidden),
+    [projects],
   )
 
   /** 프로젝트별 활동 연도. 거래가 있는 연도 + 시작일 연도 + 종료일 연도. */
@@ -385,7 +384,7 @@ export default function Projects() {
       <div className="card overflow-hidden">
         <div className="flex flex-col gap-3 border-b border-ink-200 px-4 py-3.5">
           <div className="flex flex-wrap items-center gap-2">
-            {canSeeMoney && !scopedOwn ? (
+            {canSeeMoney ? (
               <SegmentedControl
                 size="sm"
                 value={viewTab}
@@ -464,7 +463,7 @@ export default function Projects() {
         </div>
       </div>
 
-      {canSeeMoney && !scopedOwn && viewTab === 'agency' ? (
+      {canSeeMoney && viewTab === 'agency' ? (
         agencyRows.length ? (
           <div className="flex flex-col gap-4">
             <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -609,7 +608,7 @@ export default function Projects() {
                   row={row}
                   status={status}
                   isAdmin={isAdmin}
-                  canSeeMoney={canSeeMoney}
+                  canSee={canSeeMoney || project.manager_id === profile?.id}
                   managerName={managerName(project.manager_id)}
                   onEdit={() => {
                     setEditing(project)
@@ -646,7 +645,7 @@ export default function Projects() {
                       {project.venue ? ` · ${project.venue}` : ''}
                       {managerName(project.created_by) ? ` · 등록 ${managerName(project.created_by)}` : ''}
                     </p>
-                    {csplit.total > 0 ? (
+                    {rowMoney(project) && csplit.total > 0 ? (
                       <p className="mt-0.5 truncate text-xs font-semibold text-ink-700">
                         계약 {formatKRW(csplit.supply)}원
                         <span className="font-normal text-ink-400"> (합계 {formatKRW(csplit.total)}원)</span>
@@ -684,10 +683,10 @@ export default function Projects() {
                   achieved={achieved}
                   contractAmount={incl ? csplit.total : csplit.supply}
                   showContract
-                  bare={!canSeeMoney}
+                  bare={!rowMoney(project)}
                 />
 
-                {canSeeMoney ? (
+                {rowMoney(project) ? (
                   <div className="mt-3">
                     <ProfitBar value={Math.abs(row.profit)} max={maxSale} tone={row.profit >= 0 ? 'profit' : 'loss'} />
                   </div>
@@ -1026,7 +1025,7 @@ function AgencyDealModal({ partners, userId, initial = null, onClose, onSaved })
   )
 }
 
-function ProposalCard({ project, row, status, isAdmin, canSeeMoney, managerName, onEdit, onDelete }) {  /* 제안서·미진행도 손익은 장부에서 자동 계산합니다.
+function ProposalCard({ project, row, status, isAdmin, canSee, managerName, onEdit, onDelete }) {  /* 제안서·미진행도 손익은 장부에서 자동 계산합니다.
      제안 준비에 쓴 부대비용은 잡히고 매출은 없으므로 영업이익이 그대로(-) 손실이 됩니다.
      매출이 없으면 이익률은 산출할 수 없어 '—'로 둡니다. */
   const pnl = buildPnl(row?.sale, row?.purchase, row?.opex)
@@ -1084,7 +1083,7 @@ function ProposalCard({ project, row, status, isAdmin, canSeeMoney, managerName,
             {project.contract_amount > 0 ? formatKRW(project.contract_amount) : '—'}
           </dd>
         </div>
-        {canSeeMoney ? (
+        {canSee ? (
           <>
             <div>
               <dt className="text-[11px] font-semibold text-ink-500">매출총이익</dt>
@@ -1119,7 +1118,7 @@ function ProposalCard({ project, row, status, isAdmin, canSeeMoney, managerName,
       {row.count ? (
         <p className="mt-2 text-[11px] text-ink-500">
           장부 {row.count}건 기준
-          {canSeeMoney ? (
+          {canSee ? (
             <>
               {' '}· 순매출 {formatKRW(pnl.revenue)}원 − 매출원가 {formatKRW(pnl.cogs)}원 − 경비{' '}
               {formatKRW(pnl.expense)}원
