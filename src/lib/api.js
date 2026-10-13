@@ -596,6 +596,37 @@ export async function listTrashedEntries() {
     .sort((a, b) => String(b.deleted_at || '').localeCompare(String(a.deleted_at || '')))
 }
 
+/**
+ * 중복 의심 장부 합치기 (남기고 휴지통).
+ * keepId 1건은 남기고 memo에 정리 내역을 남긴 뒤, 나머지는 휴지통으로 이동합니다.
+ * 영구삭제가 아니라 휴지통 메뉴에서 복원할 수 있습니다.
+ */
+export async function mergeEntries(keepId, sourceIds, userId) {
+  const sources = [...new Set((sourceIds || []).filter(Boolean))].filter((id) => id !== keepId)
+  if (!keepId || !sources.length) throw new Error('남길 내역과 합칠 내역을 선택해 주세요.')
+  const kept = await unwrap(supabase.from('entries').select('*').eq('id', keepId).maybeSingle())
+  if (!kept) throw new Error('남길 내역을 찾지 못했습니다.')
+  const removed = await unwrap(supabase.from('entries').select('*').in('id', sources))
+  const lines = (removed || []).map(
+    (r) => `${r.entry_date || ''} ${r.counterparty || ''} ${Number(r.supply_amount || 0) + Number(r.vat_amount || 0)}원`,
+  )
+  const suffix = `중복합침 ${sources.length}건 정리${lines.length ? ` (${lines.slice(0, 3).join(', ')}${lines.length > 3 ? ' 외' : ''})` : ''}`
+  const memo = [kept.memo, suffix].filter(Boolean).join(' · ')
+  await updateEntry(keepId, { memo })
+  let ok = 0
+  for (const id of sources) {
+    // eslint-disable-next-line no-await-in-loop
+    try {
+      await trashEntry(id, userId)
+      ok += 1
+    } catch {
+      /* 개별 실패는 개수에 반영 */
+    }
+  }
+  if (!ok) throw new Error('합치기에 실패했습니다.')
+  return { keptId: keepId, merged: ok }
+}
+
 /* ------------------------------------------------------------------ */
 /* 첨부파일                                                            */
 /* ------------------------------------------------------------------ */

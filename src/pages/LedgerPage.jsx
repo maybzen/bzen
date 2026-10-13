@@ -22,6 +22,7 @@ import {
   listPartners,
   listProfiles,
   listProjects,
+  mergeEntries,
   updateEntry,
 } from '../lib/api'
 
@@ -52,6 +53,8 @@ export default function LedgerPage({ type, source = 'manual', title, description
   const [editing, setEditing] = useState(null)
   const [removing, setRemoving] = useState(null)
   const [removingMany, setRemovingMany] = useState(null)
+  const [merging, setMerging] = useState(null)
+  const [mergeKeepId, setMergeKeepId] = useState('')
   const [busy, setBusy] = useState(false)
   const [viewerFiles, setViewerFiles] = useState(null)
   const [importOpen, setImportOpen] = useState(false)
@@ -308,6 +311,36 @@ export default function LedgerPage({ type, source = 'manual', title, description
     }
   }
 
+  /* 중복 의심 합치기: 1건 남기고 나머지는 휴지통으로 (복원 가능) */
+  const openMerge = (ids) => {
+    const list = [...new Set((ids || []).filter(Boolean))]
+    if (list.length < 2) {
+      toast.info('합치려면 2건 이상 선택해 주세요.')
+      return
+    }
+    setMerging(list)
+    setMergeKeepId(list[0])
+  }
+
+  const handleMerge = async () => {
+    if (!merging?.length || !mergeKeepId) return
+    setBusy(true)
+    try {
+      const res = await mergeEntries(mergeKeepId, merging, user?.id)
+      toast.success(`1건 남기고 ${res.merged}건을 휴지통으로 이동했습니다.`)
+      for (const id of merging) {
+        if (id !== mergeKeepId) clearHighlightFor(id)
+      }
+      setMerging(null)
+      setMergeKeepId('')
+      setReloadKey((k) => k + 1)
+    } catch (error) {
+      toast.error(error.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const exportCSV = () => {
     if (!shown.length) {
       toast.info('내보낼 내역이 없습니다.')
@@ -423,6 +456,7 @@ export default function LedgerPage({ type, source = 'manual', title, description
           <HighlightBanner
             count={highlightIds.length}
             issue={highlightIssue}
+            onMerge={highlightIssue === 'duplicate' && isAdmin ? () => openMerge(highlightIds) : undefined}
             onClear={() => {
               setHighlightIds([])
               setHighlightIssue('')
@@ -531,6 +565,7 @@ export default function LedgerPage({ type, source = 'manual', title, description
             categories={CATEGORIES[type] || []}
             onSaveRow={handleSaveRow}
             onBulkDelete={isAdmin ? setRemovingMany : undefined}
+            onBulkMerge={isAdmin ? openMerge : undefined}
             canChangeAuthor={isAdmin}
             canEditEntry={ownRow}
             canDeleteEntry={ownRow}
@@ -583,6 +618,21 @@ export default function LedgerPage({ type, source = 'manual', title, description
         onConfirm={handleDeleteMany}
       />
 
+      <MergeDialog
+        open={Boolean(merging)}
+        busy={busy}
+        ids={merging || []}
+        entries={shown}
+        projects={projects}
+        keepId={mergeKeepId}
+        onKeep={setMergeKeepId}
+        onClose={() => {
+          setMerging(null)
+          setMergeKeepId('')
+        }}
+        onConfirm={handleMerge}
+      />
+
       <AttachmentModal
         open={Boolean(viewerFiles)}
         onClose={() => setViewerFiles(null)}
@@ -616,7 +666,7 @@ export default function LedgerPage({ type, source = 'manual', title, description
 
 /* --------------------------- 데이터 점검 하이라이트 배너 --------------------------- */
 
-function HighlightBanner({ count, issue, onClear }) {
+function HighlightBanner({ count, issue, onClear, onMerge }) {
   const label = ISSUE_META[issue]?.label || '점검'
   const hint = ISSUE_META[issue]?.hint || '지적된 내역입니다'
   const strong = issue === 'duplicate' || issue === 'broken'
@@ -632,10 +682,85 @@ function HighlightBanner({ count, issue, onClear }) {
         </strong>{' '}
         · {hint} · {count}건을 {strong ? '빨간색' : '노란색'}으로 표시합니다.
       </span>
+      {typeof onMerge === 'function' ? (
+        <button type="button" onClick={onMerge} className="shrink-0 font-bold hover:underline">
+          합치기
+        </button>
+      ) : null}
       <button type="button" onClick={onClear} className="shrink-0 font-bold hover:underline">
         표시 해제
       </button>
     </div>
+  )
+}
+
+/* --------------------------- 중복 의심 합치기 --------------------------- */
+
+function MergeDialog({ open, busy, ids, entries, projects, keepId, onKeep, onClose, onConfirm }) {
+  if (!open) return null
+  const rows = (ids || [])
+    .map((id) => (entries || []).find((e) => String(e.id) === String(id)))
+    .filter(Boolean)
+  const missing = (ids || []).length - rows.length
+  const projectName = (id) => (projects || []).find((p) => p.id === id)?.name || '미지정'
+  return (
+    <Modal
+      open={open}
+      onClose={busy ? undefined : onClose}
+      title="중복 의심 합치기"
+      subtitle="1건만 남기고 나머지는 휴지통으로 이동합니다 (복원 가능). 남긴 내역의 비고에 정리 내역이 남습니다."
+      footer={
+        <>
+          <button type="button" className="btn-ghost" onClick={onClose} disabled={busy}>
+            취소
+          </button>
+          <button
+            type="button"
+            className="btn-primary"
+            onClick={onConfirm}
+            disabled={busy || !keepId || (ids || []).length < 2}
+          >
+            {busy ? '합치는 중…' : '합치기'}
+          </button>
+        </>
+      }
+    >
+      <ul className="flex flex-col gap-2">
+        {rows.map((e) => (
+          <li key={e.id}>
+            <label
+              className={`flex cursor-pointer items-start gap-2.5 rounded-xl border px-3 py-2.5 transition ${
+                keepId === e.id ? 'border-brand-600 bg-brand-50' : 'border-ink-200 hover:border-brand-300'
+              }`}
+            >
+              <input
+                type="radio"
+                name="merge-keep"
+                className="mt-1 h-4 w-4 accent-brand-600"
+                checked={keepId === e.id}
+                onChange={() => onKeep(e.id)}
+              />
+              <span className="min-w-0 flex-1">
+                <span className="block text-xs font-bold text-ink-900">
+                  {e.entry_date} · {e.counterparty} · {Number(e.total_amount || 0).toLocaleString()}원
+                </span>
+                <span className="mt-0.5 block truncate text-[11px] text-ink-500">
+                  {e.description || '적요 없음'} · {e.category || '미분류'} · {projectName(e.project_id)}
+                </span>
+              </span>
+              <span className="shrink-0 text-[11px] font-bold text-ink-400">
+                {keepId === e.id ? '남김' : '휴지통'}
+              </span>
+            </label>
+          </li>
+        ))}
+      </ul>
+      {missing ? (
+        <p className="mt-2 text-[11px] text-ink-500">
+          현재 목록에 없는 {missing}건이 있습니다. 기간을 넓히면 함께 고를 수 있습니다.
+        </p>
+      ) : null}
+    </Modal>
   )
 }
 

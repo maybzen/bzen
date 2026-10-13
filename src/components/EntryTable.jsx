@@ -50,6 +50,8 @@ export default function EntryTable({
   categories = [],
   onSaveRow = null,
   onBulkDelete = null,
+  /* 중복 의심 합치기 (선택 2건 이상 → 1건 남기고 나머지 휴지통) */
+  onBulkMerge = null,
   /* 등록자(작성자) 일괄 변경. 입사 전 자료 정정용이라 관리자 화면에서만 켭니다. */
   canChangeAuthor = false,
   /* 명세서 버튼 (급여관리). 주면 행마다 명세서 버튼이 생깁니다. */
@@ -308,6 +310,15 @@ export default function EntryTable({
               className="font-bold text-loss hover:underline"
             >
               선택 삭제
+            </button>
+          ) : null}
+          {typeof onBulkMerge === 'function' && selectedIds.length >= 2 ? (
+            <button
+              type="button"
+              onClick={() => onBulkMerge(selectedIds)}
+              className="font-bold text-brand-700 hover:underline"
+            >
+              선택 합치기
             </button>
           ) : null}
           <button
