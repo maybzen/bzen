@@ -28,9 +28,6 @@ export default function ProjectDetail() {
   const navigate = useNavigate()
   const { isAdmin, user, profile } = useAuth()
   const toast = useToast()
-  /* 프로젝트 금액 열람: 관리자 + 설정 허용 + 담당자 본인 */
-  const canSeeMoney = useFinanceView(profile, isAdmin)
-  const detailMoney = canSeeMoney || project?.manager_id === profile?.id
 
   const [loading, setLoading] = useState(true)
   const [project, setProject] = useState(null)
@@ -47,6 +44,11 @@ export default function ProjectDetail() {
   const [viewerFiles, setViewerFiles] = useState(null)
   const [reloadKey, setReloadKey] = useState(0)
   const [ledgerTab, setLedgerTab] = useState('entries')
+
+  /* 프로젝트 금액 열람: 관리자 + 설정 허용 + 담당자 본인.
+     state 선언보다 위에서 project를 참조하면 TDZ로 죽습니다 (직원 전용 크래시 주의) */
+  const canSeeMoney = useFinanceView(profile, isAdmin)
+  const detailMoney = canSeeMoney || project?.manager_id === profile?.id
 
   const load = useCallback(async () => {
     setLoading(true)

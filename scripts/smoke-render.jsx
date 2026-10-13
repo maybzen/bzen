@@ -74,6 +74,8 @@ const CASES = [
   ['Projects', () => <Projects />, '/projects'],
   ['Projects(직원)', () => <Projects />, '/projects'],
   ['ProjectDetail', () => <ProjectDetail />, '/projects/aaaaaaaa-1111-2222-3333-444444444444'],
+  /* 직원 권한이면 단축평가가 풀려 TDZ 같은 선언 순서 버그가 드러납니다 */
+  ['ProjectDetail(직원)', () => <ProjectDetail />, '/projects/aaaaaaaa-1111-2222-3333-444444444444'],
   ['Partners', () => <Partners />, '/partners'],
   ['Collections', () => <Collections />, '/collections'],
   ['Tax', () => <Tax />, '/tax'],
