@@ -10,7 +10,31 @@ export function parseCardUsers(value) {
     .filter(Boolean)
 }
 
-/** 법인카드 이용자 다중 선택 (ALL은 단독). allowCustom이면 목록 외 직접 입력 가능 */
+/** 메모 이용자 꼬리표에서 이용자 코드만 뽑습니다.
+ *  메모에는 "Z,B,G,S,N,J 법카 9988→2381 10월 청구분…"처럼 코드 뒤에 카드 메모가
+ *  붙어 있어서, 앞쪽의 코드 형태 토큰만 남기고 뒷말은 버립니다 (메모 원문은 유지). */
+export function userCodesOnly(value) {
+  const out = []
+  const chunks = parseCardUsers(value)
+  chunks.forEach((chunk, ci) => {
+    if (/^[A-Za-z0-9가-힣]+$/.test(chunk)) {
+      out.push(chunk) // Z, ALL, SHINE 같은 단일 코드
+      return
+    }
+    // "J 법카 9988…"처럼 코드 뒤에 설명이 붙은 덩이는 앞쪽 코드 토큰만 살립니다
+    for (const sub of chunk.split(/\s+/)) {
+      if (!/^[A-Za-z0-9가-힣]+$/.test(sub)) break
+      if (KNOWN.has(sub) || sub === 'ALL') {
+        out.push(sub)
+        continue
+      }
+      // 직접 입력한 기타 코드(첫 덩이 맨 앞 토큰)는 살립니다
+      if (out.length === 0 && ci === 0 && sub === chunk.split(/\s+/)[0]) out.push(sub)
+      break
+    }
+  })
+  return [...new Set(out)]
+}
 export default function CardUserSelect({ value, onChange, allowCustom = false, className = '' }) {
   const [open, setOpen] = useState(false)
   const rootRef = useRef(null)
@@ -70,18 +94,20 @@ export default function CardUserSelect({ value, onChange, allowCustom = false, c
   const label = codes.length
     ? codes.map((c) => (cardUserName(c) ? `${c} ${cardUserName(c)}` : c)).join(', ')
     : '선택'
+  /* 화면에는 이용자 코드만 보여줍니다. 메모 뒷말(법카·청구분)은 상세에서 봅니다 */
+  const shown = userCodesOnly(value).join(',')
 
   return (
     <span ref={rootRef} className={`relative inline-block ${className}`}>
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        title={label}
+        title={shown || label}
         aria-haspopup="true"
         aria-expanded={open}
-        className="input w-full truncate py-2 text-left"
+        className="input w-full truncate px-2 py-2 text-left"
       >
-        {codes.join(',') || '선택 안 함'}
+        {shown || '선택 안 함'}
       </button>
       {open ? (
         <>

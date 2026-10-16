@@ -69,6 +69,15 @@
   .num {
     @apply font-num tabular-nums text-right;
   }
+  /* 넓은 등록 표를 한 화면에 다 보여주기용: 고정 레이아웃 + 좁은 셀 여백 */
+  .table-fit {
+    @apply w-full table-fixed;
+  }
+  .table-fit td,
+  .table-fit th {
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
+  }
   .empty {
     @apply px-4 py-14 text-center text-sm text-ink-500;
   }

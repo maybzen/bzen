@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Icon from '../components/Icon'
 import EntryFormModal from '../components/EntryFormModal'
-import CardUserSelect from '../components/CardUserSelect'
+import CardUserSelect, { userCodesOnly } from '../components/CardUserSelect'
 import PeriodPicker, { usePeriod } from '../components/PeriodPicker'
 import { AttachmentCell, AttachmentModal } from '../components/Attachments'
 import { useToast } from '../components/Toast'
@@ -319,11 +319,7 @@ export default function CardImport({ embed = false } = {}) {
     const projectName = (id) => regProjects.find((p) => p.id === id)?.name || ''
     const headers = ['이용일자', '가맹점', '적요', '프로젝트', '이용자', '유형', '항목', '공급가액', '부가세', '합계', '카드', '메모']
     const rows = visibleRegistered.map((e) => {
-      const userCodes = memoUser(e.memo)
-        .split(',')
-        .map((s) => s.trim())
-        .filter(Boolean)
-      const userLabel = userCodes
+      const userLabel = userCodesOnly(memoUser(e.memo))
         .map((c) => (cardUserName(c) ? `${c}(${cardUserName(c)})` : c))
         .join(',')
       return [
@@ -428,7 +424,8 @@ export default function CardImport({ embed = false } = {}) {
   }
 
   const withMemoUser = (memo, user) => {
-    const base = String(memo || '').replace(/\s*·\s*이용자\s+[^·]*/, '').trim()
+    // 구 메모("…이용자 B 법카…", · 없음)와 신 메모("… · 이용자 B · …") 둘 다 걷어냅니다
+    const base = String(memo || '').replace(/\s*(?:·\s*)?이용자\s+[^·]*/, '').trim()
     const u = String(user || '').trim()
     return u ? `${base} · 이용자 ${u}` : base
   }
@@ -1056,21 +1053,21 @@ export default function CardImport({ embed = false } = {}) {
             </div>
           </details>
           <div className="max-h-[480px] overflow-auto">
-            <table className="w-full min-w-[1220px] border-collapse text-xs">
+            <table className="table-fit border-collapse text-xs">
               <thead className="sticky top-0 bg-ink-50">
                 <tr>
-                  <th className="th w-10">등록</th>
-                  <th className="th">이용일자</th>
-                  <th className="th">가맹점</th>
-                  <th className="th">외화</th>
-                  <th className="th">적요</th>
-                  <th className="th">프로젝트</th>
-                  <th className="th">이용자</th>
-                  <th className="th">유형</th>
-                  <th className="th">항목</th>
-                  <th className="th text-right">공급가액</th>
-                  <th className="th text-right">부가세</th>
-                  <th className="th">면세</th>
+                  <th className="th w-[34px]">등록</th>
+                  <th className="th w-[106px]">이용일자</th>
+                  <th className="th w-[11%]">가맹점</th>
+                  <th className="th w-[72px]">외화</th>
+                  <th className="th w-[12%]">적요</th>
+                  <th className="th w-[12%]">프로젝트</th>
+                  <th className="th w-[92px]">이용자</th>
+                  <th className="th w-[66px]">유형</th>
+                  <th className="th w-[82px]">항목</th>
+                  <th className="th w-[80px] text-right">공급가액</th>
+                  <th className="th w-[74px] text-right">부가세</th>
+                  <th className="th w-[56px]">면세</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-ink-100">
@@ -1087,7 +1084,7 @@ export default function CardImport({ embed = false } = {}) {
                     <td className="td">
                       <input
                         type="date"
-                        className="input w-auto py-1 text-xs"
+                        className="input w-full min-w-0 px-1 py-1 text-xs"
                         value={r.date}
                         onChange={(e) => setRow(r.key, { date: e.target.value, invalid: !e.target.value })}
                       />
@@ -1110,9 +1107,9 @@ export default function CardImport({ embed = false } = {}) {
                     <td className="td whitespace-nowrap text-xs text-ink-600">
                       {r.fxAmount > 0 ? fmtFx(r.fxCurrency, r.fxAmount) : <span className="text-ink-300">—</span>}
                     </td>
-                    <td className="td min-w-[150px]">
+                    <td className="td min-w-0">
                       <input
-                        className="input py-1 text-xs"
+                        className="input min-w-0 px-2 py-1 text-xs"
                         value={r.description}
                         onChange={(e) => setRow(r.key, { description: e.target.value })}
                         placeholder="예: A4용지 2박스"
@@ -1120,7 +1117,7 @@ export default function CardImport({ embed = false } = {}) {
                     </td>
                     <td className="td">
                       <select
-                        className="input w-auto max-w-[190px] py-1 text-xs"
+                        className="input w-full min-w-0 px-2 py-1 text-xs"
                         value={r.projectId}
                         onChange={(e) => setRow(r.key, { projectId: e.target.value })}
                       >
@@ -1132,12 +1129,12 @@ export default function CardImport({ embed = false } = {}) {
                         ))}
                       </select>
                     </td>
-                    <td className="td min-w-[150px] max-w-[210px]">
+                    <td className="td">
                       <CardUserSelect value={r.cardUser} onChange={(v) => setRow(r.key, { cardUser: v })} allowCustom className="block w-full" />
                     </td>
                     <td className="td">
                       <select
-                        className="input w-auto py-1 text-xs"
+                        className="input w-full min-w-0 px-2 py-1 text-xs"
                         value={r.type}
                         onChange={(e) => setRow(r.key, { type: e.target.value, category: '' })}
                       >
@@ -1147,7 +1144,7 @@ export default function CardImport({ embed = false } = {}) {
                     </td>
                     <td className="td">
                       <select
-                        className="input w-auto py-1 text-xs"
+                        className="input w-full min-w-0 px-2 py-1 text-xs"
                         value={r.category}
                         onChange={(e) => setRow(r.key, { category: e.target.value })}
                         title={categoryHint(r.category) || '항목을 선택하세요'}
@@ -1162,7 +1159,7 @@ export default function CardImport({ embed = false } = {}) {
                     </td>
                     <td className="td num">
                       <AmountInput
-                        className="input w-28 py-1 text-right text-xs"
+                        className="input w-full min-w-0 px-2 py-1 text-right text-xs"
                         value={r.supply}
                         onChange={(e) => {
                           const supply = Number(e.target.value) || 0
@@ -1172,7 +1169,7 @@ export default function CardImport({ embed = false } = {}) {
                     </td>
                     <td className="td num">
                       <AmountInput
-                        className="input w-24 py-1 text-right text-xs"
+                        className="input w-full min-w-0 px-2 py-1 text-right text-xs"
                         value={r.vat}
                         disabled={r.taxFree}
                         onChange={(e) => {
@@ -1526,11 +1523,11 @@ export default function CardImport({ embed = false } = {}) {
               </div>
             ) : null}
             <div ref={regTableRef} className="overflow-x-auto">
-              <table className="w-full min-w-[1220px] border-collapse text-xs">
+              <table className="table-fit border-collapse text-xs">
                 <thead className="bg-ink-50/70">
                   <tr>
                     {isAdmin ? (
-                      <th className="th w-10 text-center">
+                      <th className="th w-[30px] text-center">
                         <input
                           type="checkbox"
                           className="h-4 w-4 accent-brand-600"
@@ -1540,19 +1537,19 @@ export default function CardImport({ embed = false } = {}) {
                         />
                       </th>
                     ) : null}
-                    <th className="th">이용일자</th>
-                    <th className="th">가맹점</th>
-                    <th className="th">적요</th>
-                    <th className="th">프로젝트</th>
-                    <th className="th">유형</th>
-                    <th className="th">항목</th>
-                    <th className="th">이용자</th>
-                    <th className="th">등록자</th>
-                    <th className="th text-right">공급가액</th>
-                    <th className="th text-right">부가세</th>
-                    <th className="th text-right">합계</th>
-                    <th className="th text-right">서류</th>
-                    <th className="th sticky right-0 bg-ink-50 text-right shadow-[-8px_0_12px_-8px_rgba(16,24,64,0.25)]">저장</th>
+                    <th className="th w-[106px]">이용일자</th>
+                    <th className="th w-[8%]">가맹점</th>
+                    <th className="th w-[10%]">적요</th>
+                    <th className="th w-[11%]">프로젝트</th>
+                    <th className="th w-[72px]">유형</th>
+                    <th className="th w-[84px]">항목</th>
+                    <th className="th w-[92px]">이용자</th>
+                    <th className="th w-[54px]">등록자</th>
+                    <th className="th w-[78px] text-right">공급가액</th>
+                    <th className="th w-[72px] text-right">부가세</th>
+                    <th className="th w-[70px] text-right">합계</th>
+                    <th className="th w-[40px] text-right">서류</th>
+                    <th className="th sticky right-0 w-[78px] bg-ink-50 text-right shadow-[-8px_0_12px_-8px_rgba(16,24,64,0.25)]">저장</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-ink-100">
@@ -1581,14 +1578,14 @@ export default function CardImport({ embed = false } = {}) {
                         <td className="td">
                           <input
                             type="date"
-                            className="input w-auto py-1 text-xs"
+                            className="input w-full min-w-0 px-1 py-1 text-xs"
                             value={work.entry_date || ''}
                             onChange={(e) => setCell(entry.id, { entry_date: e.target.value })}
                           />
                         </td>
-                        <td className="td min-w-[140px]">
+                        <td className="td">
                           <input
-                            className="input py-1 text-xs"
+                            className="input w-full min-w-0 px-2 py-1 text-xs"
                             value={work.counterparty || ''}
                             onChange={(e) => setCell(entry.id, { counterparty: e.target.value })}
                           />
@@ -1599,10 +1596,10 @@ export default function CardImport({ embed = false } = {}) {
                             <span className="chip mt-1 bg-ink-100 text-ink-500">직접등록</span>
                           ) : null}
                         </td>
-                        <td className="td min-w-[150px]">
+                        <td className="td">
                           <div className="flex items-center gap-1">
                             <input
-                              className="input min-w-0 flex-1 py-1 text-xs"
+                              className="input min-w-0 flex-1 px-2 py-1 text-xs"
                               value={work.description || ''}
                               onChange={(e) => setCell(entry.id, { description: e.target.value })}
                               placeholder="예: A4용지 2박스"
@@ -1621,7 +1618,7 @@ export default function CardImport({ embed = false } = {}) {
                         </td>
                         <td className="td">
                           <select
-                            className="input w-auto max-w-[190px] py-1 text-xs"
+                            className="input w-full min-w-0 px-2 py-1 text-xs"
                             value={work.project_id || ''}
                             onChange={(e) => setCell(entry.id, { project_id: e.target.value })}
                           >
@@ -1635,7 +1632,7 @@ export default function CardImport({ embed = false } = {}) {
                         </td>
                         <td className="td">
                           <select
-                            className="input w-auto py-1 text-xs"
+                            className="input w-full min-w-0 px-2 py-1 text-xs"
                             value={work.entry_type}
                             onChange={(e) => setCell(entry.id, { entry_type: e.target.value, category: '' })}
                           >
@@ -1645,7 +1642,7 @@ export default function CardImport({ embed = false } = {}) {
                         </td>
                         <td className="td">
                           <select
-                            className="input w-auto py-1 text-xs"
+                            className="input w-full min-w-0 px-2 py-1 text-xs"
                             value={work.category || ''}
                             onChange={(e) => setCell(entry.id, { category: e.target.value })}
                             title={categoryHint(work.category) || '항목을 선택하세요'}
@@ -1658,7 +1655,7 @@ export default function CardImport({ embed = false } = {}) {
                             ))}
                           </select>
                         </td>
-                        <td className="td min-w-[150px] max-w-[210px]">
+                        <td className="td">
                           <CardUserSelect
                             value={cardUser}
                             onChange={(v) => setCell(entry.id, { cardUser: v })}
@@ -1671,14 +1668,14 @@ export default function CardImport({ embed = false } = {}) {
                         </td>
                         <td className="td num">
                           <AmountInput
-                            className="input w-24 py-1 text-right text-xs"
+                            className="input w-full min-w-0 px-2 py-1 text-right text-xs"
                             value={work.supply_amount ?? 0}
                             onChange={(e) => setCell(entry.id, { supply_amount: Number(e.target.value) || 0 })}
                           />
                         </td>
                         <td className="td num">
                           <AmountInput
-                            className="input w-24 py-1 text-right text-xs"
+                            className="input w-full min-w-0 px-2 py-1 text-right text-xs"
                             value={work.vat_amount ?? 0}
                             onChange={(e) => setCell(entry.id, { vat_amount: Number(e.target.value) || 0 })}
                           />
@@ -1692,7 +1689,7 @@ export default function CardImport({ embed = false } = {}) {
                             onOpen={setViewerFiles}
                           />
                         </td>
-                        <td className="td num sticky right-0 whitespace-nowrap bg-white shadow-[-8px_0_12px_-8px_rgba(16,24,64,0.25)]">
+                        <td className="td sticky right-0 bg-white shadow-[-8px_0_12px_-8px_rgba(16,24,64,0.25)]">
                           <button
                             type="button"
                             onClick={() => setDetailEntry(entry)}
