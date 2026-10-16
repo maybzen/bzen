@@ -11,6 +11,7 @@ import { ensureLedgerIndex, useLedgerIndex } from '../lib/ledgerIndex'
 import { isStaffVisible, staffIdsFromProfiles } from '../lib/permissions'
 import { ISSUE_META, checkEntryDraft } from '../lib/validate'
 import { aliasRoot } from '../lib/aliases'
+import { cardTagOf, withMemoCard, withMemoUser } from '../lib/cardTag'
 
 const MAX_FILE = 20 * 1024 * 1024
 
@@ -28,24 +29,10 @@ function memoUser(memo) {
   return m ? m[1].trim() : ''
 }
 
-function withMemoUser(memo, user) {
-  const base = String(memo || '').replace(/\s*·\s*이용자\s+[^·]*/, '').trim()
-  const u = String(user || '').trim()
-  return u ? `${base} · 이용자 ${u}` : base
-}
-
-/** 메모의 "· 법카 2381" 읽기/쓰기. 뒤 4자리 기준으로 통일합니다 */
+/** 메모의 카드 꼬리표 읽기 (전체 보관: "법카 9988→2381"). 없으면 '' */
 function memoCard(memo) {
-  const m = String(memo || '').match(/법카\s+([^·]+)/)
-  if (!m) return ''
-  const d = (m[1].match(/(\d{4})(?!.*\d)/) || [])[1]
-  return d ? `법카 ${d}` : ''
-}
-
-function withMemoCard(memo, label) {
-  const base = String(memo || '').replace(/\s*·\s*법카\s+[^·]*/, '').trim()
-  const v = String(label || '').trim()
-  return v ? `${base} · ${v}` : base
+  const t = cardTagOf(memo)
+  return t === '기타' ? '' : t
 }
 
 function cardLast4(number) {
@@ -739,6 +726,13 @@ export default function EntryFormModal({
                 onChange={set('card_label')}
               >
                 <option value="">선택 안 함</option>
+                {form.card_label &&
+                !fundCards.some((c) => {
+                  const last4 = cardLast4(c.number)
+                  return last4 && `법카 ${last4}` === form.card_label
+                }) ? (
+                  <option value={form.card_label}>{form.card_label} (메모 유지)</option>
+                ) : null}
                 {fundCards.map((c) => {
                   const last4 = cardLast4(c.number)
                   /* "1500만원 한도" 같은 문구는 빼고 보여줍니다 */

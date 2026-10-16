@@ -2,8 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Icon from '../components/Icon'
 import EntryFormModal from '../components/EntryFormModal'
 import CardUserSelect from '../components/CardUserSelect'
-import { userCodesOnly } from '../lib/cardTag'
-import { cardTagOf, withMemoCard, shortCard, DEFAULT_CARD_OPTIONS } from '../lib/cardTag'
+import { cardTagOf, withMemoCard, withMemoUser, shortCard, DEFAULT_CARD_OPTIONS, userCodesOnly } from '../lib/cardTag'
 import PeriodPicker, { usePeriod } from '../components/PeriodPicker'
 import { AttachmentCell, AttachmentModal } from '../components/Attachments'
 import { useToast } from '../components/Toast'
@@ -331,7 +330,7 @@ export default function CardImport({ embed = false } = {}) {
     const base = [...DEFAULT_CARD_OPTIONS]
     const seen = new Set(base)
     for (const e of registered || []) {
-      const c = cardOf(e.memo)
+      const c = cardOf(e)
       if (c && c !== '기타' && !seen.has(c)) {
         seen.add(c)
         base.push(c)
@@ -452,16 +451,6 @@ export default function CardImport({ embed = false } = {}) {
     return p?.full_name || p?.email || '—'
   }
 
-  const withMemoUser = (memo, user) => {
-    // 코드 토큰만 걷어내고 뒷말(법카·청구분)은 유지합니다.
-    // 구 메모("…이용자 B 법카…", · 없음)와 신 메모("… · 이용자 B · …") 둘 다 처리합니다
-    const base = String(memo || '')
-      .replace(/\s*(?:·\s*)?이용자\s+[A-Za-z0-9가-힣]+(?:\s*,\s*[A-Za-z0-9가-힣]+)*(?=[\s·]|$)/, '')
-      .trim()
-    const codes = userCodesOnly(user)
-    return codes.length ? `${base} · 이용자 ${codes.join(',')}` : base
-  }
-
   const buildRowPayload = (entry, patch) => {
     const work = { ...entry, ...patch }
     if (!work.entry_date || !String(work.counterparty || '').trim()) {
@@ -479,7 +468,7 @@ export default function CardImport({ embed = false } = {}) {
         vat_amount: Number(work.vat_amount) || 0,
         memo: withMemoCard(
           withMemoUser(entry.memo, patch.cardUser !== undefined ? patch.cardUser : memoUser(entry.memo)),
-          patch.card !== undefined ? patch.card : cardOf(entry.memo) === '기타' ? '' : cardOf(entry.memo),
+          patch.card !== undefined ? patch.card : cardOf(entry) === '기타' ? '' : cardOf(entry),
         ),
       },
     }
@@ -1661,7 +1650,7 @@ export default function CardImport({ embed = false } = {}) {
                     const saving = savingId === entry.id
                     const cardUser =
                       edit.cardUser !== undefined ? edit.cardUser : memoUser(entry.memo)
-                    const cardValue = edit.card !== undefined ? edit.card : cardOf(entry.memo)
+                    const cardValue = edit.card !== undefined ? edit.card : cardOf(entry)
                     return (
                       <tr key={entry.id} className={dirty ? 'bg-brand-50/40' : undefined}>
                         {isAdmin ? (

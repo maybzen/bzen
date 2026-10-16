@@ -67,3 +67,14 @@ export function shortCard(label) {
   const d = String(label || '').replace(/[^0-9]/g, '')
   return d ? d.slice(-4) : label
 }
+
+/** 메모의 이용자 꼬리표 읽기/쓰기.
+ *  코드 토큰만 걷어내고 뒷말(법카·청구분)은 유지합니다.
+ *  구 메모("…이용자 B 법카…", · 없음)와 신 메모("… · 이용자 B · …") 둘 다 처리합니다 */
+export function withMemoUser(memo, user) {
+  const base = String(memo || '')
+    .replace(/\s*(?:·\s*)?이용자\s+[A-Za-z0-9가-힣]+(?:\s*,\s*[A-Za-z0-9가-힣]+)*(?=[\s·]|$)/, '')
+    .trim()
+  const codes = userCodesOnly(user)
+  return codes.length ? `${base} · 이용자 ${codes.join(',')}` : base
+}
