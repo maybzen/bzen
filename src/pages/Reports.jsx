@@ -59,9 +59,9 @@ export default function Reports() {
         prev ? listEntries({ from: prev.from, to: prev.to }) : Promise.resolve([]),
         listProjects(),
       ])
-      setEntries(rows)
-      setPrevious(prevRows)
-      setProjects(projectRows)
+      setEntries(rows || [])
+      setPrevious(prevRows || [])
+      setProjects(projectRows || [])
     } catch (error) {
       toast.error(error.message)
     } finally {

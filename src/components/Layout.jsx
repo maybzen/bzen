@@ -4,7 +4,7 @@ import Icon from './Icon'
 import { useAuth } from '../auth/AuthContext'
 import { useToast } from './Toast'
 import { getSettings } from '../lib/api'
-import { useStaffPermissions } from '../lib/permissions'
+import { useStaffPermissions, staffLanding } from '../lib/permissions'
 import { APP_NAME, APP_VERSION, COMPANY_EN, DEFAULT_COMPANY } from '../lib/constants'
 
 export const NAV = [
@@ -21,7 +21,7 @@ export const NAV = [
   { to: '/payroll', label: '급여관리', icon: 'coins', adminOnly: true },
   { to: '/leaves', label: '휴무대장', icon: 'file', perm: 'leaves' },
   { to: '/tax', label: '세금관리', icon: 'calendar', perm: 'tax' },
-  { to: '/reports', label: '보고서', icon: 'chart', perm: 'reports' },
+  { to: '/reports', label: '보고서', icon: 'chart', adminOnly: true },
   { to: '/users', label: '계정관리', icon: 'users', adminOnly: true },
   { to: '/funds', label: '자금관리', icon: 'coins', adminOnly: true },
   { to: '/trash', label: '휴지통', icon: 'trash', adminOnly: true },
@@ -173,7 +173,7 @@ export default function Layout() {
           company={company}
           onHome={() => {
             onNavigate?.()
-            const home = isAdmin ? '/dashboard' : '/expense-reports'
+            const home = isAdmin ? '/dashboard' : staffLanding(perms)
             if (location.pathname !== home) navigate(home)
             else window.location.reload()
           }}

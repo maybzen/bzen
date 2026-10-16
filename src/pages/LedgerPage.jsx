@@ -29,7 +29,7 @@ import {
 const IMPORT_COLUMNS = ['일자', '거래처', '항목', '적요', '공급가액', '부가세', '결제수단', '비고', '프로젝트']
 
 export default function LedgerPage({ type, source = 'manual', title, description }) {
-  const meta = ENTRY_META[type]
+  const meta = ENTRY_META[type] || ENTRY_META.opex
   const { profile, isAdmin, user } = useAuth()
   const toast = useToast()
   const period = usePeriod('quarter', `bzen.period.ledger.${source === 'expense_report' ? 'expense-reports' : type}`)
@@ -209,7 +209,7 @@ export default function LedgerPage({ type, source = 'manual', title, description
     const ORDER = ['이향란', '이보람', '권혜민', '박현정', '김상희', '김혜린', '박은영', '이정현']
     const ordered = []
     for (const nm of ORDER) {
-      const prof = profiles.find((p) => p.full_name === nm)
+      const prof = (profiles || []).find((p) => p?.full_name === nm)
       const key = prof ? prof.id : `name:${nm}`
       const g = map.get(key) || { key, name: nm, n: 0, supply: 0, vat: 0, total: 0 }
       ordered.push(g)

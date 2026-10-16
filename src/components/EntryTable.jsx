@@ -9,7 +9,7 @@ import { useToast } from './Toast'
 
 function personName(profiles, id) {
   if (!id) return '—'
-  const p = profiles.find((x) => x.id === id)
+  const p = (profiles || []).find((x) => x?.id === id)
   return p?.full_name || p?.email || '—'
 }
 
@@ -80,6 +80,7 @@ export default function EntryTable({
   const [bulkProject, setBulkProject] = useState('')
   const [bulkAuthor, setBulkAuthor] = useState('')
   const toast = useToast()
+  const rows = entries || []
 
   const editable = bulkEdit && canEdit && typeof onSaveRow === 'function'
 
@@ -104,8 +105,8 @@ export default function EntryTable({
 
   /* 점검 항목으로 이동하면 첫 번째 의심 행으로 스크롤합니다 */
   useEffect(() => {
-    if (!hlSet.size || !entries.length) return
-    const first = entries.find((e) => hlSet.has(String(e.id)))
+    if (!hlSet.size || !rows.length) return
+    const first = rows.find((e) => hlSet.has(String(e?.id)))
     if (!first) return
     const t = window.setTimeout(() => {
       document.getElementById(`entry-${first.id}`)?.scrollIntoView({ block: 'center', behavior: 'smooth' })
@@ -163,7 +164,7 @@ export default function EntryTable({
   }
 
   const saveAllDirty = async () => {
-    const targets = entries.filter((e) => rowEdits[e.id])
+    const targets = rows.filter((e) => rowEdits[e?.id])
     if (!targets.length) return
     setBulkSaving(true)
     try {
@@ -176,10 +177,10 @@ export default function EntryTable({
     }
   }
 
-  const selectedIds = useMemo(() => entries.filter((e) => selected[e.id]).map((e) => e.id), [entries, selected])
+  const selectedIds = useMemo(() => rows.filter((e) => selected[e?.id]).map((e) => e?.id), [rows, selected])
   const selectedSum = useMemo(
-    () => entries.filter((e) => selected[e.id]).reduce((a, e) => a + Number(e.total_amount || 0), 0),
-    [entries, selected],
+    () => rows.filter((e) => selected[e?.id]).reduce((a, e) => a + Number(e?.total_amount || 0), 0),
+    [rows, selected],
   )
   const dirtyCount = Object.keys(rowEdits).length
 
@@ -213,11 +214,11 @@ export default function EntryTable({
 
   const authorName = (id) => {
     if (!id) return '미지정'
-    const p = profiles.find((x) => x.id === id)
+    const p = (profiles || []).find((x) => x?.id === id)
     return p?.full_name || p?.email || '미지정'
   }
 
-  if (!entries.length) {
+  if (!(entries || []).length) {
     return (
       <div className="empty">
         <p className="font-semibold text-ink-600">내역이 없습니다</p>
@@ -231,8 +232,8 @@ export default function EntryTable({
     ? (() => {
         const seen = new Set()
         let s = 0
-        for (const e of entries) {
-          const n = String(e.counterparty || '').trim()
+        for (const e of rows) {
+          const n = String(e?.counterparty || '').trim()
           if (n && !seen.has(n)) {
             seen.add(n)
             s += Number(extraPayMap[n] || 0)
@@ -241,11 +242,11 @@ export default function EntryTable({
         return s
       })()
     : 0
-  const totals = entries.reduce(
+  const totals = rows.reduce(
     (acc, e) => {
-      acc.supply += Number(e.supply_amount || 0)
-      acc.vat += Number(e.vat_amount || 0)
-      acc.total += Number(e.total_amount || 0)
+      acc.supply += Number(e?.supply_amount || 0)
+      acc.vat += Number(e?.vat_amount || 0)
+      acc.total += Number(e?.total_amount || 0)
       return acc
     },
     { supply: 0, vat: 0, total: 0 },
@@ -359,7 +360,7 @@ export default function EntryTable({
                   <input
                     type="checkbox"
                     className="h-4 w-4 accent-brand-600"
-                    checked={entries.length > 0 && selectedIds.length === entries.length}
+                    checked={rows.length > 0 && selectedIds.length === rows.length}
                     onChange={(e) => toggleSelectAll(e.target.checked)}
                     aria-label="전체 선택"
                   />
@@ -381,8 +382,8 @@ export default function EntryTable({
             </tr>
           </thead>
           <tbody className="divide-y divide-ink-100">
-            {entries.map((entry) => {
-              const project = projects.find((p) => p.id === entry.project_id)
+            {rows.map((entry) => {
+              const project = (projects || []).find((p) => p?.id === entry?.project_id)
               const meta = ENTRY_META[entry.entry_type]
               const files = attachmentsByEntry[entry.id] || []
               const edit = rowEdits[entry.id] || {}
@@ -627,7 +628,7 @@ export default function EntryTable({
           <tfoot className="border-t-2 border-ink-200 bg-ink-50/80">
             <tr>
               <td className="td font-bold" colSpan={leadCols}>
-                합계 ({entries.length}건)
+                합계 ({rows.length}건)
               </td>
               <td className="td num font-bold">{formatKRW(totals.supply)}</td>
               {hideVat ? null : <td className="td num font-bold">{formatKRW(totals.vat)}</td>}
@@ -645,8 +646,8 @@ export default function EntryTable({
       <div className="lg:hidden">
         {bulkBars}
         <ul className="flex flex-col divide-y divide-ink-100">
-          {entries.map((entry) => {
-            const project = projects.find((p) => p.id === entry.project_id)
+          {rows.map((entry) => {
+            const project = (projects || []).find((p) => p?.id === entry?.project_id)
             const meta = ENTRY_META[entry.entry_type]
             const files = attachmentsByEntry[entry.id] || []
             const edit = rowEdits[entry.id] || {}
@@ -809,7 +810,7 @@ export default function EntryTable({
           })}
           <li className="bg-ink-50/80 px-4 py-3">
             <div className="flex items-center justify-between text-sm font-bold text-ink-900">
-              <span>합계 ({entries.length}건)</span>
+              <span>합계 ({rows.length}건)</span>
               <span className="font-num tabular-nums text-ink-900">{formatKRW(totals.total)}원</span>
             </div>
           </li>

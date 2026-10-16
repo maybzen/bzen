@@ -15,6 +15,11 @@ const LANDING_BY_PERM = {
   partners: '/partners',
   projects: '/projects',
   leaves: '/leaves',
+  sales: '/sales',
+  purchases: '/purchases',
+  collections: '/collections',
+  fixed: '/fixed-costs',
+  tax: '/tax',
 }
 
 /** 직원이 볼 수 있는 첫 화면. 설정에서 메뉴를 끈 경우를 대비해 순서대로 찾고, 없으면 설정으로 */
@@ -26,7 +31,8 @@ export function staffLanding(perms) {
 }
 
 /** 토글로 관리하는 메뉴 정의 (설정·계정관리 화면과 공유)
- *  - 고정 공통(설정)은 여기서 뺍니다. 계정관리는 항상 관리자 전용. */
+ *  - 고정 공통(설정)은 여기서 뺍니다. 계정관리는 항상 관리자 전용.
+ *  - 보고서: 직원에게 절대 노출하지 않기로 해서 토글에서 뺍니다 (관리자 전용). */
 export const PERM_DEFS = [
   { key: 'expense-reports', label: '지출결의' },
   { key: 'partners', label: '거래처' },
@@ -35,7 +41,6 @@ export const PERM_DEFS = [
   { key: 'purchases', label: '매입' },
   { key: 'expenses', label: '운영비' },
   { key: 'fixed', label: '고정비' },
-  { key: 'reports', label: '보고서' },
   { key: 'tax', label: '세금관리' },
   { key: 'collections', label: '수금관리' },
   { key: 'leaves', label: '휴무대장' },
@@ -47,6 +52,11 @@ export const PERM_LABEL = Object.fromEntries(PERM_DEFS.map((p) => [p.key, p.labe
 export const STAFF_BASE_LABEL = '설정'
 
 let cached = null
+
+/** 설정 저장 후 호출하면 다음 조회부터 새 값을 읽습니다. */
+export function resetStaffSettingsCache() {
+  cached = null
+}
 
 function getStaffSettings() {
   if (!cached) {
@@ -67,12 +77,14 @@ function getStaffSettings() {
   return cached
 }
 
-/** 전체 기본 권한 + 해당 계정의 추가 권한을 합친 실효 권한 */
+/** 전체 기본 권한 + 해당 계정의 추가 권한을 합친 실효 권한
+ *  토글에서 빠진 키(예: 보고서)는 DB에 남아 있어도 무시합니다. */
 export function effectivePerms(staffSettings, profile) {
-  const global = staffSettings?.global || []
+  const valid = new Set(PERM_DEFS.map((p) => p.key))
+  const global = (staffSettings?.global || []).filter((k) => valid.has(k))
   const extra =
     (profile && staffSettings?.overrides && staffSettings.overrides[profile.id]) || []
-  return [...new Set([...global, ...(Array.isArray(extra) ? extra : [])])]
+  return [...new Set([...global, ...(Array.isArray(extra) ? extra.filter((k) => valid.has(k)) : [])])]
 }
 
 /** 사원(관리자 제외) id 집합 */

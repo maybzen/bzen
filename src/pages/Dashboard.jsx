@@ -1427,7 +1427,7 @@ function StaffHome({ period, loading, stats, current, projects, profiles, attach
     )
   }
 
-  const costs = current.reduce((acc, e) => acc + Number(e.total_amount || 0), 0)
+  const costs = current.reduce((acc, e) => acc + Number(e?.total_amount || 0), 0)
 
   return (
     <div className="flex flex-col gap-5">
@@ -1442,7 +1442,7 @@ function StaffHome({ period, loading, stats, current, projects, profiles, attach
         <StatCard label="등록 건수" value={String(current.length)} unit="건" tone="neutral" icon="file" />
         <StatCard
           label="공급가액 합계"
-          value={current.reduce((acc, e) => acc + Number(e.supply_amount || 0), 0)}
+          value={current.reduce((acc, e) => acc + Number(e?.supply_amount || 0), 0)}
           tone="neutral"
           icon="receipt"
         />

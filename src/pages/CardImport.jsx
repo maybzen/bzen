@@ -206,6 +206,9 @@ export default function CardImport({ embed = false } = {}) {
   /* 청구서 대조: 월(YYYY-MM) → 청구액 입력값 */
   const [bills, setBills] = useState({})
   const [savedBills, setSavedBills] = useState({})
+  /* 등록 표 가로 스크롤 (잘림 없이 부가세·저장까지 볼 수 있게) */
+  const regTableRef = useRef(null)
+  const scrollRegTable = (dx) => regTableRef.current?.scrollBy({ left: dx, behavior: 'smooth' })
 
   const openMonthly = () => {
     setShowMonthly(true)
@@ -1117,7 +1120,7 @@ export default function CardImport({ embed = false } = {}) {
                     </td>
                     <td className="td">
                       <select
-                        className="input w-auto py-1 text-xs"
+                        className="input w-auto max-w-[190px] py-1 text-xs"
                         value={r.projectId}
                         onChange={(e) => setRow(r.key, { projectId: e.target.value })}
                       >
@@ -1129,8 +1132,8 @@ export default function CardImport({ embed = false } = {}) {
                         ))}
                       </select>
                     </td>
-                    <td className="td">
-                      <CardUserSelect value={r.cardUser} onChange={(v) => setRow(r.key, { cardUser: v })} allowCustom />
+                    <td className="td min-w-[150px] max-w-[210px]">
+                      <CardUserSelect value={r.cardUser} onChange={(v) => setRow(r.key, { cardUser: v })} allowCustom className="block w-full" />
                     </td>
                     <td className="td">
                       <select
@@ -1418,6 +1421,24 @@ export default function CardImport({ embed = false } = {}) {
                 <span className="hidden sm:inline">이용일자 {regSort === 'date-desc' ? '최신순' : '오래된순'}</span>
               </button>
               <span className="text-xs text-ink-500 sm:ml-auto">{visibleRegistered.length}건</span>
+              <div className="flex shrink-0 items-center gap-1" title="표가 잘리면 옆으로 넘겨 보세요">
+                <button
+                  type="button"
+                  onClick={() => scrollRegTable(-360)}
+                  className="rounded-lg border border-ink-200 p-1.5 text-ink-500 transition hover:bg-ink-50"
+                  aria-label="표 왼쪽으로 넘기기"
+                >
+                  <Icon name="chevron-left" size={14} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => scrollRegTable(360)}
+                  className="rounded-lg border border-ink-200 p-1.5 text-ink-500 transition hover:bg-ink-50"
+                  aria-label="표 오른쪽으로 넘기기"
+                >
+                  <Icon name="chevron-right" size={14} />
+                </button>
+              </div>
               {regMonthFilter ? (
                 <button
                   type="button"
@@ -1504,7 +1525,7 @@ export default function CardImport({ embed = false } = {}) {
                 </button>
               </div>
             ) : null}
-            <div className="overflow-x-auto">
+            <div ref={regTableRef} className="overflow-x-auto">
               <table className="w-full min-w-[1220px] border-collapse text-xs">
                 <thead className="bg-ink-50/70">
                   <tr>
@@ -1531,7 +1552,7 @@ export default function CardImport({ embed = false } = {}) {
                     <th className="th text-right">부가세</th>
                     <th className="th text-right">합계</th>
                     <th className="th text-right">서류</th>
-                    <th className="th text-right">저장</th>
+                    <th className="th sticky right-0 bg-ink-50 text-right shadow-[-8px_0_12px_-8px_rgba(16,24,64,0.25)]">저장</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-ink-100">
@@ -1600,7 +1621,7 @@ export default function CardImport({ embed = false } = {}) {
                         </td>
                         <td className="td">
                           <select
-                            className="input w-auto py-1 text-xs"
+                            className="input w-auto max-w-[190px] py-1 text-xs"
                             value={work.project_id || ''}
                             onChange={(e) => setCell(entry.id, { project_id: e.target.value })}
                           >
@@ -1637,11 +1658,12 @@ export default function CardImport({ embed = false } = {}) {
                             ))}
                           </select>
                         </td>
-                        <td className="td">
+                        <td className="td min-w-[150px] max-w-[210px]">
                           <CardUserSelect
                             value={cardUser}
                             onChange={(v) => setCell(entry.id, { cardUser: v })}
                             allowCustom
+                            className="block w-full"
                           />
                         </td>
                         <td className="td max-w-[110px] truncate text-xs text-ink-500">
@@ -1670,7 +1692,7 @@ export default function CardImport({ embed = false } = {}) {
                             onOpen={setViewerFiles}
                           />
                         </td>
-                        <td className="td num whitespace-nowrap">
+                        <td className="td num sticky right-0 whitespace-nowrap bg-white shadow-[-8px_0_12px_-8px_rgba(16,24,64,0.25)]">
                           <button
                             type="button"
                             onClick={() => setDetailEntry(entry)}

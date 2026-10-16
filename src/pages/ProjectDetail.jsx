@@ -59,15 +59,15 @@ export default function ProjectDetail() {
         listProfiles(),
         listPartners().catch(() => []),
       ])
-      const found = projectRows.find((p) => p.id === id)
+      const found = (projectRows || []).find((p) => p?.id === id)
       setProject(found || null)
-      setEntries(entryRows)
-      setProfiles(profileRows)
+      setEntries(entryRows || [])
+      setProfiles(profileRows || [])
       setPartners(partnerRows || [])
 
-      const files = await listAttachments(entryRows.map((r) => r.id))
+      const files = await listAttachments((entryRows || []).map((r) => r?.id)).catch(() => [])
       const map = {}
-      for (const file of files) {
+      for (const file of files || []) {
         if (!map[file.entry_id]) map[file.entry_id] = []
         map[file.entry_id].push(file)
       }

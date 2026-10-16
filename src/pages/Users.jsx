@@ -4,7 +4,7 @@ import { useToast } from '../components/Toast'
 import { ConfirmDialog, Field, InlineAlert, LoadingBlock, Modal, PageHeader, Spinner } from '../components/ui'
 import { useAuth } from '../auth/AuthContext'
 import { EXTERNAL_PARTNER_DEFAULT, ROLE_LABEL } from '../lib/constants'
-import { PERM_DEFS, PERM_LABEL } from '../lib/permissions'
+import { PERM_DEFS, PERM_LABEL, resetStaffSettingsCache } from '../lib/permissions'
 import { formatDateHuman } from '../lib/format'
 import { callAdminFn, createExternalMember, getSettings, listProfiles, updateProfile, updateSettings } from '../lib/api'
 
@@ -148,6 +148,7 @@ export default function Users() {
             const myMenus = form.role === 'staff' ? form.menus : []
             if (myMenus.length) next[editing.id] = myMenus
             await updateSettings({ staff_overrides: next })
+            resetStaffSettingsCache()
             setOverrides(next)
           } catch (permErr) {
             toast.error(`계정은 수정됐지만 메뉴 권한 저장에 실패했습니다: ${permErr.message}`)
@@ -406,7 +407,7 @@ export default function Users() {
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <InlineAlert tone="info">
           <strong className="font-semibold">권한 안내</strong> — 전 직원은 지출결의·운영비·거래처·프로젝트·휴무대장·설정이 공통으로 보입니다.
-          나머지 메뉴(매출·매입·수금관리·고정비·보고서·세금관리)는 설정 또는 계정별로 허용할 수 있습니다.
+          나머지 메뉴(매출·매입·수금관리·고정비·세금관리)는 설정 또는 계정별로 허용할 수 있습니다.
           장부에서는 등록·수정은 가능하고 삭제는 관리자만 가능합니다.
         </InlineAlert>
         <InlineAlert tone="warn">

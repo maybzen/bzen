@@ -6,7 +6,7 @@ import { useToast } from '../components/Toast'
 import { Field, InlineAlert, LoadingBlock, PageHeader, Spinner } from '../components/ui'
 import { useAuth } from '../auth/AuthContext'
 import { APP_NAME, APP_VERSION, COMPANY_EN, ROLE_LABEL } from '../lib/constants'
-import { PERM_DEFS } from '../lib/permissions'
+import { PERM_DEFS, resetStaffSettingsCache } from '../lib/permissions'
 import { formatDateHuman } from '../lib/format'
 import { callAdminFn, getSettings, listProfiles, updateProfile, updateSettings } from '../lib/api'
 
@@ -76,6 +76,10 @@ export default function Settings() {
 
   const saveMe = async (e) => {
     e.preventDefault()
+    if (!profile?.id) {
+      toast.error('계정 정보를 불러오는 중입니다. 잠시 후 다시 시도해 주세요.')
+      return
+    }
     if (!me.full_name.trim()) {
       toast.error('이름을 입력해 주세요.')
       return
@@ -124,6 +128,7 @@ export default function Settings() {
     setSavingPerms(true)
     try {
       await updateSettings({ staff_permissions: staffPerms })
+      resetStaffSettingsCache()
       toast.success('직원 권한이 저장되었습니다. 직원은 다음 접속부터 적용됩니다.')
     } catch (error) {
       toast.error(error.message)
@@ -141,6 +146,7 @@ export default function Settings() {
     setSavingFinance(true)
     try {
       await updateSettings({ finance_viewers: financeViewers })
+      resetStaffSettingsCache()
       toast.success('저장되었습니다. 해당 직원은 다음 접속부터 프로젝트 금액을 봅니다.')
     } catch (error) {
       toast.error(error.message)

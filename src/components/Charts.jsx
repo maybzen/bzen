@@ -86,7 +86,7 @@ export function MonthlyTrendChart({ data, height = 320, showProfit = true }) {
 
 /** 비용 구성 도넛 */
 export function CompositionDonut({ data, height = 260 }) {
-  const total = data.reduce((sum, d) => sum + Number(d.value || 0), 0)
+  const total = (data || []).reduce((sum, d) => sum + Number(d?.value || 0), 0)
   if (!total) {
     return (
       <div className="flex h-[200px] items-center justify-center text-sm text-ink-400">

@@ -11,7 +11,7 @@ export function parseCardUsers(value) {
 }
 
 /** 법인카드 이용자 다중 선택 (ALL은 단독). allowCustom이면 목록 외 직접 입력 가능 */
-export default function CardUserSelect({ value, onChange, allowCustom = false }) {
+export default function CardUserSelect({ value, onChange, allowCustom = false, className = '' }) {
   const [open, setOpen] = useState(false)
   const rootRef = useRef(null)
   const codes = parseCardUsers(value)
@@ -72,7 +72,7 @@ export default function CardUserSelect({ value, onChange, allowCustom = false })
     : '선택'
 
   return (
-    <span ref={rootRef} className="relative inline-block">
+    <span ref={rootRef} className={`relative inline-block ${className}`}>
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}

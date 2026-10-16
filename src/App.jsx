@@ -295,7 +295,7 @@ export default function App() {
             <Route
               path="/reports"
               element={
-                <Guard perm="reports">
+                <Guard adminOnly>
                   <Reports />
                 </Guard>
               }
@@ -367,10 +367,10 @@ export default function App() {
             <Route path="/settings" element={<Settings />} />
 
             <Route path="/" element={<HomeRedirect />} />
-            <Route path="*" element={<Navigate to="/dashboard" replace />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
 
-          <Route path="*" element={<Navigate to="/dashboard" replace />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </Suspense>
         </ChunkErrorBoundary>

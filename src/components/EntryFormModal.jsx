@@ -101,7 +101,7 @@ export default function EntryFormModal({
 
   /** 신규 등록 시 프로젝트 미선택이면 사내 공통(비젠공통·관리)으로 자동 지정 (effect보다 먼저 선언) */
   const internalProjectId = useMemo(
-    () => projects.find((p) => p.name === INTERNAL_PROJECT_NAME)?.id || '',
+    () => (projects || []).find((p) => p?.name === INTERNAL_PROJECT_NAME)?.id || '',
     [projects],
   )
 

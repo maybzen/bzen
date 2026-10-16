@@ -5,6 +5,7 @@ import PartnerFormModal from '../components/PartnerFormModal'
 import { useToast } from '../components/Toast'
 import { ConfirmDialog, EmptyState, InlineAlert, LoadingBlock, Modal, PageHeader, StatCard } from '../components/ui'
 import { useAuth } from '../auth/AuthContext'
+import { useFinanceView } from '../lib/permissions'
 import { PARTNER_GROUPS, suggestPartnerGroup } from '../lib/constants'
 import { supabase } from '../lib/supabase'
 import { downloadTextFile, toCSV } from '../lib/csv'
@@ -50,8 +51,10 @@ function memoAccounts(memo) {
 }
 
 export default function Partners() {
-  const { isAdmin, user } = useAuth()
+  const { isAdmin, user, profile } = useAuth()
   const toast = useToast()
+  /* 거래처 금액(수금 연동액·미지급)은 관리자 + 설정에서 허용한 직원만 봅니다 */
+  const canSeeMoney = useFinanceView(profile, isAdmin)
 
   const [loading, setLoading] = useState(true)
   const [partners, setPartners] = useState([])
@@ -799,8 +802,13 @@ export default function Partners() {
                       <td className="td num whitespace-nowrap">
                         {collected ? (
                           <Link
-                            to={`/collections?vendor=${encodeURIComponent(p.name)}`}
-                            title={`수금관리에서 ${p.name} 보기 (${collected.count}건 · ${formatKRW(collected.amount)}원)`}
+                            to={canSeeMoney ? `/collections?vendor=${encodeURIComponent(p.name)}` : undefined}
+                            onClick={canSeeMoney ? undefined : (e) => e.preventDefault()}
+                            title={
+                              canSeeMoney
+                                ? `수금관리에서 ${p.name} 보기 (${collected.count}건 · ${formatKRW(collected.amount)}원)`
+                                : `수금 연동 ${collected.count}건 (금액은 관리자만 확인 가능)`
+                            }
                             className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-50"
                           >
                             <Icon name="card" size={14} />
@@ -925,7 +933,7 @@ export default function Partners() {
                     </p>
                     <p className="mt-0.5 text-ink-500">
                       장부 {s.entries}건 · 수금 {s.collections}건 · 프로젝트 연결 {s.links}곳 · 서류 {s.docs}건
-                      {Number(p.payable_balance || 0) ? ` · 미지급 ${formatKRW(p.payable_balance)}원` : ''}
+                      {canSeeMoney && Number(p.payable_balance || 0) ? ` · 미지급 ${formatKRW(p.payable_balance)}원` : ''}
                     </p>
                   </li>
                 )
