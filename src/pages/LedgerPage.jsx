@@ -25,6 +25,7 @@ import {
   listProjects,
   mergeEntries,
   updateEntry,
+  uploadAttachment,
 } from '../lib/api'
 
 const IMPORT_COLUMNS = ['일자', '거래처', '항목', '적요', '공급가액', '부가세', '결제수단', '비고', '프로젝트']
@@ -289,9 +290,9 @@ export default function LedgerPage({ type, source = 'manual', title, description
     clearHighlightFor(entry.id)
     return saved
   }
-  /* 목록에서 카드 바로 바꾸기 (매출 제외). 메모 꼬리표만 갈아낍니다 */
+  /* 목록에서 카드 바로 바꾸기 (매출·지출결의 제외). 메모 꼬리표만 갈아낍니다 */
   const cardOptions = useMemo(() => {
-    if (type === 'sale') return null
+    if (type === 'sale' || source === 'expense_report') return null
     const base = [...DEFAULT_CARD_OPTIONS]
     const seen = new Set(base)
     for (const e of entries || []) {
@@ -307,6 +308,12 @@ export default function LedgerPage({ type, source = 'manual', title, description
     const saved = await updateEntry(entry.id, { memo: withMemoCard(entry.memo, cardLabel) })
     setEntries((rows) => rows.map((r) => (r.id === entry.id ? { ...r, ...saved } : r)))
     clearHighlightFor(entry.id)
+    return saved
+  }
+  /* 목록에서 증빙 바로 올리기 (본인 행·관리자) */
+  const handleUploadFile = async (entry, file) => {
+    const saved = await uploadAttachment(entry.id, file, user?.id)
+    setAttachmentsByEntry((m) => ({ ...m, [entry.id]: [...(m[entry.id] || []), saved] }))
     return saved
   }
   const handleDeleteMany = async () => {
@@ -593,6 +600,7 @@ export default function LedgerPage({ type, source = 'manual', title, description
             showSource={type === 'opex' && source === 'manual'}
             cardOptions={cardOptions}
             onSaveCard={cardOptions ? handleSaveCard : undefined}
+            onUploadFile={handleUploadFile}
           />
         )}
       </div>

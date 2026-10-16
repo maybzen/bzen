@@ -3,7 +3,7 @@ import Icon from './Icon'
 import { AmountInput } from './ui'
 import { AttachmentCell } from './Attachments'
 import { ENTRY_META } from '../lib/constants'
-import { cardTagOf, shortCard } from '../lib/cardTag'
+import { cardTagOf, shortCard, userCodesOnly } from '../lib/cardTag'
 import { formatDateHuman, formatKRW } from '../lib/format'
 import { ISSUE_META } from '../lib/validate'
 import { useToast } from './Toast'
@@ -25,14 +25,15 @@ function memoUser(entry) {
 
 function ownerLabel(profiles, entry) {
   if (entry.requester_id) return personName(profiles, entry.requester_id)
-  if (memoUser(entry)) return memoUser(entry)
+  const codes = userCodesOnly(memoUser(entry))
+  if (codes.length) return codes.join(',')
   if (entry.created_by) return personName(profiles, entry.created_by)
   return '미지정'
 }
 
-/** 법인카드 이용자: 메모의 "· 이용자 XXX" 에서 추출 */
+/** 법인카드 이용자: 메모의 "· 이용자 XXX" 에서 코드만 추출 */
 function cardUser(entry) {
-  return memoUser(entry)
+  return userCodesOnly(memoUser(entry)).join(',')
 }
 
 export default function EntryTable({
@@ -67,6 +68,8 @@ export default function EntryTable({
   /* 목록에서 바로 바꾸는 결제 카드 (운영비·매입·지출결의용). 주면 카드 열이 생깁니다 */
   cardOptions = null,
   onSaveCard = null,
+  /* 목록에서 증빙 바로 올리기 (지출결의용). 주면 증빙 칸에 올리기 단추가 생깁니다 */
+  onUploadFile = null,
   /* 부가세 열 숨기기 (급여처럼 전부 0원일 때) */
   hideVat = false,
   /* 데이터 점검에서 넘어온 의심 항목 id 목록 → 색으로 표시 */
@@ -143,6 +146,26 @@ export default function EntryTable({
       toast.error(`카드를 바꾸지 못했습니다: ${err?.message || '알 수 없는 오류'}`)
     } finally {
       setCardSavingId(null)
+    }
+  }
+
+  /* 목록에서 증빙 바로 올리기 */
+  const [uploadingId, setUploadingId] = useState(null)
+  const canUpload = (entry) =>
+    onUploadFile && (!canEditEntry || canEditEntry(entry))
+  const uploadFiles = async (entry, fileList) => {
+    if (!onUploadFile || !fileList?.length || uploadingId) return
+    setUploadingId(entry.id)
+    try {
+      for (const f of fileList) {
+        // eslint-disable-next-line no-await-in-loop
+        await onUploadFile(entry, f)
+      }
+      toast.success('증빙을 올렸습니다.')
+    } catch (err) {
+      toast.error(`올리지 못했습니다: ${err?.message || '알 수 없는 오류'}`)
+    } finally {
+      setUploadingId(null)
     }
   }
 
@@ -588,7 +611,12 @@ export default function EntryTable({
                     </td>
                   ) : null}
                   <td className="td">
-                    <AttachmentCell attachments={files} onOpen={onOpenAttachments} />
+                    <AttachmentCell
+                      attachments={files}
+                      onOpen={onOpenAttachments}
+                      onUpload={canUpload(entry) ? (list) => uploadFiles(entry, list) : undefined}
+                      uploading={uploadingId === entry.id}
+                    />
                   </td>
                   <td className="td max-w-[130px] truncate text-xs text-ink-500">
                     {(() => {
@@ -849,7 +877,12 @@ export default function EntryTable({
                   </div>
                 ) : null}
                 <div className="mt-2.5 flex items-center justify-between">
-                  <AttachmentCell attachments={files} onOpen={onOpenAttachments} />
+                  <AttachmentCell
+                    attachments={files}
+                    onOpen={onOpenAttachments}
+                    onUpload={canUpload(entry) ? (list) => uploadFiles(entry, list) : undefined}
+                    uploading={uploadingId === entry.id}
+                  />
                   {canEdit ? (
                     <div className="flex items-center gap-1">
                       {onSlip ? (

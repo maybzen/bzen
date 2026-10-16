@@ -2,6 +2,39 @@
  * 메모의 카드 꼬리표 읽기/쓰기 (법카 9988→2381, 카드의정석 0854).
  * 목록에서 바로 카드를 바꿀 때 씁니다. 위치는 그대로 두고 꼬리표만 갈아낍니다.
  */
+import { CARD_USERS } from './constants'
+
+const KNOWN_USER_CODES = new Set(CARD_USERS.map((u) => u.code))
+
+export function parseCardUsers(value) {
+  return String(value || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+}
+
+/** 메모 이용자 꼬리표에서 이용자 코드만 뽑습니다.
+ *  메모에는 "Z,B,G,S,N,J 법카 9988→2381 10월 청구분…"처럼 코드 뒤에 카드 메모가
+ *  붙어 있어서, 앞쪽의 코드 형태 토큰만 남기고 뒷말은 버립니다 (메모 원문은 유지). */
+export function userCodesOnly(value) {
+  const out = []
+  const single = /^[A-Za-z0-9가-힣]+$/
+  for (const chunk of parseCardUsers(value)) {
+    if (single.test(chunk)) {
+      out.push(chunk) // Z, ALL, SHINE 같은 단일 코드
+      continue
+    }
+    // "J 법카 9988…"처럼 코드 뒤에 설명이 붙은 덩이는 앞쪽 코드 토큰만 살립니다
+    const subs = chunk.split(/\s+/)
+    for (let i = 0; i < subs.length; i += 1) {
+      const sub = subs[i]
+      if (!single.test(sub)) break
+      if (KNOWN_USER_CODES.has(sub) || sub === 'ALL' || i === 0) out.push(sub)
+      else break
+    }
+  }
+  return [...new Set(out)]
+}
 
 export const CARD_TAG_RE = /법카\s*\d+(?:→\d+)?|카드의정석\s*[\d-]+/
 

@@ -15,18 +15,44 @@ function isPdf(mime, name) {
   return /\.pdf$/i.test(name || '')
 }
 
-/** 목록에서 증빙 개수를 보여주는 셀 */
-export function AttachmentCell({ attachments = [], onOpen }) {
-  if (!attachments.length) return <span className="text-xs text-ink-300">—</span>
+/** 목록에서 증빙 개수를 보여주는 셀. onUpload를 주면 목록에서 바로 올릴 수 있습니다 */
+export function AttachmentCell({ attachments = [], onOpen, onUpload, uploading = false, disabled = false }) {
+  if (!attachments.length && !onUpload) return <span className="text-xs text-ink-300">—</span>
   return (
-    <button
-      type="button"
-      onClick={() => onOpen(attachments)}
-      className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-xs font-semibold text-brand-700 transition hover:bg-brand-50"
-    >
-      <Icon name="paperclip" size={14} />
-      {attachments.length}
-    </button>
+    <span className="inline-flex items-center gap-1">
+      {attachments.length ? (
+        <button
+          type="button"
+          onClick={() => onOpen(attachments)}
+          className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-xs font-semibold text-brand-700 transition hover:bg-brand-50"
+        >
+          <Icon name="paperclip" size={14} />
+          {attachments.length}
+        </button>
+      ) : null}
+      {onUpload ? (
+        <label
+          title="증빙 올리기"
+          className={`inline-flex cursor-pointer items-center gap-1 rounded-md px-1.5 py-1 text-xs font-semibold transition ${
+            disabled || uploading ? 'text-ink-300' : 'text-ink-500 hover:bg-ink-100 hover:text-ink-800'
+          }`}
+        >
+          {uploading ? <Spinner size={13} /> : <Icon name="plus" size={14} />}
+          {!attachments.length ? '올리기' : null}
+          <input
+            type="file"
+            className="hidden"
+            accept="image/*,.pdf"
+            multiple
+            disabled={disabled || uploading}
+            onChange={(e) => {
+              onUpload([...(e.target.files || [])])
+              e.target.value = ''
+            }}
+          />
+        </label>
+      ) : null}
+    </span>
   )
 }
 
