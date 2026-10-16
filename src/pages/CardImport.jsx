@@ -165,7 +165,15 @@ function fmtFx(currency, amount) {
 export default function CardImport({ embed = false } = {}) {
   const { isAdmin, user } = useAuth()
   const toast = useToast()
-  const period = usePeriod('thisMonth', 'bzen.period.cards')
+  /* 기간은 기억하지 않습니다. 탭에 들어오면 항상 이번 달부터 보여줍니다 */
+  const period = usePeriod('thisMonth')
+  useEffect(() => {
+    try {
+      localStorage.removeItem('bzen.period.cards')
+    } catch {
+      /* 무시 */
+    }
+  }, [])
 
   const [fileName, setFileName] = useState('')
   const [rawRows, setRawRows] = useState([])
@@ -253,8 +261,9 @@ export default function CardImport({ embed = false } = {}) {
     }
   }
 
-  /* 월별 합계 + 고정비 감지를 한 번의 12개월 조회로 함께 계산합니다 (탭 진입 속도용) */
+  /* 월별 합계 + 고정비 감지: 12개월치는 무거우니 월별 화면을 열 때만 한 번 가져옵니다 */
   useEffect(() => {
+    if (!showMonthly) return undefined
     let alive = true
     setMonthlyLoading(true)
     setFixedLoading(true)
@@ -301,7 +310,7 @@ export default function CardImport({ embed = false } = {}) {
     return () => {
       alive = false
     }
-  }, [reloadKey])
+  }, [showMonthly, reloadKey])
 
   const jumpToMonth = (mk) => {
     const [y, m] = mk.split('-').map(Number)
@@ -755,6 +764,15 @@ export default function CardImport({ embed = false } = {}) {
     }
   }
 
+  /* 선택 기간이 길면(두 달 초과) 낱건 표 대신 월별 묶음으로 보여줍니다 */
+  const rangeDays = useMemo(() => {
+    const f = period.range.from
+    const t = period.range.to
+    if (!f || !t) return 0
+    return Math.round((new Date(t) - new Date(f)) / 86400000) + 1
+  }, [period.range.from, period.range.to])
+  const isGrouped = rangeDays === 0 || rangeDays > 62
+
   const loadRegistered = useCallback(async () => {
     setLoadingList(true)
     try {
@@ -773,13 +791,22 @@ export default function CardImport({ embed = false } = {}) {
       setProjects(projectRows || [])
       setRegProjects(projectRows || [])
       setRegProfiles(profileRows || [])
-      const files = await listAttachments(cardRows.map((r) => r.id)).catch(() => [])
-      const map = {}
-      for (const file of files || []) {
-        if (!map[file.entry_id]) map[file.entry_id] = []
-        map[file.entry_id].push(file)
+      /* 월별 묶음 보기에서는 증빙을 미리 안 가져옵니다 (낱건 화면에서 봅니다) */
+      const grouped =
+        !period.range.from ||
+        !period.range.to ||
+        Math.round((new Date(period.range.to) - new Date(period.range.from)) / 86400000) + 1 > 62
+      if (grouped) {
+        setRegAttachments({})
+      } else {
+        const files = await listAttachments((cardRows || []).map((r) => r.id)).catch(() => [])
+        const map = {}
+        for (const file of files || []) {
+          if (!map[file.entry_id]) map[file.entry_id] = []
+          map[file.entry_id].push(file)
+        }
+        setRegAttachments(map)
       }
-      setRegAttachments(map)
     } catch (error) {
       toast.error(error.message)
     } finally {
@@ -822,6 +849,32 @@ export default function CardImport({ embed = false } = {}) {
     )
     return rows
   }, [registered, regProjectFilter, regCardFilter, regMonthFilter, regSort])
+
+  /* 긴 기간은 월별 묶음으로 계산합니다 (필터가 걸린 목록 기준) */
+  const monthGroups = useMemo(() => {
+    const map = new Map()
+    for (const e of visibleRegistered) {
+      const mk = String(e.entry_date || '').slice(0, 7)
+      if (!/^\d{4}-\d{2}$/.test(mk)) continue
+      const g = map.get(mk) || { mk, n: 0, total: 0, byCard: new Map() }
+      g.n += 1
+      g.total += Number(e.total_amount || 0)
+      const label = cardOf(e) || '기타'
+      const c = g.byCard.get(label) || { n: 0, total: 0 }
+      c.n += 1
+      c.total += Number(e.total_amount || 0)
+      g.byCard.set(label, c)
+      map.set(mk, g)
+    }
+    return [...map.values()]
+      .sort((a, b) => (a.mk < b.mk ? 1 : -1))
+      .map((g) => ({
+        ...g,
+        cards: [...g.byCard.entries()]
+          .map(([label, v]) => ({ label, ...v }))
+          .sort((a, b) => b.total - a.total),
+      }))
+  }, [visibleRegistered])
 
   const selectedIds = useMemo(
     () => visibleRegistered.filter((e) => selected[e.id]).map((e) => e.id),
@@ -1436,6 +1489,45 @@ export default function CardImport({ embed = false } = {}) {
                 </button>
               ) : null}
             </div>
+            {isGrouped ? (
+              <div className="px-4 py-3.5">
+                <p className="text-xs leading-relaxed text-ink-500">
+                  기간이 길어서 월별로 묶어 보여줍니다. 달을 누르면 낱건 내역으로 이동합니다.
+                </p>
+                <div className="mt-2.5 grid grid-cols-2 gap-2.5 sm:grid-cols-3 xl:grid-cols-4">
+                  {monthGroups.map((g) => (
+                    <button
+                      key={g.mk}
+                      type="button"
+                      onClick={() => jumpToMonth(g.mk)}
+                      className="rounded-xl border border-ink-200 bg-white px-3.5 py-3 text-left transition hover:border-brand-300 hover:shadow-card"
+                      title={`${g.mk} 낱건 보기`}
+                    >
+                      <p className="text-xs font-semibold text-ink-500">
+                        {g.mk.slice(0, 4)}년 {Number(g.mk.slice(5))}월
+                      </p>
+                      <p className="mt-1 font-num text-base font-extrabold tabular-nums tracking-tight text-ink-900">
+                        {formatKRW(g.total)}
+                        <span className="text-xs font-semibold text-ink-400">원</span>
+                      </p>
+                      <p className="mt-0.5 text-[11px] text-ink-500">{g.n}건</p>
+                      <div className="mt-1.5 flex flex-col gap-0.5 border-t border-ink-100 pt-1.5">
+                        {(g.cards || []).slice(0, 3).map((c) => (
+                          <p key={c.label} className="flex items-baseline justify-between gap-2 text-[11px] text-ink-500">
+                            <span className="truncate">{c.label}</span>
+                            <span className="shrink-0 font-num tabular-nums">{formatKRW(c.total)}</span>
+                          </p>
+                        ))}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+                {!monthGroups.length ? (
+                  <p className="mt-2 text-xs text-ink-400">해당 기간에 내역이 없습니다.</p>
+                ) : null}
+              </div>
+            ) : (
+            <>
             <div className="grid grid-cols-2 gap-3 border-b border-ink-200 px-4 py-3.5 lg:grid-cols-4">
               <StatCard label="등록 건수" value={String(visibleRegistered.length)} unit="건" tone="neutral" icon="card" hint="클릭하면 월별로 이동" onClick={openMonthly} />
               <StatCard
@@ -1721,6 +1813,8 @@ export default function CardImport({ embed = false } = {}) {
                 </tbody>
               </table>
             </div>
+            </>
+            )}
           </>
         ) : (
           <EmptyState
