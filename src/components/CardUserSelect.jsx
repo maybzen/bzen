@@ -15,24 +15,21 @@ export function parseCardUsers(value) {
  *  붙어 있어서, 앞쪽의 코드 형태 토큰만 남기고 뒷말은 버립니다 (메모 원문은 유지). */
 export function userCodesOnly(value) {
   const out = []
-  const chunks = parseCardUsers(value)
-  chunks.forEach((chunk, ci) => {
-    if (/^[A-Za-z0-9가-힣]+$/.test(chunk)) {
+  const single = /^[A-Za-z0-9가-힣]+$/
+  for (const chunk of parseCardUsers(value)) {
+    if (single.test(chunk)) {
       out.push(chunk) // Z, ALL, SHINE 같은 단일 코드
-      return
+      continue
     }
     // "J 법카 9988…"처럼 코드 뒤에 설명이 붙은 덩이는 앞쪽 코드 토큰만 살립니다
-    for (const sub of chunk.split(/\s+/)) {
-      if (!/^[A-Za-z0-9가-힣]+$/.test(sub)) break
-      if (KNOWN.has(sub) || sub === 'ALL') {
-        out.push(sub)
-        continue
-      }
-      // 직접 입력한 기타 코드(첫 덩이 맨 앞 토큰)는 살립니다
-      if (out.length === 0 && ci === 0 && sub === chunk.split(/\s+/)[0]) out.push(sub)
-      break
+    const subs = chunk.split(/\s+/)
+    for (let i = 0; i < subs.length; i += 1) {
+      const sub = subs[i]
+      if (!single.test(sub)) break
+      if (KNOWN.has(sub) || sub === 'ALL' || i === 0) out.push(sub)
+      else break
     }
-  })
+  }
   return [...new Set(out)]
 }
 export default function CardUserSelect({ value, onChange, allowCustom = false, className = '' }) {

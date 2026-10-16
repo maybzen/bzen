@@ -3,6 +3,7 @@ import Icon from './Icon'
 import { AmountInput } from './ui'
 import { AttachmentCell } from './Attachments'
 import { ENTRY_META } from '../lib/constants'
+import { cardTagOf, shortCard } from '../lib/cardTag'
 import { formatDateHuman, formatKRW } from '../lib/format'
 import { ISSUE_META } from '../lib/validate'
 import { useToast } from './Toast'
@@ -63,6 +64,9 @@ export default function EntryTable({
   /* 행별 수정·삭제 가능 여부 (직원 본인 행만 허용할 때 사용) */
   canEditEntry = null,
   canDeleteEntry = null,
+  /* 목록에서 바로 바꾸는 결제 카드 (운영비·매입·지출결의용). 주면 카드 열이 생깁니다 */
+  cardOptions = null,
+  onSaveCard = null,
   /* 부가세 열 숨기기 (급여처럼 전부 0원일 때) */
   hideVat = false,
   /* 데이터 점검에서 넘어온 의심 항목 id 목록 → 색으로 표시 */
@@ -75,6 +79,7 @@ export default function EntryTable({
 }) {
   const [rowEdits, setRowEdits] = useState({})
   const [savingId, setSavingId] = useState(null)
+  const [cardSavingId, setCardSavingId] = useState(null)
   const [bulkSaving, setBulkSaving] = useState(false)
   const [selected, setSelected] = useState({})
   const [bulkProject, setBulkProject] = useState('')
@@ -123,6 +128,22 @@ export default function EntryTable({
       delete next[id]
       return next
     })
+  }
+
+  /* 목록에서 카드 바로 바꾸기 (메모 꼬리표만 갈아낍니다) */
+  const canChangeCard = (entry) =>
+    onSaveCard && (!canEditEntry || canEditEntry(entry))
+  const saveCard = async (entry, cardLabel) => {
+    if (!onSaveCard || cardSavingId) return
+    setCardSavingId(entry.id)
+    try {
+      const saved = await onSaveCard(entry, cardLabel)
+      if (saved && saved.memo !== undefined) entry.memo = saved.memo
+    } catch (err) {
+      toast.error(`카드를 바꾸지 못했습니다: ${err?.message || '알 수 없는 오류'}`)
+    } finally {
+      setCardSavingId(null)
+    }
   }
 
   const saveRow = async (entry, silent = false) => {
@@ -372,6 +393,7 @@ export default function EntryTable({
               <th className="th">거래처 / 사용처</th>
               <th className="th">항목</th>
               <th className="th">적요</th>
+              {cardOptions ? <th className="th">카드</th> : null}
               <th className="th text-right">공급가액</th>
               {hideVat ? null : <th className="th text-right">부가세</th>}
               <th className="th text-right">합계</th>
@@ -503,6 +525,34 @@ export default function EntryTable({
                       entry.description || <span className="text-ink-300">—</span>
                     )}
                   </td>
+                  {cardOptions ? (
+                    <td className="td">
+                      {(() => {
+                        const tag = cardTagOf(entry.memo)
+                        const saving = cardSavingId === entry.id
+                        return canChangeCard(entry) ? (
+                          <select
+                            className="input w-full min-w-[64px] max-w-[110px] px-2 py-1 text-xs"
+                            value={cardOptions.includes(tag) ? tag : ''}
+                            title={tag === '기타' ? '미지정' : tag}
+                            disabled={saving}
+                            onChange={(e) => saveCard(entry, e.target.value)}
+                          >
+                            <option value="">미지정</option>
+                            {cardOptions.map((c) => (
+                              <option key={c} value={c}>
+                                {shortCard(c)}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <span className="text-xs text-ink-500" title={entry.memo || ''}>
+                            {tag === '기타' ? <span className="text-ink-300">—</span> : shortCard(tag)}
+                          </span>
+                        )
+                      })()}
+                    </td>
+                  ) : null}
                   <td className="td num">
                     {editable ? (
                       <AmountInput
@@ -771,6 +821,33 @@ export default function EntryTable({
                   ) : null
                 )}
 
+                {cardOptions ? (
+                  <div className="mt-2 flex items-center gap-2">
+                    <span className="shrink-0 text-[11px] font-semibold text-ink-500">카드</span>
+                    {(() => {
+                      const tag = cardTagOf(entry.memo)
+                      const saving = cardSavingId === entry.id
+                      return canChangeCard(entry) ? (
+                        <select
+                          className="input min-w-0 flex-1 py-1.5 text-xs"
+                          value={cardOptions.includes(tag) ? tag : ''}
+                          onChange={(e) => saveCard(entry, e.target.value)}
+                          disabled={saving}
+                          aria-label="결제 카드"
+                        >
+                          <option value="">미지정</option>
+                          {cardOptions.map((c) => (
+                            <option key={c} value={c}>
+                              {c}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <span className="text-xs text-ink-600">{tag === '기타' ? '—' : tag}</span>
+                      )
+                    })()}
+                  </div>
+                ) : null}
                 <div className="mt-2.5 flex items-center justify-between">
                   <AttachmentCell attachments={files} onOpen={onOpenAttachments} />
                   {canEdit ? (

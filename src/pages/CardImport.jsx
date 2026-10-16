@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Icon from '../components/Icon'
 import EntryFormModal from '../components/EntryFormModal'
 import CardUserSelect, { userCodesOnly } from '../components/CardUserSelect'
+import { cardTagOf, withMemoCard, shortCard, DEFAULT_CARD_OPTIONS } from '../lib/cardTag'
 import PeriodPicker, { usePeriod } from '../components/PeriodPicker'
 import { AttachmentCell, AttachmentModal } from '../components/Attachments'
 import { useToast } from '../components/Toast'
@@ -322,10 +323,21 @@ export default function CardImport({ embed = false } = {}) {
     setShowMonthly(false)
   }
 
-  const cardOf = (entry) => {
-    const m = String(entry.memo || '').match(/(법카\s*\d+(?:→\d+)?|카드의정석\s*[\d-]+)/)
-    return m ? m[1].replace(/\s+/g, ' ') : '기타'
-  }
+  const cardOf = (entry) => cardTagOf(entry.memo)
+
+  /* 목록에서 바로 바꾸는 결제 카드 선택지 (기본 3종 + 자료에 있는 다른 카드) */
+  const cardOptions = useMemo(() => {
+    const base = [...DEFAULT_CARD_OPTIONS]
+    const seen = new Set(base)
+    for (const e of registered || []) {
+      const c = cardOf(e.memo)
+      if (c && c !== '기타' && !seen.has(c)) {
+        seen.add(c)
+        base.push(c)
+      }
+    }
+    return base
+  }, [registered])
 
   const exportRegistered = () => {
     if (!visibleRegistered.length) {
@@ -440,10 +452,13 @@ export default function CardImport({ embed = false } = {}) {
   }
 
   const withMemoUser = (memo, user) => {
-    // 구 메모("…이용자 B 법카…", · 없음)와 신 메모("… · 이용자 B · …") 둘 다 걷어냅니다
-    const base = String(memo || '').replace(/\s*(?:·\s*)?이용자\s+[^·]*/, '').trim()
-    const u = String(user || '').trim()
-    return u ? `${base} · 이용자 ${u}` : base
+    // 코드 토큰만 걷어내고 뒷말(법카·청구분)은 유지합니다.
+    // 구 메모("…이용자 B 법카…", · 없음)와 신 메모("… · 이용자 B · …") 둘 다 처리합니다
+    const base = String(memo || '')
+      .replace(/\s*(?:·\s*)?이용자\s+[A-Za-z0-9가-힣]+(?:\s*,\s*[A-Za-z0-9가-힣]+)*(?=[\s·]|$)/, '')
+      .trim()
+    const codes = userCodesOnly(user)
+    return codes.length ? `${base} · 이용자 ${codes.join(',')}` : base
   }
 
   const buildRowPayload = (entry, patch) => {
@@ -461,7 +476,10 @@ export default function CardImport({ embed = false } = {}) {
         category: work.category || '',
         supply_amount: Number(work.supply_amount) || 0,
         vat_amount: Number(work.vat_amount) || 0,
-        memo: withMemoUser(entry.memo, patch.cardUser !== undefined ? patch.cardUser : memoUser(entry.memo)),
+        memo: withMemoCard(
+          withMemoUser(entry.memo, patch.cardUser !== undefined ? patch.cardUser : memoUser(entry.memo)),
+          patch.card !== undefined ? patch.card : cardOf(entry.memo) === '기타' ? '' : cardOf(entry.memo),
+        ),
       },
     }
   }
@@ -1608,7 +1626,7 @@ export default function CardImport({ embed = false } = {}) {
                 <thead className="bg-ink-50/70">
                   <tr>
                     {isAdmin ? (
-                      <th className="th w-[30px] text-center">
+                      <th className="th w-[28px] text-center">
                         <input
                           type="checkbox"
                           className="h-4 w-4 accent-brand-600"
@@ -1618,19 +1636,20 @@ export default function CardImport({ embed = false } = {}) {
                         />
                       </th>
                     ) : null}
-                    <th className="th w-[106px]">이용일자</th>
-                    <th className="th w-[8%]">가맹점</th>
-                    <th className="th w-[10%]">적요</th>
-                    <th className="th w-[11%]">프로젝트</th>
-                    <th className="th w-[72px]">유형</th>
-                    <th className="th w-[84px]">항목</th>
-                    <th className="th w-[92px]">이용자</th>
-                    <th className="th w-[54px]">등록자</th>
+                    <th className="th w-[102px]">이용일자</th>
+                    <th className="th w-[7%]">가맹점</th>
+                    <th className="th w-[9%]">적요</th>
+                    <th className="th w-[10%]">프로젝트</th>
+                    <th className="th w-[68px]">유형</th>
+                    <th className="th w-[80px]">항목</th>
+                    <th className="th w-[100px]">이용자</th>
+                    <th className="th w-[50px]">등록자</th>
+                    <th className="th w-[64px]">카드</th>
                     <th className="th w-[78px] text-right">공급가액</th>
-                    <th className="th w-[72px] text-right">부가세</th>
-                    <th className="th w-[70px] text-right">합계</th>
-                    <th className="th w-[40px] text-right">서류</th>
-                    <th className="th sticky right-0 w-[78px] bg-ink-50 text-right shadow-[-8px_0_12px_-8px_rgba(16,24,64,0.25)]">저장</th>
+                    <th className="th w-[70px] text-right">부가세</th>
+                    <th className="th w-[66px] text-right">합계</th>
+                    <th className="th w-[38px] text-right">서류</th>
+                    <th className="th sticky right-0 w-[70px] bg-ink-50 text-right shadow-[-8px_0_12px_-8px_rgba(16,24,64,0.25)]">저장</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-ink-100">
@@ -1641,6 +1660,7 @@ export default function CardImport({ embed = false } = {}) {
                     const saving = savingId === entry.id
                     const cardUser =
                       edit.cardUser !== undefined ? edit.cardUser : memoUser(entry.memo)
+                    const cardValue = edit.card !== undefined ? edit.card : cardOf(entry.memo)
                     return (
                       <tr key={entry.id} className={dirty ? 'bg-brand-50/40' : undefined}>
                         {isAdmin ? (
@@ -1746,6 +1766,21 @@ export default function CardImport({ embed = false } = {}) {
                         </td>
                         <td className="td max-w-[110px] truncate text-xs text-ink-500">
                           {regName(entry.created_by)}
+                        </td>
+                        <td className="td">
+                          <select
+                            className="input w-full min-w-0 px-2 py-1 text-xs"
+                            value={cardOptions.includes(cardValue) ? cardValue : ''}
+                            title={cardValue || '미지정'}
+                            onChange={(e) => setCell(entry.id, { card: e.target.value })}
+                          >
+                            <option value="">미지정</option>
+                            {cardOptions.map((c) => (
+                              <option key={c} value={c}>
+                                {shortCard(c)}
+                              </option>
+                            ))}
+                          </select>
                         </td>
                         <td className="td num">
                           <AmountInput
