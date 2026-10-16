@@ -253,16 +253,20 @@ export default function CardImport({ embed = false } = {}) {
     }
   }
 
+  /* 월별 합계 + 고정비 감지를 한 번의 12개월 조회로 함께 계산합니다 (탭 진입 속도용) */
   useEffect(() => {
     let alive = true
     setMonthlyLoading(true)
+    setFixedLoading(true)
     const now = new Date()
     const from = toISODate(new Date(now.getFullYear(), now.getMonth() - 11, 1))
-    listEntries({ from, to: toISODate(now), source: 'card', maxRows: 20000 })
+    listEntries({ from, to: toISODate(now), maxRows: 20000 })
       .then((rows) => {
         if (!alive) return
+        const all = rows || []
         const map = new Map()
-        for (const e of rows || []) {
+        for (const e of all) {
+          if (e.source !== 'card') continue
           if (e.entry_type !== 'purchase' && e.entry_type !== 'opex') continue
           const mk = String(e.entry_date || '').slice(0, 7)
           if (!mk) continue
@@ -286,10 +290,13 @@ export default function CardImport({ embed = false } = {}) {
                 .sort((a, b) => b.total - a.total),
             })),
         )
+        setFixedCosts(detectFixedCosts(all))
       })
       .catch(() => {})
       .finally(() => {
-        if (alive) setMonthlyLoading(false)
+        if (!alive) return
+        setMonthlyLoading(false)
+        setFixedLoading(false)
       })
     return () => {
       alive = false
@@ -861,24 +868,6 @@ export default function CardImport({ embed = false } = {}) {
   useEffect(() => {
     loadRegistered()
   }, [loadRegistered, reloadKey])
-
-  useEffect(() => {
-    let alive = true
-    setFixedLoading(true)
-    const now = new Date()
-    const from = toISODate(new Date(now.getFullYear(), now.getMonth() - 11, 1))
-    listEntries({ from, to: toISODate(now), maxRows: 20000 })
-      .then((rows) => {
-        if (alive) setFixedCosts(detectFixedCosts(rows || []))
-      })
-      .catch(() => {})
-      .finally(() => {
-        if (alive) setFixedLoading(false)
-      })
-    return () => {
-      alive = false
-    }
-  }, [reloadKey, toast])
 
   const mapSelect = (key, label) => (
     <Field label={label}>
