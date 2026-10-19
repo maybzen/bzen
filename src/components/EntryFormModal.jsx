@@ -69,7 +69,6 @@ export default function EntryFormModal({
   const toast = useToast()
   const meta = ENTRY_META[entryType] || ENTRY_META.sale
   const labels = LABELS[entryType] || LABELS.sale
-  const isReport = source === 'expense_report'
 
   const [form, setForm] = useState(() => emptyForm(entryType, source, userId))
   const [totalDraft, setTotalDraft] = useState('')
@@ -86,10 +85,25 @@ export default function EntryFormModal({
   const [fundCards, setFundCards] = useState([])
   /* 카드 표시값: 9988→2381 도 "2381" 로만 보이게 합니다 */
   const shortLabel = (o) => (o === '기타' ? '' : shortCard(o))
-  /* 운영비 신규 등록에서 개인지결로 전환 (지출결의로 저장) */
-  const [asReport, setAsReport] = useState(false)
-  const canToggleReport = entryType === 'opex' && source === 'manual' && !initial?.id
-  const formIsReport = isReport || asReport
+  /* 이 건의 구분: 'manual'(운영비) / 'report'(지출결의).
+     수정할 때는 저장된 구분을 그대로 이어받아 지결이 풀리지 않게 합니다. */
+  const [division, setDivision] = useState('manual')
+  const formIsReport = division === 'report'
+  /* 구분을 직접 고를 수 있는 화면: 운영비 신규 등록, 그리고 운영비·지결 행 수정.
+     카드 일괄등록분(source='card')은 구분을 건드리지 않습니다. */
+  const canChooseDivision =
+    entryType === 'opex' &&
+    ((!initial?.id && source === 'manual') ||
+      (Boolean(initial?.id) &&
+        (initial.source === 'manual' || initial.source === 'expense_report' || !initial.source)))
+  /* 저장할 구분: 수정은 원래 값을 유지하고, 화면에서 고른 경우에만 바꿉니다 */
+  const payloadSource = canChooseDivision
+    ? formIsReport
+      ? 'expense_report'
+      : 'manual'
+    : initial?.id
+      ? initial.source || source
+      : source
   /* 중복·표기 대조용 장부 전체 (관리자만 조회 가능) */
   const ledger = useLedgerIndex({ enabled: open })
 
@@ -159,7 +173,8 @@ export default function EntryFormModal({
       .catch(() => setFundCards([]))
     setError('')
     setForceSave(false)
-    setAsReport(false)
+    /* 수정: 저장된 구분을 이어받습니다. 신규: 화면(source) 구분으로 엽니다. */
+    setDivision((initial?.id ? initial.source || source : source) === 'expense_report' ? 'report' : 'manual')
     setFiles([])
     setRemoved([])
     setTotalDraft('')
@@ -319,7 +334,7 @@ export default function EntryFormModal({
     try {
       const payload = {
         entry_type: entryType,
-        source: asReport ? 'expense_report' : source,
+        source: payloadSource,
         doc_no: form.doc_no.trim(),
         entry_date: form.entry_date,
         project_id: form.project_id || null,
@@ -446,32 +461,34 @@ export default function EntryFormModal({
           </div>
         ) : null}
 
-        {canToggleReport ? (
+        {canChooseDivision ? (
           <div className="flex flex-col gap-1.5 rounded-lg border border-ink-200 bg-ink-50/60 px-3.5 py-3">
             <div className="inline-flex gap-1 rounded-lg bg-white p-1 shadow-sm">
               <button
                 type="button"
-                onClick={() => setAsReport(false)}
+                onClick={() => setDivision('manual')}
                 className={`flex-1 rounded-md px-3 py-1.5 text-xs font-bold transition ${
-                  !asReport ? 'bg-brand-600 text-white' : 'text-ink-500 hover:text-ink-800'
+                  !formIsReport ? 'bg-brand-600 text-white' : 'text-ink-500 hover:text-ink-800'
                 }`}
               >
-                운영비로 등록
+                {initial?.id ? '운영비' : '운영비로 등록'}
               </button>
               <button
                 type="button"
-                onClick={() => setAsReport(true)}
+                onClick={() => setDivision('report')}
                 className={`flex-1 rounded-md px-3 py-1.5 text-xs font-bold transition ${
-                  asReport ? 'bg-brand-600 text-white' : 'text-ink-500 hover:text-ink-800'
+                  formIsReport ? 'bg-brand-600 text-white' : 'text-ink-500 hover:text-ink-800'
                 }`}
               >
-                개인지결로 등록
+                {initial?.id ? '지결' : '개인지결로 등록'}
               </button>
             </div>
             <p className="text-[11px] text-ink-500">
-              {asReport
+              {formIsReport
                 ? '지출결의로 저장됩니다 (지출자 기준 집계). 카드 이용자도 함께 기록됩니다.'
-                : '회사 비용은 운영비, 개인이 먼저 쓴 돈은 개인지결로 등록하세요.'}
+                : initial?.id
+                  ? '운영비로 저장됩니다.'
+                  : '회사 비용은 운영비, 개인이 먼저 쓴 돈은 개인지결로 등록하세요.'}
             </p>
           </div>
         ) : null}
@@ -675,7 +692,7 @@ export default function EntryFormModal({
                 className="input"
                 value={form.requester_id}
                 onChange={set('requester_id')}
-                disabled={!isReport && entryType === 'sale'}
+                disabled={!formIsReport && entryType === 'sale'}
               >
                 <option value="">선택 안 함</option>
                 {profiles.map((p) => (
