@@ -560,7 +560,6 @@ export default function Payroll() {
                 canEdit={isAdmin}
                 onDelete={isAdmin ? setRemoving : undefined}
                 onOpenAttachments={setViewerFiles}
-                canChangeAuthor={isAdmin}
                 onSlip={slipsMissing ? undefined : setSlipEntry}
                 slipEntryIds={slipIds}
                 slipLabel="상세"
@@ -594,7 +593,6 @@ export default function Payroll() {
                 onEdit={openEdit}
                 onDelete={isAdmin ? setRemoving : undefined}
                 onOpenAttachments={setViewerFiles}
-                canChangeAuthor={isAdmin}
                 extraPayMap={Object.fromEntries(reportByPerson)}
               />
             ) : (
@@ -626,7 +624,6 @@ export default function Payroll() {
                 onEdit={openEdit}
                 onDelete={isAdmin ? setRemoving : undefined}
                 onOpenAttachments={setViewerFiles}
-                canChangeAuthor={isAdmin}
                 extraPayMap={Object.fromEntries(reportByPerson)}
               />
             ) : (
@@ -650,7 +647,6 @@ export default function Payroll() {
                 onEdit={openEdit}
                 onDelete={isAdmin ? setRemoving : undefined}
                 onOpenAttachments={setViewerFiles}
-                canChangeAuthor={isAdmin}
               />
             ) : (
               <EmptyState icon="file" title="내역이 없습니다" />

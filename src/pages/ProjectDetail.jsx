@@ -491,7 +491,6 @@ export default function ProjectDetail() {
             attachmentsByEntry={attachmentsByEntry}
             showType
             canEdit
-            canChangeAuthor={isAdmin}
             onEdit={(entry) => {
               setEditing({ ...entry, attachments: attachmentsByEntry[entry.id] || [] })
               setFormType(entry.entry_type)

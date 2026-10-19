@@ -712,7 +712,7 @@ export default function EntryFormModal({
           </Field>
 
           {isAdmin && initial?.id ? (
-            <Field label="등록자" hint="입사 전 자료 등 작성자가 다르면 여기서 바로잡습니다.">
+            <Field label="등록자">
               <select className="input" value={form.author_id} onChange={set('author_id')}>
                 <option value="">미지정</option>
                 {profiles.map((p) => (

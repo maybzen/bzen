@@ -585,7 +585,6 @@ export default function LedgerPage({ type, source = 'manual', title, description
             onSaveRow={handleSaveRow}
             onBulkDelete={isAdmin ? setRemovingMany : undefined}
             onBulkMerge={isAdmin ? openMerge : undefined}
-            canChangeAuthor={isAdmin}
             canEditEntry={ownRow}
             canDeleteEntry={ownRow}
             showSource={type === 'opex' && source === 'manual'}

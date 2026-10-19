@@ -54,8 +54,6 @@ export default function EntryTable({
   onBulkDelete = null,
   /* 중복 의심 합치기 (선택 2건 이상 → 1건 남기고 나머지 휴지통) */
   onBulkMerge = null,
-  /* 등록자(작성자) 일괄 변경. 입사 전 자료 정정용이라 관리자 화면에서만 켭니다. */
-  canChangeAuthor = false,
   /* 명세서 버튼 (급여관리). 주면 행마다 명세서 버튼이 생깁니다. */
   onSlip = null,
   /* 명세서가 저장된 행 id 목록. 버튼에 ✓가 붙습니다. */
@@ -86,7 +84,6 @@ export default function EntryTable({
   const [bulkSaving, setBulkSaving] = useState(false)
   const [selected, setSelected] = useState({})
   const [bulkProject, setBulkProject] = useState('')
-  const [bulkAuthor, setBulkAuthor] = useState('')
   const toast = useToast()
   const rows = entries || []
 
@@ -184,7 +181,6 @@ export default function EntryTable({
         category: work.category || '',
         supply_amount: Number(work.supply_amount) || 0,
         vat_amount: Number(work.vat_amount) || 0,
-        ...(work.created_by !== undefined ? { created_by: work.created_by || null } : {}),
       })
       if (saved && saved.id) {
         entry.supply_amount = saved.supply_amount ?? work.supply_amount
@@ -195,7 +191,6 @@ export default function EntryTable({
         entry.description = saved.description ?? work.description
         entry.project_id = saved.project_id ?? work.project_id ?? null
         entry.category = saved.category ?? work.category ?? ''
-        if (work.created_by !== undefined) entry.created_by = saved.created_by ?? work.created_by ?? null
       }
       cancelRow(entry.id)
       return true
@@ -245,21 +240,6 @@ export default function EntryTable({
       for (const id of selectedIds) next[id] = { ...(next[id] || {}), project_id: bulkProject }
       return next
     })
-  }
-
-  const applyBulkAuthor = () => {
-    if (!selectedIds.length) return
-    setRowEdits((m) => {
-      const next = { ...m }
-      for (const id of selectedIds) next[id] = { ...(next[id] || {}), created_by: bulkAuthor || null }
-      return next
-    })
-  }
-
-  const authorName = (id) => {
-    if (!id) return '미지정'
-    const p = (profiles || []).find((x) => x?.id === id)
-    return p?.full_name || p?.email || '미지정'
   }
 
   if (!(entries || []).length) {
@@ -324,30 +304,6 @@ export default function EntryTable({
           >
             일괄 적용
           </button>
-          {canChangeAuthor ? (
-            <>
-              <select
-                className="input w-auto py-1 text-xs"
-                value={bulkAuthor}
-                onChange={(e) => setBulkAuthor(e.target.value)}
-                title="선택한 행의 등록자를 바꿉니다"
-              >
-                <option value="">등록자 선택</option>
-                {profiles.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.full_name || p.email}
-                  </option>
-                ))}
-              </select>
-              <button
-                type="button"
-                onClick={applyBulkAuthor}
-                className="font-bold text-brand-700 hover:underline"
-              >
-                등록자 적용
-              </button>
-            </>
-          ) : null}
           {typeof onBulkDelete === 'function' ? (
             <button
               type="button"
@@ -642,9 +598,6 @@ export default function EntryTable({
                       }
                       return use ? <>이용자 {use}</> : '미지정'
                     })()}
-                    {dirty && work.created_by !== undefined ? (
-                      <span className="block truncate text-[11px] text-brand-700">→ {authorName(work.created_by)}</span>
-                    ) : null}
                   </td>
                   <td className="td">
                     {canEdit ? (
