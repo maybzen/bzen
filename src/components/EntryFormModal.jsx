@@ -330,7 +330,7 @@ export default function EntryFormModal({
         vat_amount: vat,
         payment_method: form.payment_method,
         memo: withMemoCard(
-          withMemoUser(form.memo, formIsReport ? '' : form.card_user),
+          withMemoUser(form.memo, form.card_user),
           form.payment_method === '카드' && !formIsReport ? form.card_label : '',
         ),
         requester_id: formIsReport ? form.requester_id || userId : form.requester_id || null,
@@ -460,10 +460,7 @@ export default function EntryFormModal({
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  setFields((f) => ({ ...f, card_user: '', card_label: '' }))
-                  setAsReport(true)
-                }}
+                onClick={() => setAsReport(true)}
                 className={`flex-1 rounded-md px-3 py-1.5 text-xs font-bold transition ${
                   asReport ? 'bg-brand-600 text-white' : 'text-ink-500 hover:text-ink-800'
                 }`}
@@ -473,7 +470,7 @@ export default function EntryFormModal({
             </div>
             <p className="text-[11px] text-ink-500">
               {asReport
-                ? '지출결의로 저장됩니다 (지출자 기준 집계). 카드 이용자 입력은 숨겨집니다.'
+                ? '지출결의로 저장됩니다 (지출자 기준 집계). 카드 이용자도 함께 기록됩니다.'
                 : '회사 비용은 운영비, 개인이 먼저 쓴 돈은 개인지결로 등록하세요.'}
             </p>
           </div>
