@@ -392,31 +392,45 @@ export default function CardImport({ embed = false } = {}) {
     }
   }, [registered])
 
-  const suggestPatch = (entry) => {
-    const kw = suggestCategory(entry.counterparty, entry.description, null)
+  /**
+   * 추천 미리보기. 사용자가 직접 고친 칸에는 추천하지 않습니다.
+   * 예: 적요를 직접 지웠는데 저장하자마자 또 채워지는 일을 막습니다.
+   * touched 가 undefined 면 아직 손대지 않은 칸입니다.
+   */
+  /* ✨ 추천은 "아무것도 안 채워진 칸"에만 제안합니다.
+       값이 이미 있는 행에 추천을 계속하면, 저장할 때마다 되살아나서
+       사용자가 고친 값을 시스템이 덮어쓰는 것처럼 보입니다. */
+  const suggestPatch = (entry, edit = {}) => {
+    const patch = {}
+    const kw = suggestCategory(entry.counterparty, entry.description, entry.entry_type)
+    /* 유형이 이미 정해져 있으면 항목만 봅니다 (택시 규칙으로 유형이 끌려다니는 것 방지) */
+    const type = kw && kw.type !== entry.entry_type ? kw.type : null
+    if (type) {
+      patch.entry_type = type
+      patch.category = kw.category || ''
+      return patch
+    }
     const remembered = regMemory.cat(entry.counterparty)
     const [rType, rCat] = remembered ? remembered.split('|') : []
-    const type = kw?.type || (rType === 'purchase' || rType === 'opex' ? rType : null)
-    const category = kw?.category || (type && rType === type ? rCat : '')
-    const patch = {}
-    if (type && type !== entry.entry_type) {
-      patch.entry_type = type
-      patch.category = category || ''
-    } else if (category && category !== entry.category) {
-      patch.category = category
+    /* 항목이 비었을 때만, 이 거래처에 쓰인 가장 흔한 항목을 제안 */
+    const currentCat = String(edit.category ?? entry.category ?? '').trim()
+    if (!currentCat && rType === entry.entry_type && rCat) patch.category = rCat
+    /* 적요가 비었을 때만, 이 거래처에 쓰인 가장 흔한 적요를 제안 */
+    const currentDesc = String(edit.description ?? entry.description ?? '').trim()
+    if (!currentDesc) {
+      const d = regMemory.desc(entry.counterparty)
+      if (d) patch.description = d
     }
-    const d = regMemory.desc(entry.counterparty)
-    if (d && d !== (entry.description || '').trim()) patch.description = d
     return patch
   }
 
   const applySuggest = (entry) => {
-    const patch = suggestPatch(entry)
+    const patch = suggestPatch(entry, rowEdits[entry.id] || {})
     if (!Object.keys(patch).length) {
       toast.info('추천할 내용이 없습니다.')
       return
     }
-    setCell(entry.id, patch)
+    setCell(entry.id, patch, { touched: false })
     toast.success('추천을 적용했습니다. 저장 버튼을 눌러주세요.')
   }
 
@@ -427,8 +441,19 @@ export default function CardImport({ embed = false } = {}) {
   const [busy, setBusy] = useState(false)
   const [viewerFiles, setViewerFiles] = useState(null)
 
-  const setCell = (id, patch) => {
-    setRowEdits((m) => ({ ...m, [id]: { ...(m[id] || {}), ...patch } }))
+  /* touched = 사용자가 직접 고친 칸. 추천은 이 칸에 다시 제안하지 않습니다. */
+  const setCell = (id, patch, { touched = true } = {}) => {
+    setRowEdits((m) => ({
+      ...m,
+      [id]: {
+        ...(m[id] || {}),
+        ...Object.fromEntries(Object.entries(patch).filter(([k]) => k !== '_touched')),
+        _touched: {
+          ...(m[id]?._touched || {}),
+          ...Object.keys(patch).filter((k) => k !== '_touched'),
+        },
+      },
+    }))
   }
 
   const cancelRow = (id) => {
@@ -676,7 +701,7 @@ export default function CardImport({ embed = false } = {}) {
         base.map((r) => {
           const dup = !r.invalid && dupSet.has(`${r.date}|${r.merchant}|${r.total}`)
           const remembered = !r.invalid ? merchantMap.get(r.merchant) : null
-          const kw = !remembered && !r.invalid ? suggestCategory(r.merchant, r.memo, null) : null
+          const kw = !remembered && !r.invalid ? suggestCategory(r.merchant, r.memo, r.type) : null
           return {
             ...r,
             dup,
@@ -697,7 +722,19 @@ export default function CardImport({ embed = false } = {}) {
   }, [dataRows, mapping])
 
   const setRow = (key, patch) => {
-    setPreview((rows) => rows.map((r) => (r.key === key ? { ...r, ...patch } : r)))
+    setPreview((rows) =>
+      rows.map((r) => {
+        if (r.key !== key) return r
+        const next = { ...r, ...patch }
+        /* 손댄 칸은 자동 적용 표시를 내립니다. 그대로 두면
+           사용자가 고친 값을 시스템이 덮어쓴 것처럼 보여서 헷갈립니다. */
+        if ('category' in patch || 'type' in patch) {
+          next.autoFilled = false
+          next.autoLabel = ''
+        }
+        return next
+      }),
+    )
   }
 
   const applyBulk = () => {
@@ -1646,7 +1683,7 @@ export default function CardImport({ embed = false } = {}) {
                   {visibleRegistered.map((entry) => {
                     const edit = rowEdits[entry.id] || {}
                     const work = { ...entry, ...edit }
-                    const dirty = Object.keys(edit).length > 0
+                    const dirty = Object.keys(edit).some((k) => k !== '_touched')
                     const saving = savingId === entry.id
                     const cardUser =
                       edit.cardUser !== undefined ? edit.cardUser : memoUser(entry.memo)
@@ -1695,7 +1732,7 @@ export default function CardImport({ embed = false } = {}) {
                               onChange={(e) => setCell(entry.id, { description: e.target.value })}
                               placeholder="예: A4용지 2박스"
                             />
-                            {Object.keys(suggestPatch(work)).length > 0 ? (
+                            {Object.keys(suggestPatch(entry, edit)).length > 0 ? (
                               <button
                                 type="button"
                                 title="적요·항목 추천 적용"
