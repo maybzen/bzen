@@ -1,4 +1,4 @@
-import { Children, cloneElement, isValidElement, useCallback, useEffect, useMemo, useRef } from 'react'
+import { Children, cloneElement, isValidElement, useCallback, useEffect, useId, useMemo, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { Link } from 'react-router-dom'
 import Icon from './Icon'
@@ -36,7 +36,12 @@ function unlockBodyScroll() {
 
 export function Modal({ open, onClose, title, subtitle, children, footer, size = 'md', overflowVisible = false }) {
   const panelRef = useRef(null)
-  const titleId = useMemo(() => `modal-title-${Math.random().toString(36).slice(2, 9)}`, [])
+  const titleId = `modal-title-${useId()}`
+  /* onClose 는 보통 호출부에서 화살표 함수로 넘겨옵니다(매 렌더 새 참조).
+     그대로 두면 이모드가 매 렌마다 다시 돌면서 첫 입력칸으로 포커스를 빼앗아
+     "한 글자만 들어가고 흔들리는" 증상이 납니다. ref에 담아依赖에서 뺍니다. */
+  const onCloseRef = useRef(onClose)
+  onCloseRef.current = onClose
 
   useEffect(() => {
     if (!open) return undefined
@@ -63,7 +68,7 @@ export function Modal({ open, onClose, title, subtitle, children, footer, size =
       if (!isTop()) return
       if (e.key === 'Escape') {
         e.stopPropagation()
-        onClose?.()
+        onCloseRef.current?.()
         return
       }
       /* Tab 은 모달 안에서만 돌게 합니다 (포커스 트랩) */
@@ -96,17 +101,25 @@ export function Modal({ open, onClose, title, subtitle, children, footer, size =
       if (i >= 0) modalStack.splice(i, 1)
       unlockBodyScroll()
       /* 닫히면 원래 있던 곳으로 포커스를 되돌립니다 */
-      if (previouslyFocused && typeof previouslyFocused.focus === 'function') {
+      /* 원래 있던 곳으로 되돌립니다. 단, 그 요소가 이미 화면에 있을 때만
+         (없어졌으면 focus() 가 본드로 튕겨 화면을 흔듭니다) */
+      if (
+        previouslyFocused
+        && typeof previouslyFocused.focus === 'function'
+        && previouslyFocused.isConnected
+        && previouslyFocused.offsetParent !== null
+      ) {
         previouslyFocused.focus()
       }
     }
-  }, [open, onClose])
+    /* open 이 바뀔 때만: 렌마다 돌면 입력 중 포커스를 빼앗아 글자가 안 먹습니다 */
+  }, [open])
 
   if (!open) return null
 
   return createPortal(
     <div className="fixed inset-0 z-[70] flex items-end justify-center sm:items-center sm:p-6">
-      <div className="absolute inset-0 bg-ink-900/50 backdrop-blur-[2px]" onClick={onClose} />
+      <div className="absolute inset-0 bg-ink-900/50 backdrop-blur-[2px]" onClick={() => onCloseRef.current?.()} />
       <div
         ref={panelRef}
         role="dialog"
@@ -263,7 +276,8 @@ function findOnlyFormControl(children) {
 }
 
 export function Field({ label, hint, required, error, children, className = '' }) {
-  const inputId = useMemo(() => `field-${Math.random().toString(36).slice(2, 9)}`, [])
+  const fieldUid = useId()
+  const inputId = `field-${fieldUid}`
   /*label 과 입력칸 연결.
      자식이 여러 개이거나 div 같은 래퍼여도, 그 안에 입력칸이 하나면
      거기까지 id 를 밀어 넣어 클릭하면 입력칸으로 focus 되게 합니다. */

@@ -1764,7 +1764,7 @@ export default function CardImport({ embed = false } = {}) {
                             title={cardValue || '미지정'}
                             onChange={(e) => setCell(entry.id, { card: e.target.value })}
                           >
-                            <option value="">미지정</option>
+                            <option value="">{entry.source === 'expense_report' ? '지결' : '미지정'}</option>
                             {cardOptions.map((c) => (
                               <option key={c} value={c}>
                                 {shortCard(c)}

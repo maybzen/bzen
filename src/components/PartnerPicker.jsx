@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { createPartner, listPartners } from '../lib/api'
 import { normalizeVendorName } from '../lib/format'
 import { findSimilarParties } from '../lib/validate'
@@ -22,6 +22,9 @@ export default function PartnerPicker({ value, onChange, placeholder, autoFocus 
   const [regMemo, setRegMemo] = useState('')
   const [regSaving, setRegSaving] = useState(false)
   const [regError, setRegError] = useState('')
+  /* 한 화면에 이 창이 여러 개(발주처·대행업체 등) 있어도 id 가 겹치지 않게 합니다.
+     겹치면 등록 버튼이 다른 폼을 제출해 오류가 납니다. */
+  const quickFormId = `partner-quick-${useId()}`
 
   const reloadPartners = () => {
     listPartners().then((rows) => setPartners(rows || [])).catch(() => {})
@@ -224,14 +227,14 @@ export default function PartnerPicker({ value, onChange, placeholder, autoFocus 
               <button type="button" className="btn-ghost" onClick={() => setRegOpen(false)} disabled={regSaving}>
                 취소
               </button>
-              <button type="submit" form="partner-quick-form" className="btn-primary" disabled={regSaving}>
+              <button type="submit" form={quickFormId} className="btn-primary" disabled={regSaving}>
                 {regSaving ? '저장 중…' : '등록'}
               </button>
             </>
           }
         >
           <form
-            id="partner-quick-form"
+            id={quickFormId}
             onSubmit={async (e) => {
               e.preventDefault()
               const name = regName.trim()

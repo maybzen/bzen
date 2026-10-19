@@ -47,7 +47,16 @@ export default function CardUserSelect({ value, onChange, allowCustom = false, c
     emit(next, customs)
   }
 
-  const setCustom = (text) => {
+  /* 기타 칸은 직접 입력 중입니다.
+     emit() 을 매 글자에 호출하면 setCustom 안에서 trim/필터로 값을 다시 만들어
+     "한 글자만 들어가고 흔들리는" 증상이 났습니다(커서가 튀고 글자가 잘림).
+     draft 로 먼저 받고 확정/포커스 빠질 때만 부모로 넘깁니다. */
+  const [draft, setDraft] = useState('')
+  useEffect(() => {
+    if (open) setDraft(customs.join(','))
+  }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const commitCustom = (text) => {
     const parts = String(text || '')
       .split(',')
       .map((s) => s.trim())
@@ -109,9 +118,24 @@ export default function CardUserSelect({ value, onChange, allowCustom = false, c
                 <input
                   className="input py-1.5 text-xs"
                   placeholder="예: SHINE"
-                  value={customs.join(',')}
-                  onChange={(e) => setCustom(e.target.value)}
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  onBlur={(e) => commitCustom(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault()
+                      commitCustom(e.currentTarget.value)
+                      setOpen(false)
+                    }
+                    if (e.key === 'Escape') {
+                      e.stopPropagation()
+                      setOpen(false)
+                    }
+                  }}
                 />
+                <span className="mt-1 block text-[10px] text-ink-400">
+                  입력 후 Enter 또는 칸을 벗어나면 반영됩니다
+                </span>
               </span>
             ) : null}
           </span>
