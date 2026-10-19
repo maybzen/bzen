@@ -1352,7 +1352,7 @@ export default function CardImport({ embed = false } = {}) {
                       <div className="mt-1.5 flex flex-col gap-0.5 border-t border-ink-100 pt-1.5">
                         {(view.cards || []).map((c) => (
                           <p key={c.label} className="flex items-baseline justify-between gap-2 text-[11px] text-ink-500">
-                            <span className="truncate">{c.label}</span>
+                            <span className="truncate" title={c.label}>{shortCard(c.label)}</span>
                             <span className="shrink-0 font-num tabular-nums">{formatKRW(c.total)}</span>
                           </p>
                         ))}
@@ -1453,9 +1453,9 @@ export default function CardImport({ embed = false } = {}) {
                 onChange={(e) => setRegCardFilter(e.target.value)}
               >
                 <option value="">전체 카드</option>
-                <option value="법카 9988→2381">법카 9988→2381</option>
-                <option value="법카 3918→3842">법카 3918→3842</option>
-                <option value="카드의정석 0854">카드의정석 0854</option>
+                <option value="법카 9988→2381">2381</option>
+                <option value="법카 3918→3842">3842</option>
+                <option value="카드의정석 0854">0854</option>
                 <option value="기타">기타</option>
               </select>
               <button
@@ -1522,7 +1522,7 @@ export default function CardImport({ embed = false } = {}) {
                       <div className="mt-1.5 flex flex-col gap-0.5 border-t border-ink-100 pt-1.5">
                         {(g.cards || []).slice(0, 3).map((c) => (
                           <p key={c.label} className="flex items-baseline justify-between gap-2 text-[11px] text-ink-500">
-                            <span className="truncate">{c.label}</span>
+                            <span className="truncate" title={c.label}>{shortCard(c.label)}</span>
                             <span className="shrink-0 font-num tabular-nums">{formatKRW(c.total)}</span>
                           </p>
                         ))}
@@ -1562,7 +1562,7 @@ export default function CardImport({ embed = false } = {}) {
                   .map((c) => (
                     <StatCard
                       key={c.label}
-                      label={c.label}
+                      label={shortCard(c.label)}
                       value={c.total}
                       tone="neutral"
                       icon="receipt"

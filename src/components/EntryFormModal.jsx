@@ -11,7 +11,7 @@ import { ensureLedgerIndex, useLedgerIndex } from '../lib/ledgerIndex'
 import { isStaffVisible, staffIdsFromProfiles } from '../lib/permissions'
 import { ISSUE_META, checkEntryDraft } from '../lib/validate'
 import { aliasRoot } from '../lib/aliases'
-import { cardTagOf, withMemoCard, withMemoUser } from '../lib/cardTag'
+import { cardTagOf, withMemoCard, withMemoUser, shortCard, DEFAULT_CARD_OPTIONS } from '../lib/cardTag'
 
 const MAX_FILE = 20 * 1024 * 1024
 
@@ -29,10 +29,15 @@ function memoUser(memo) {
   return m ? m[1].trim() : ''
 }
 
-/** 메모의 카드 꼬리표 읽기 (전체 보관: "법카 9988→2381"). 없으면 '' */
+/** 메모의 카드 꼬리표를 선택칸 값으로 읽습니다.
+ *  저장 형태는 "법카 9988→2381", "법카 2381", "카드의정석 0854"가 섞여 있어서
+ *  화면·저장 모두 끝 4자리("법카 2381" / "카드의정석 0854")로 맞춥니다. */
 function memoCard(memo) {
   const t = cardTagOf(memo)
-  return t === '기타' ? '' : t
+  if (t === '기타') return ''
+  if (t.startsWith('카드의정석')) return `카드의정석 ${cardLast4(t)}`
+  const d = cardLast4(t)
+  return d ? `법카 ${d}` : ''
 }
 
 function cardLast4(number) {
@@ -79,6 +84,8 @@ export default function EntryFormModal({
   const [forceSave, setForceSave] = useState(false)
   /* 자금관리에 등록된 법인카드 목록 (결제수단=카드 선택 시, 등록용 2종만) */
   const [fundCards, setFundCards] = useState([])
+  /* 카드 표시값: 9988→2381 도 "2381" 로만 보이게 합니다 */
+  const shortLabel = (o) => (o === '기타' ? '' : shortCard(o))
   /* 운영비 신규 등록에서 개인지결로 전환 (지출결의로 저장) */
   const [asReport, setAsReport] = useState(false)
   const canToggleReport = entryType === 'opex' && source === 'manual' && !initial?.id
@@ -726,13 +733,13 @@ export default function EntryFormModal({
                 onChange={set('card_label')}
               >
                 <option value="">선택 안 함</option>
-                {form.card_label &&
-                !fundCards.some((c) => {
-                  const last4 = cardLast4(c.number)
-                  return last4 && `법카 ${last4}` === form.card_label
-                }) ? (
-                  <option value={form.card_label}>{form.card_label} (메모 유지)</option>
-                ) : null}
+                {!fundCards.length
+                  ? DEFAULT_CARD_OPTIONS.map((o) => (
+                      <option key={o} value={o}>
+                        {shortLabel(o)}
+                      </option>
+                    ))
+                  : null}
                 {fundCards.map((c) => {
                   const last4 = cardLast4(c.number)
                   /* "1500만원 한도" 같은 문구는 빼고 보여줍니다 */
