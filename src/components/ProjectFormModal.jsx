@@ -127,7 +127,10 @@ export default function ProjectFormModal({ open, onClose, onSaved, initial, prof
           <input className="input" value={form.name} onChange={set('name')} placeholder="예: 2026 브랜드 리뉴얼" />
         </Field>
 
-        <Field label="발주처 / 고객사">
+        <Field
+          label="발주처 / 고객사"
+          hint="거래처를 찾아 고르거나, 아래에서 새 거래처를 바로 등록하세요"
+        >
           <PartnerPicker value={form.client} onChange={set('client')} placeholder="예: ○○ 주식회사" userId={userId} />
         </Field>
 

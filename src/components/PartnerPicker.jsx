@@ -42,11 +42,25 @@ export default function PartnerPicker({ value, onChange, placeholder, autoFocus 
   }, [])
 
   const q = normalizeVendorName(value)
+  /* 검색은 이름 + 담당자 + 구분까지. "인력" 같은 구분어로도协力사를 찾게 합니다. */
   const matches = useMemo(() => {
-    if (!q) return (partners || []).slice(0, 6)
-    return (partners || [])
-      .filter((p) => normalizeVendorName(p.name).includes(q))
-      .slice(0, 6)
+    const rows = partners || []
+    if (!q) return rows.slice(0, 8)
+    return rows
+      .filter((p) => {
+        const name = normalizeVendorName(p.name)
+        if (name.includes(q)) return true
+        if (name.startsWith(q)) return true
+        return normalizeVendorName(p.group_name || '').includes(q)
+          || normalizeVendorName(p.contact_person || '').includes(q)
+      })
+      .sort((a, b) => {
+        /* 이름 앞부분이 맞는 쪽을 먼저 (사단/㈜ 같은 표기 차이 대비) */
+        const an = normalizeVendorName(a.name).startsWith(q) ? 0 : 1
+        const bn = normalizeVendorName(b.name).startsWith(q) ? 0 : 1
+        return an - bn
+      })
+      .slice(0, 8)
   }, [partners, q])
   const exact = useMemo(
     () => (partners || []).some((p) => normalizeVendorName(p.name) === q && q),
@@ -106,6 +120,17 @@ export default function PartnerPicker({ value, onChange, placeholder, autoFocus 
     setOpen(false)
   }
 
+  /** 간단 등록 창을 엽니다. presetName 이 있으면 이름이 미리 채워집니다. */
+  const openQuickRegister = (presetName) => {
+    setRegName(presetName || '')
+    setRegContact('')
+    setRegPhone('')
+    setRegMemo('')
+    setRegError('')
+    setRegOpen(true)
+    setOpen(false)
+  }
+
   return (
     <div className="relative">
       <input
@@ -131,7 +156,12 @@ export default function PartnerPicker({ value, onChange, placeholder, autoFocus 
         }}
       />
       {open && (matches.length > 0 || String(value || '').trim()) ? (
-        <ul className="absolute z-30 mt-1 max-h-48 w-full overflow-auto rounded-lg border border-ink-200 bg-white py-1 shadow-pop">
+        <ul className="absolute z-30 mt-1 max-h-64 w-full overflow-auto rounded-lg border border-ink-200 bg-white py-1 shadow-pop">
+          {!q ? (
+            <li className="px-3 py-1.5 text-[10px] font-medium text-ink-400">
+              거래처명·담당자·구분으로 찾습니다
+            </li>
+          ) : null}
           {matches.map((p) => (
             <li key={p.id}>
               <button
@@ -144,25 +174,39 @@ export default function PartnerPicker({ value, onChange, placeholder, autoFocus 
                 className="flex w-full items-center justify-between gap-2 px-3 py-1.5 text-left text-xs transition hover:bg-brand-50"
               >
                 <span className="truncate font-semibold text-ink-800">{p.name}</span>
-                {p.contact_person ? (
-                  <span className="shrink-0 text-[11px] text-ink-400">{p.contact_person}</span>
-                ) : null}
+                <span className="flex shrink-0 items-center gap-1.5">
+                  {/* cooperation category label — helps you tell client from vendor at a glance */}
+                  {p.group_name && p.group_name !== '기타' ? (
+                    <span className="rounded bg-ink-100 px-1.5 py-0.5 text-[10px] font-medium text-ink-600">
+                      {p.group_name}
+                    </span>
+                  ) : null}
+                  {p.contact_person ? (
+                    <span className="text-[11px] text-ink-400">{p.contact_person}</span>
+                  ) : null}
+                </span>
               </button>
             </li>
           ))}
+          <li className="border-t border-ink-100 px-3 py-1.5">
+            <button
+              type="button"
+              onPointerDown={(e) => {
+                e.preventDefault()
+                openQuickRegister('')
+              }}
+              className="w-full text-left text-[11px] font-semibold text-ink-500 hover:text-brand-700 hover:underline"
+            >
+              + 거래처 새로 등록 (이름만 넣어도 됩니다)
+            </button>
+          </li>
           {!exact && String(value || '').trim() ? (
             <li className="border-t border-ink-100 px-3 py-1.5">
               <button
                 type="button"
                 onPointerDown={(e) => {
                   e.preventDefault()
-                  setRegName(String(value).trim())
-                  setRegContact('')
-                  setRegPhone('')
-                  setRegMemo('')
-                  setRegError('')
-                  setRegOpen(true)
-                  setOpen(false)
+                  openQuickRegister(String(value).trim())
                 }}
                 className="w-full text-left text-xs text-brand-700 hover:underline"
               >
