@@ -424,6 +424,17 @@ export default function CardImport({ embed = false } = {}) {
     return patch
   }
 
+  /* 추천 대상이 있는지와, 무엇을 넣을지 한 줄로 알려줍니다 (버튼 안내용) */
+  const suggestable = (entry, edit = {}) => Object.keys(suggestPatch(entry, edit)).length > 0
+  const suggestLabel = (entry, edit = {}) => {
+    const p = suggestPatch(entry, edit)
+    if (p.entry_type) return '유형·항목'
+    const bits = []
+    if (p.category) bits.push(`항목 ${p.category}`)
+    if (p.description) bits.push(`적요 ${p.description}`)
+    return bits.join(' · ')
+  }
+
   const applySuggest = (entry) => {
     const patch = suggestPatch(entry, rowEdits[entry.id] || {})
     if (!Object.keys(patch).length) {
@@ -1732,14 +1743,14 @@ export default function CardImport({ embed = false } = {}) {
                               onChange={(e) => setCell(entry.id, { description: e.target.value })}
                               placeholder="예: A4용지 2박스"
                             />
-                            {Object.keys(suggestPatch(entry, edit)).length > 0 ? (
+                            {suggestable(entry, edit) ? (
                               <button
                                 type="button"
-                                title="적요·항목 추천 적용"
+                                title={`추천 적용: ${suggestLabel(entry, edit)}`}
                                 onClick={() => applySuggest(entry)}
-                                className="shrink-0 rounded-md px-1.5 py-1 text-xs hover:bg-brand-50"
+                                className="shrink-0 rounded-md px-1.5 py-0.5 text-[11px] font-semibold text-ink-400 transition hover:bg-brand-50 hover:text-brand-700"
                               >
-                                ✨
+                                추천
                               </button>
                             ) : null}
                           </div>
