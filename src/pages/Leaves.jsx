@@ -833,7 +833,7 @@ function LeaveFormModal({ open, onClose, onSaved, personOptions, userId, isAdmin
   const [approveNow, setApproveNow] = useState(false)
   /* 자동계산기가 마지막으로 넣은 문구 (다시 계산하면 그 부분만 교체) */
   const autoMemoRef = useRef('')
-  const [form, setForm] = useState({
+  const BLANK = {
     entry_date: todayKST(),
     end_date: todayKST(),
     person: '',
@@ -843,7 +843,8 @@ function LeaveFormModal({ open, onClose, onSaved, personOptions, userId, isAdmin
     memo: '',
     weekendStart: '',
     weekendEnd: '',
-  })
+  }
+  const [form, setForm] = useState(BLANK)
 
   useEffect(() => {
     if (!open) return
@@ -863,14 +864,19 @@ function LeaveFormModal({ open, onClose, onSaved, personOptions, userId, isAdmin
       })
       return
     }
-    setForm((f) => ({
-      ...f,
+    /* 신규 등록은 매번 초기 상태로 시작합니다.
+       이전에 입력했던 값이 남아 있으면 헷갈리므로 날짜·구분·일수·메모를 다 비웁니다. */
+    setForm({
       entry_date: todayKST(),
       end_date: todayKST(),
-      person: lockPerson || defaultPerson || f.person || '',
+      person: lockPerson || defaultPerson || '',
+      leave_type: '연차',
+      direction: '사용',
+      days: '1',
+      memo: '',
       weekendStart: '',
       weekendEnd: '',
-    }))
+    })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, initial?.id])
 
