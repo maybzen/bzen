@@ -38,7 +38,10 @@ export function userCodesOnly(value) {
 
 export const CARD_TAG_RE = /법카\s*\d+(?:→\d+)?|카드의정석\s*[\d-]+/
 
-export const DEFAULT_CARD_OPTIONS = ['법카 9988→2381', '법카 3918→3842', '카드의정석 0854']
+/** 장부·카드 화면에서 고르는 법인카드 고정 목록 (여기 한 곳에서만 관리).
+ *  화면에는 shortCard() 로 뒤 4자리(2381 / 3842)만 보이고, 비어 있는 "미지정"(지결 행은 "지결")까지
+ *  합쳐 3가지로만 고를 수 있습니다. 목록에 없는 옛 카드 값은 지우지 않고 그대로 둡니다. */
+export const CARD_OPTIONS = ['법카 9988→2381', '법카 3918→3842']
 
 /** 메모에서 카드 꼬리표를 읽습니다. 없으면 '기타' */
 export function cardTagOf(memo) {

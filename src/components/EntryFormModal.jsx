@@ -11,7 +11,7 @@ import { ensureLedgerIndex, useLedgerIndex } from '../lib/ledgerIndex'
 import { isStaffVisible, staffIdsFromProfiles } from '../lib/permissions'
 import { ISSUE_META, checkEntryDraft } from '../lib/validate'
 import { aliasRoot } from '../lib/aliases'
-import { cardTagOf, withMemoCard, withMemoUser, shortCard, DEFAULT_CARD_OPTIONS } from '../lib/cardTag'
+import { cardTagOf, withMemoCard, withMemoUser, shortCard, CARD_OPTIONS } from '../lib/cardTag'
 
 const MAX_FILE = 20 * 1024 * 1024
 
@@ -748,7 +748,7 @@ export default function EntryFormModal({
               >
                 <option value="">선택 안 함</option>
                 {!fundCards.length
-                  ? DEFAULT_CARD_OPTIONS.map((o) => (
+                  ? CARD_OPTIONS.map((o) => (
                       <option key={o} value={o}>
                         {shortLabel(o)}
                       </option>

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Icon from '../components/Icon'
 import EntryFormModal from '../components/EntryFormModal'
 import CardUserSelect from '../components/CardUserSelect'
-import { cardTagOf, withMemoCard, withMemoUser, shortCard, DEFAULT_CARD_OPTIONS, userCodesOnly } from '../lib/cardTag'
+import { cardTagOf, withMemoCard, withMemoUser, shortCard, CARD_OPTIONS, userCodesOnly } from '../lib/cardTag'
 import PeriodPicker, { usePeriod } from '../components/PeriodPicker'
 import { AttachmentCell, AttachmentModal } from '../components/Attachments'
 import { useToast } from '../components/Toast'
@@ -325,19 +325,8 @@ export default function CardImport({ embed = false } = {}) {
 
   const cardOf = (entry) => cardTagOf(entry.memo)
 
-  /* 목록에서 바로 바꾸는 결제 카드 선택지 (기본 3종 + 자료에 있는 다른 카드) */
-  const cardOptions = useMemo(() => {
-    const base = [...DEFAULT_CARD_OPTIONS]
-    const seen = new Set(base)
-    for (const e of registered || []) {
-      const c = cardOf(e)
-      if (c && c !== '기타' && !seen.has(c)) {
-        seen.add(c)
-        base.push(c)
-      }
-    }
-    return base
-  }, [registered])
+  /* 목록에서 바로 바꾸는 결제 카드 선택지 (고정 목록 + 미지정/지결). cardTag.js 한 곳에서 관리 */
+  const cardOptions = CARD_OPTIONS
 
   const exportRegistered = () => {
     if (!visibleRegistered.length) {
