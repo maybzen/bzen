@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import Icon from '../components/Icon'
 import ProjectFormModal from '../components/ProjectFormModal'
@@ -12,7 +12,8 @@ import { useFinanceView } from '../lib/permissions'
 import { PROJECT_STATUS } from '../lib/constants'
 import { contractSplit, formatDateHuman, formatKRW, formatPercent, normalizeVendorName } from '../lib/format'
 import { buildPnl, groupByProject, summarize } from '../lib/summary'
-import { createEntry, createProject, deleteProject, isMissingTableError, linkProjectPartner, listEntries, listPartners, listProfiles, listProjectPartners, listProjects, unlinkProjectPartner, updateProject } from '../lib/api'
+import { deriveAgencyStatus, isAgencyStatusAhead } from '../lib/agency'
+import { createEntry, createProject, deleteProject, isMissingTableError, linkProjectPartner, listCollections, listEntries, listPartners, listProfiles, listProjectPartners, listProjects, unlinkProjectPartner, updateProject } from '../lib/api'
 
 /**
  * 카드에 쓰는 손익 표기. 세무·회계 표현을 그대로 씁니다.
@@ -117,6 +118,7 @@ export default function Projects() {
   const [profiles, setProfiles] = useState([])
   const [partners, setPartners] = useState([])
   const [links, setLinks] = useState([])
+  const [collections, setCollections] = useState([])
   const [expandedVendors, setExpandedVendors] = useState({})
 
   const managerName = (id) => profiles.find((p) => p.id === id)?.full_name || ''
@@ -188,18 +190,20 @@ export default function Projects() {
     try {
       // 카드 금액은 "프로젝트 전체 기간" 기준입니다. 상세 화면(listEntries({projectId}))과
       // 동일해야 하므로 기간 필터를 걸지 않습니다. 연간 일정 전체를 한 번에 봐야 해서 기간 조회는 두지 않습니다.
-      const [projectRows, entryRows, profileRows, partnerRows, linkRows] = await Promise.all([
+      const [projectRows, entryRows, profileRows, partnerRows, linkRows, collectionRows] = await Promise.all([
         listProjects(),
         listEntries(),
         listProfiles(),
         listPartners().catch(() => []),
         listProjectPartners().catch(() => []),
+        listCollections().catch(() => []),
       ])
       setProjects(projectRows || [])
       setEntries(entryRows || [])
       setProfiles(profileRows || [])
       setPartners(partnerRows || [])
       setLinks(linkRows || [])
+      setCollections(collectionRows || [])
     } catch (error) {
       toast.error(error.message)
     } finally {
@@ -305,6 +309,12 @@ export default function Projects() {
       const key = `${e.project_id}||${normalizeVendorName(e.counterparty)}`
       paidByProjectName.set(key, (paidByProjectName.get(key) || 0) + Number(e.total_amount || 0))
     }
+    /* 원청 수금액 (대금집행 상태 자동 판정용) */
+    const collectedByProject = new Map()
+    for (const c of collections || []) {
+      if (!c.project_id) continue
+      collectedByProject.set(c.project_id, (collectedByProject.get(c.project_id) || 0) + Number(c.amount || 0))
+    }
     const byAgency = new Map()
     for (const l of links || []) {
       if ((l.role || '협력') !== '대행') continue
@@ -317,7 +327,8 @@ export default function Projects() {
       const fee = Number(project.agency_fee || 0)            /* 수수료 수익액 (우리 회사 매출) */
       const paid = paidByProjectName.get(`${project.id}||${normalizeVendorName(p.name)}`) || 0  /* 실제 대행업체 지급액 */
       const passThrough = contract - fee                      /* 대행업체 전달금 (총계약 − 수수료) */
-      const deal = { project, agencyId: p.id, agencyName: p.name, contract, paid, fee, passThrough }
+      const collected = collectedByProject.get(project.id) || 0
+      const deal = { project, agencyId: p.id, agencyName: p.name, contract, paid, fee, passThrough, collected }
       const row = byAgency.get(p.id)
       row.deals.push(deal)
       row.contract += deal.contract
@@ -331,7 +342,7 @@ export default function Projects() {
         deals: r.deals.sort((a, b) => b.contract - a.contract) 
       }))
       .sort((a, b) => b.fee - a.fee)
-  }, [links, partners, projects, entries])
+  }, [links, partners, projects, entries, collections])
   const agencyTotals = useMemo(
     () => agencyRows.reduce((a, r) => ({ 
       contract: a.contract + r.contract, 
@@ -342,6 +353,34 @@ export default function Projects() {
     }), { contract: 0, paid: 0, fee: 0, passThrough: 0, unpaid: 0 }),
     [agencyRows],
   )
+
+  /* 입금·지급 내역이 쌓이면 대금집행 상태를 자동으로 앞 단계로 올립니다.
+     수동으로 고른 상태(더 뒤 단계)는 건드리지 않습니다. */
+  const autoStatusBusy = useRef(false)
+  const autoStatusTried = useRef(new Set())
+  useEffect(() => {
+    if (loading || !isAdmin || autoStatusBusy.current) return
+    const pending = []
+    for (const row of agencyRows) {
+      for (const d of row.deals) {
+        const derived = deriveAgencyStatus(d)
+        const current = d.project.agency_status || '계약중'
+        const key = `${d.project.id}|${derived}`
+        if (autoStatusTried.current.has(key)) continue
+        if (!isAgencyStatusAhead(derived, current)) continue
+        autoStatusTried.current.add(key)
+        pending.push({ id: d.project.id, status: derived })
+      }
+    }
+    if (!pending.length) return
+    autoStatusBusy.current = true
+    Promise.all(
+      pending.map((p) => updateProject(p.id, { agency_status: p.status }).catch(() => null)),
+    ).then((results) => {
+      autoStatusBusy.current = false
+      if (results.some(Boolean)) setReloadKey((k) => k + 1)
+    })
+  }, [loading, isAdmin, agencyRows])
 
   const handleDelete = async () => {
     if (!removing) return

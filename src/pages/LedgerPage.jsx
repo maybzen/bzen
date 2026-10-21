@@ -193,6 +193,16 @@ export default function LedgerPage({ type, source = 'manual', title, description
     return rows
   }, [base, isReport, effectiveFilter, oldestFirst])
 
+  /* 인라인 수정 드롭다운: 새 비목 + 지금 화면에 있는 예전 비목만 노출 */
+  const rowCategories = useMemo(() => {
+    const list = [...(CATEGORIES[type] || [])]
+    for (const e of shown) {
+      const c = String(e.category || '').trim()
+      if (c && !list.includes(c)) list.push(c)
+    }
+    return list
+  }, [type, shown])
+
   const byPerson = useMemo(() => {
     if (!isReport) return []
     const map = new Map()
@@ -581,7 +591,7 @@ export default function LedgerPage({ type, source = 'manual', title, description
             onDelete={(entry) => setRemoving(entry)}
             onOpenAttachments={setViewerFiles}
             bulkEdit={bulkEdit}
-            categories={CATEGORIES[type] || []}
+            categories={rowCategories}
             onSaveRow={handleSaveRow}
             onBulkDelete={isAdmin ? setRemovingMany : undefined}
             onBulkMerge={isAdmin ? openMerge : undefined}

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom'
 import EntryFormModal from '../components/EntryFormModal'
 import EntryTable from '../components/EntryTable'
@@ -15,7 +15,8 @@ import { isStaffVisible, staffIdsFromProfiles, useFinanceView } from '../lib/per
 import { ENTRY_META, PROJECT_STATUS } from '../lib/constants'
 import { contractSplit, formatDateHuman, formatKRW, formatPercent, monthLabel, normalizeVendorName } from '../lib/format'
 import { groupByMonth, summarize } from '../lib/summary'
-import { deleteEntry, isMissingTableError, linkProjectPartner, listAttachments, listEntries, listPartners, listProfiles, listProjectPartners, listProjects, setProjectPartnerRole, unlinkProjectPartner } from '../lib/api'
+import { deriveAgencyStatus, isAgencyStatusAhead } from '../lib/agency'
+import { deleteEntry, isMissingTableError, linkProjectPartner, listAttachments, listCollections, listEntries, listPartners, listProfiles, listProjectPartners, listProjects, setProjectPartnerRole, unlinkProjectPartner, updateProject } from '../lib/api'
 
 /* 대금집행 상태에 따른 칩 스타일 */
 const statusChip = (s) => {
@@ -44,6 +45,7 @@ export default function ProjectDetail() {
   const [loading, setLoading] = useState(true)
   const [project, setProject] = useState(null)
   const [entries, setEntries] = useState([])
+  const [collections, setCollections] = useState([])
   const [profiles, setProfiles] = useState([])
   const [partners, setPartners] = useState([])
   const [attachmentsByEntry, setAttachmentsByEntry] = useState({})
@@ -67,17 +69,19 @@ export default function ProjectDetail() {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const [projectRows, entryRows, profileRows, partnerRows] = await Promise.all([
+      const [projectRows, entryRows, profileRows, partnerRows, collectionRows] = await Promise.all([
         listProjects(),
         listEntries({ projectId: id }),
         listProfiles(),
         listPartners().catch(() => []),
+        listCollections().catch(() => []),
       ])
       const found = (projectRows || []).find((p) => p?.id === id)
       setProject(found || null)
       setEntries(entryRows || [])
       setProfiles(profileRows || [])
       setPartners(partnerRows || [])
+      setCollections(collectionRows || [])
 
       const files = await listAttachments((entryRows || []).map((r) => r?.id)).catch(() => [])
       const map = {}
@@ -266,6 +270,34 @@ export default function ProjectDetail() {
     .filter((v) => agencyPartner && normalizeVendorName(v.name) === normalizeVendorName(agencyPartner.name))
     .reduce((a, v) => a + v.total, 0)
   const agencyUnpaid = agencyPassThrough - agencyPaid
+  /* 원청 수금액 — 대금집행 상태 자동 판정에 사용 */
+  const projectCollections = (collections || []).filter((c) => c.project_id === id)
+  const agencyCollected = projectCollections.reduce((a, c) => a + Number(c.amount || 0), 0)
+
+  /* 입금·지급 내역이 쌓이면 상태를 자동으로 앞 단계로 올립니다.
+     수동으로 고른 더 뒤 단계는 건드리지 않습니다. */
+  const autoStatusTried = useRef(false)
+  useEffect(() => {
+    if (loading || !isAdmin || !project || !isAgencyProject) return
+    if (autoStatusTried.current) return
+    const derived = deriveAgencyStatus({
+      contract: agencyContract,
+      passThrough: agencyPassThrough,
+      paid: agencyPaid,
+      collected: agencyCollected,
+    })
+    const current = project.agency_status || '계약중'
+    if (!isAgencyStatusAhead(derived, current)) return
+    autoStatusTried.current = true
+    updateProject(project.id, { agency_status: derived })
+      .then(() => {
+        autoStatusTried.current = false
+        setReloadKey((k) => k + 1)
+      })
+      .catch(() => {
+        autoStatusTried.current = false
+      })
+  }, [loading, isAdmin, project, isAgencyProject, agencyContract, agencyPassThrough, agencyPaid, agencyCollected])
 
   const handleDeleteEntry = async () => {
     if (!removing) return
@@ -580,6 +612,7 @@ export default function ProjectDetail() {
             partners={partners}
             profiles={profiles}
             ledgerEntries={entries}
+            collections={projectCollections}
             onLink={handleLink}
             onUnlink={handleUnlink}
             onLinkAll={handleLinkAll}
@@ -680,7 +713,7 @@ export default function ProjectDetail() {
  * 프로젝트마다 따로 연결하므로 중복 걱정 없습니다.
  * 장부에만 있고 미연결인 곳은 후보로 보여주고, 밥집처럼 엮지 않을 곳은 그냥 두면 됩니다.
  */
-function VendorPanel({ links, linked, candidates, linkBusy, isAdmin, userId, partners, profiles, ledgerEntries, onLink, onUnlink, onLinkAll, onSetRole, onPartnerSaved }) {
+function VendorPanel({ links, linked, candidates, linkBusy, isAdmin, userId, partners, profiles, ledgerEntries, collections, onLink, onUnlink, onLinkAll, onSetRole, onPartnerSaved }) {
   const [q, setQ] = useState('')
   const [newOpen, setNewOpen] = useState(false)
   const ql = q.trim().toLowerCase()
@@ -742,7 +775,7 @@ function VendorPanel({ links, linked, candidates, linkBusy, isAdmin, userId, par
           }}
           initial={null}
           userId={userId}
-          ledger={{ entries: ledgerEntries || [], collections: [] }}
+          ledger={{ entries: ledgerEntries || [], collections: collections || [] }}
           isAdmin={isAdmin}
           profiles={profiles}
           existingNames={(partners || []).map((x) => ({ id: x.id, name: x.name }))}

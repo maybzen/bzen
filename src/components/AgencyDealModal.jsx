@@ -7,7 +7,7 @@ import { createEntry, createProject, deleteProject, linkProjectPartner, listEntr
 import { normalizeVendorName } from '../lib/format'
 
 /** 대행 수수료 매출에 쓰는 비목 (행사대행업 기준) */
-const FEE_CATEGORY = '행사대행수수료'
+const FEE_CATEGORY = '행사대행'
 const FEE_MEMO = '대행계약 수수료 매출'
 
 /** 대행계약 요약 줄을 새로 만들고, 사용자가 적은 나머지 메모는 그대로 둡니다. */
