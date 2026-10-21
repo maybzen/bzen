@@ -374,16 +374,19 @@ export default function ProjectDetail() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <button type="button" className="btn-ghost" onClick={() => {
-              const isAgency = isAgencyProject
-              if (isAgency) {
-                const agencyLink = linkedVendors.find((v) => v.linkRole === '대행')
-                setAgencyDealInitial({ project, partnerId: agencyLink?.partner?.id })
-                setAgencyDealOpen(true)
-              } else {
-                setProjectForm(true)
-              }
-            }}>
+            <button
+              type="button"
+              className="btn-ghost"
+              onClick={() => {
+                if (isAgencyProject) {
+                  const agencyLink = linkedVendors.find((v) => v.linkRole === '대행')
+                  setAgencyDealInitial({ project, partnerId: agencyLink?.partner?.id })
+                  setAgencyDealOpen(true)
+                } else {
+                  setProjectForm(true)
+                }
+              }}
+            >
               <Icon name="pencil" size={16} />
               {isAgencyProject ? '대행계약 수정' : '프로젝트 수정'}
             </button>
