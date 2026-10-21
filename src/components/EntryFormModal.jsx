@@ -344,10 +344,7 @@ export default function EntryFormModal({
         supply_amount: supply,
         vat_amount: vat,
         payment_method: form.payment_method,
-        memo: withMemoCard(
-          withMemoUser(form.memo, form.card_user),
-          form.payment_method === '카드' && !formIsReport ? form.card_label : '',
-        ),
+        memo: form.memo.trim(),
         requester_id: formIsReport ? form.requester_id || userId : form.requester_id || null,
         // 등록자(작성자) 수정은 기존 내역만. 관리자가 바꿀 수 있고, 입사 전 자료 정정용입니다.
         // 신규 등록은 RLS가 created_by = 로그인 계정으로 강제하므로 키를 보내지 않습니다.
@@ -480,7 +477,7 @@ export default function EntryFormModal({
                   formIsReport ? 'bg-brand-600 text-white' : 'text-ink-500 hover:text-ink-800'
                 }`}
               >
-                {initial?.id ? '지결' : '개인지결로 등록'}
+                {initial?.id ? '지출결의' : '개인지출결의로 등록'}
               </button>
             </div>
             <p className="text-[11px] text-ink-500">

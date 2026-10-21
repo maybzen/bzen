@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import Icon from '../components/Icon'
 import ProjectFormModal from '../components/ProjectFormModal'
 import PartnerPicker from '../components/PartnerPicker'
+import AgencyDealModal from '../components/AgencyDealModal'
 import { ProfitBar } from '../components/Charts'
 import { useToast } from '../components/Toast'
 import { AmountInput, ConfirmDialog, EmptyState, Field, InlineAlert, LoadingBlock, Modal, PageHeader, SegmentedControl, StatCard } from '../components/ui'
@@ -89,6 +90,17 @@ function PnlGrid({ pnl, achieved, contractAmount, showContract, bare = false }) 
       ) : null}
     </>
   )
+}
+
+/* 대금집행 상태에 따른 칩 스타일 */
+const statusChip = (s) => {
+  switch (s) {
+    case '입금완료': return 'bg-amber-50 text-amber-700 border-amber-200'
+    case '정산중': return 'bg-blue-50 text-blue-700 border-blue-200'
+    case '지급완료': return 'bg-emerald-50 text-emerald-700 border-emerald-200'
+    case '계약중': return 'bg-ink-100 text-ink-600 border-ink-200'
+    default: return 'bg-ink-100 text-ink-600 border-ink-200'
+  }
 }
 
 export default function Projects() {
@@ -299,22 +311,35 @@ export default function Projects() {
       const p = partnerById.get(l.partner_id)
       const project = projectById.get(l.project_id)
       if (!p || !project) continue
-      if (!byAgency.has(p.id)) byAgency.set(p.id, { partner: p, deals: [], contract: 0, paid: 0 })
+      if (!byAgency.has(p.id)) byAgency.set(p.id, { partner: p, deals: [], contract: 0, paid: 0, fee: 0, passThrough: 0 })
       /* 대행은 부가세포함가 기준 (구글시트와 동일) */
       const contract = Number(project.contract_amount || 0)
-      const paid = paidByProjectName.get(`${project.id}||${normalizeVendorName(p.name)}`) || 0
-      const deal = { project, agencyId: p.id, agencyName: p.name, contract, paid, fee: contract - paid }
+      const fee = Number(project.agency_fee || 0)            /* 수수료 수익액 (우리 회사 매출) */
+      const paid = paidByProjectName.get(`${project.id}||${normalizeVendorName(p.name)}`) || 0  /* 실제 대행업체 지급액 */
+      const passThrough = contract - fee                      /* 대행업체 전달금 (총계약 − 수수료) */
+      const deal = { project, agencyId: p.id, agencyName: p.name, contract, paid, fee, passThrough }
       const row = byAgency.get(p.id)
       row.deals.push(deal)
       row.contract += deal.contract
       row.paid += deal.paid
+      row.fee += deal.fee
+      row.passThrough += deal.passThrough
     }
     return [...byAgency.values()]
-      .map((r) => ({ ...r, fee: r.contract - r.paid, deals: r.deals.sort((a, b) => b.contract - a.contract) }))
+      .map((r) => ({ ...r, 
+        unpaid: r.passThrough - r.paid,                       /* 미지급액 (전달금 − 실제 지급) */
+        deals: r.deals.sort((a, b) => b.contract - a.contract) 
+      }))
       .sort((a, b) => b.fee - a.fee)
   }, [links, partners, projects, entries])
   const agencyTotals = useMemo(
-    () => agencyRows.reduce((a, r) => ({ contract: a.contract + r.contract, paid: a.paid + r.paid, fee: a.fee + r.fee }), { contract: 0, paid: 0, fee: 0 }),
+    () => agencyRows.reduce((a, r) => ({ 
+      contract: a.contract + r.contract, 
+      paid: a.paid + r.paid, 
+      fee: a.fee + r.fee,
+      passThrough: a.passThrough + r.passThrough,
+      unpaid: a.unpaid + r.unpaid
+    }), { contract: 0, paid: 0, fee: 0, passThrough: 0, unpaid: 0 }),
     [agencyRows],
   )
 
@@ -391,7 +416,7 @@ export default function Projects() {
                 onChange={setViewTab}
                 options={[
                   { key: 'projects', label: '프로젝트' },
-                  { key: 'agency', label: `대행계약${agencyRows.length ? ` ${agencyRows.length}` : ''}` },
+                  { key: 'agency', label: '대행계약' },
                 ]}
               />
             ) : null}
@@ -468,9 +493,11 @@ export default function Projects() {
           <div className="flex flex-col gap-4">
             <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
               <StatCard label="대행계약" value={String(agencyRows.reduce((a, r) => a + r.deals.length, 0))} unit="건" tone="neutral" icon="building" />
-              <StatCard label="대행 계약" value={agencyTotals.contract} tone="sale" icon="trending-up" hint="부가세포함 기준" />
-              <StatCard label="업체 지급" value={agencyTotals.paid} tone="opex" icon="cart" hint="해당 업체명 매입 합계" />
-              <StatCard label="수수료" value={agencyTotals.fee} tone={agencyTotals.fee >= 0 ? 'profit' : 'loss'} icon="coins" hint="계약 − 지급" />
+              <StatCard label="총계약액 (입금)" value={agencyTotals.contract} tone="sale" icon="trending-up" hint="부가세포함 기준" />
+              <StatCard label="수수료 수익" value={agencyTotals.fee} tone={agencyTotals.fee >= 0 ? 'profit' : 'loss'} icon="coins" hint="우리 회사 매출" />
+              <StatCard label="전달금" value={agencyTotals.passThrough} tone="opex" icon="cart" hint="총계약 − 수수료" />
+              <StatCard label="실제 지급" value={agencyTotals.paid} tone="opex" icon="wallet" hint="대행업체 지급 합계" />
+              <StatCard label="미지급액" value={agencyTotals.unpaid} tone={agencyTotals.unpaid > 0 ? 'loss' : 'neutral'} icon="clock" hint="전달금 − 지급" />
             </div>
             <p className="text-xs leading-relaxed text-ink-500">
               계약만 하고 행사는 업체가 진행하는 건입니다. 여성기업·소기업 수의계약 한도는 5,500만원입니다.
@@ -499,7 +526,11 @@ export default function Projects() {
                         </Link>
                         <p className="mt-0.5 truncate text-xs text-ink-500">
                           {d.project.client || '발주처 미지정'}
-                          {d.project.referrer ? ` · 연결자 ${d.project.referrer}` : ''}
+                        </p>
+                        <p className="mt-0.5 truncate text-xs font-semibold">
+                          <span className={`chip ${statusChip(d.project.agency_status || '계약중')}`}>
+                            {d.project.agency_status || '계약중'}
+                          </span>
                         </p>
                         <p className="mt-0.5 truncate text-xs text-ink-500">
                           수행 {d.agencyName}
@@ -519,19 +550,37 @@ export default function Projects() {
                     </div>
                     <div className="mt-3 grid grid-cols-3 gap-2 border-t border-ink-100 pt-3 text-right">
                       <div>
-                        <p className="text-[11px] text-ink-400">계약</p>
+                        <p className="text-[11px] text-ink-400">총계약액 (입금)</p>
                         <p className="font-num text-sm font-extrabold tabular-nums text-ink-900">{formatKRW(d.contract)}</p>
                       </div>
                       <div>
-                        <p className="text-[11px] text-ink-400">업체 지급</p>
-                        <p className="font-num text-sm font-extrabold tabular-nums text-ink-500">
-                          {d.paid ? formatKRW(d.paid) : '0'}
+                        <p className="text-[11px] text-ink-400">수수료 수익</p>
+                        <p className={`font-num text-sm font-extrabold tabular-nums ${d.fee >= 0 ? 'text-emerald-700' : 'text-loss'}`}>
+                          {formatKRW(d.fee)}
                         </p>
                       </div>
                       <div>
-                        <p className="text-[11px] text-ink-400">수수료</p>
-                        <p className={`font-num text-sm font-extrabold tabular-nums ${d.fee >= 0 ? 'text-emerald-700' : 'text-loss'}`}>
-                          {formatKRW(d.fee)}
+                        <p className="text-[11px] text-ink-400">전달금</p>
+                        <p className="font-num text-sm font-extrabold tabular-nums text-ink-500">{formatKRW(d.passThrough)}</p>
+                      </div>
+                    </div>
+                    <div className="mt-2 grid grid-cols-3 gap-2 text-right">
+                      <div>
+                        <p className="text-[10px] text-ink-400">실제 지급</p>
+                        <p className="font-num text-xs font-bold tabular-nums text-ink-500">{formatKRW(d.paid)}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-ink-400">미지급</p>
+                        <p className={`font-num text-xs font-bold tabular-nums ${d.unpaid > 0 ? 'text-loss' : 'text-ink-400'}`}>
+                          {formatKRW(d.unpaid)}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-ink-400">상태</p>
+                        <p className="font-num text-xs font-bold tabular-nums text-ink-400">
+                          <span className={`chip ${statusChip(d.project.agency_status || '계약중')}`}>
+                            {d.project.agency_status || '계약중'}
+                          </span>
                         </p>
                       </div>
                     </div>
@@ -546,6 +595,55 @@ export default function Projects() {
                   </article>
                 )),
               )}
+            </div>
+
+            {/* 대행업체별 정산 요약 */}
+            <div className="mt-6 card overflow-hidden">
+              <header className="flex items-center justify-between gap-2 border-b border-ink-200 px-4 py-3">
+                <h2 className="text-sm font-bold text-ink-900">대행업체별 정산 요약</h2>
+                <p className="text-xs text-ink-500">업체별 미지급액 확인</p>
+              </header>
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse">
+                  <thead className="bg-ink-50/70">
+                    <tr>
+                      <th className="th text-left">대행업체</th>
+                      <th className="th text-right">총계약액</th>
+                      <th className="th text-right">수수료 수익</th>
+                      <th className="th text-right">전달금</th>
+                      <th className="th text-right">실제 지급</th>
+                      <th className="th text-right">미지급액</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-ink-100">
+                    {agencyRows.map((a) => (
+                      <tr key={a.agencyId}>
+                        <td className="td font-semibold">{a.agencyName}</td>
+                        <td className="td num">{formatKRW(a.contract)}원</td>
+                        <td className="td num">{formatKRW(a.fee)}원</td>
+                        <td className="td num">{formatKRW(a.passThrough)}원</td>
+                        <td className="td num">{formatKRW(a.paid)}원</td>
+                        <td className={`td num ${a.unpaid > 0 ? 'text-loss' : 'text-ink-400'}`}>
+                          {formatKRW(a.unpaid)}원
+                        </td>
+                      </tr>
+                    ))}
+                    <tr className="bg-ink-50 font-bold">
+                      <td className="td">합계</td>
+                      <td className="td num">{formatKRW(agencyTotals.contract)}원</td>
+                      <td className="td num">{formatKRW(agencyTotals.fee)}원</td>
+                      <td className="td num">{formatKRW(agencyTotals.passThrough)}원</td>
+                      <td className="td num">{formatKRW(agencyTotals.paid)}원</td>
+                      <td className={`td num ${agencyTotals.unpaid > 0 ? 'text-loss' : 'text-ink-400'}`}>
+                        {formatKRW(agencyTotals.unpaid)}원
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <p className="border-t border-ink-100 px-4 py-3 text-[11px] text-ink-400">
+                실제 지급 내역은 매입/운영비 메뉴에서 대행업체 이름으로 입력하면 반영됩니다.
+              </p>
             </div>
           </div>
         ) : (
@@ -803,225 +901,6 @@ export default function Projects() {
         onConfirm={handleDelete}
       />
     </div>
-  )
-}
-
-/**
- * 대행계약 등록 (대표 전용).
- * 행사이름·발주처·대행업체·총계약·수수료를 받아 프로젝트(계약=수수료) +
- * 대행 연결 + 수수료 매출까지 한 번에 만듭니다. 없는 업체는 거래처에서 먼저 등록하세요.
- */
-function AgencyDealModal({ partners, userId, initial = null, onClose, onSaved }) {
-  const toast = useToast()
-  const parseTotalRate = (memo) => {
-    const t = String(memo || '').match(/총계약 ([\d,]+)원/)
-    const r = String(memo || '').match(/수수료 ([\d.]+)%/)
-    return { total: t ? t[1].replace(/,/g, '') : '', rate: r ? r[1] : '3' }
-  }
-  const initParsed = initial?.project ? parseTotalRate(initial.project.memo) : { total: '', rate: '3' }
-  const initAgencyName = (() => {
-    if (!initial?.partnerId) return ''
-    return (partners || []).find((p) => p.id === initial.partnerId)?.name || ''
-  })()
-  const [form, setForm] = useState({
-    name: initial?.project?.name || '',
-    client: initial?.project?.client || '',
-    agencyName: initAgencyName,
-    total: initParsed.total,
-    rate: initParsed.rate,
-    fee: initial?.project?.contract_amount ? String(initial.project.contract_amount) : '',
-    start: initial?.project?.start_date || '',
-    end: initial?.project?.end_date || '',
-    referrer: initial?.project?.referrer || '',
-    memo: initial?.project?.memo || '',
-  })
-  const [feeTouched, setFeeTouched] = useState(Boolean(initial))
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState('')
-
-  const set = (key, transform) => (e) => {
-    const v = transform ? transform(e.target.value) : e.target.value
-    setForm((f) => {
-      const next = { ...f, [key]: v }
-      if ((key === 'total' || key === 'rate') && !feeTouched) {
-        const t = Number(String(next.total).replace(/[^0-9]/g, '')) || 0
-        const r = Number(next.rate) || 0
-        // 부가세포함 총계약액에 수수료율을 그대로 곱해 계산.
-        // VAT 제외 특약이면 수수료를 직접 고치세요 (고치면 자동 계산이 멈춥니다).
-        next.fee = t && r ? String(Math.round((t * r) / 100)) : ''
-      }
-      return next
-    })
-  }
-  const feeNum = Number(String(form.fee).replace(/[^0-9]/g, '')) || 0
-  const totalNum = Number(String(form.total).replace(/[^0-9]/g, '')) || 0
-
-  const submit = async (e) => {
-    e.preventDefault()
-    if (!form.name.trim()) return setError('행사이름을 입력해 주세요.')
-    if (!form.client.trim()) return setError('발주처를 입력해 주세요.')
-    if (!form.agencyName.trim()) return setError('대행업체를 입력해 주세요.')
-    setSaving(true)
-    setError('')
-    try {
-      const allPartners = await listPartners().catch(() => partners)
-      const target = normalizeVendorName(form.agencyName.trim())
-      const partner = (allPartners || []).find((p) => normalizeVendorName(p.name) === target)
-      if (!partner) return setError('대행업체를 먼저 등록해 주세요 (입력창에서 + 새로 등록).')
-      if (initial?.project?.id) {
-        await updateProject(initial.project.id, {
-          name: form.name.trim(),
-          client: form.client.trim(),
-          start_date: form.start || null,
-          end_date: form.end || null,
-          contract_amount: feeNum,
-          referrer: form.referrer.trim(),
-          memo: form.memo.trim(),
-        })
-        if (initial.partnerId && initial.partnerId !== partner.id) {
-          await unlinkProjectPartner(initial.project.id, initial.partnerId).catch(() => {})
-        }
-        await linkProjectPartner(initial.project.id, partner.id, userId, '대행')
-        toast.success('대행계약을 수정했습니다. 수수료 매출 행은 금액이 바뀌었으면 따로 고쳐주세요.')
-        onSaved?.()
-        return
-      }
-      const project = await createProject({
-        name: form.name.trim(),
-        client: form.client.trim(),
-        venue: '',
-        status: 'active',
-        start_date: form.start || null,
-        end_date: form.end || null,
-        contract_amount: feeNum,
-        referrer: form.referrer.trim(),
-        memo: [
-          `대행계약: 총계약 ${formatKRW(totalNum)}원 중 수수료 ${form.rate || 0}%만 매출.`,
-          `수행 ${partner.name} (나머지 ${formatKRW(totalNum - feeNum)}원 전달).`,
-          String(form.memo || '').trim(),
-        ]
-          .filter(Boolean)
-          .join('\n'),
-      })
-      await linkProjectPartner(project.id, partner.id, userId, '대행')
-      let clientMissing = false
-      if (form.client.trim()) {
-        const all2 = await listPartners().catch(() => partners)
-        clientMissing = !(all2 || []).some(
-          (p) => normalizeVendorName(p.name) === normalizeVendorName(form.client.trim()),
-        )
-      }
-      if (feeNum > 0) {
-        const supply = Math.round(feeNum / 1.1)
-        await createEntry(
-          {
-            entry_date: form.start || new Date().toISOString().slice(0, 10),
-            counterparty: form.client.trim(),
-            project_id: project.id,
-            category: '용역매출',
-            description: `대행 수수료 (총계약 ${formatKRW(totalNum)}원의 ${form.rate || 0}%)`,
-            supply_amount: supply,
-            vat_amount: feeNum - supply,
-            payment_method: '계좌이체',
-            memo: '대행계약 수수료만 매출',
-            entry_type: 'sale',
-          },
-          userId,
-        )
-      }
-      toast.success(
-        clientMissing
-          ? '대행계약을 등록했습니다. 발주처는 목록에서 + 새로 등록으로 추가해 주세요.'
-          : '대행계약을 등록했습니다.',
-      )
-      onSaved?.()
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  return (
-    <Modal
-      open
-      onClose={saving ? undefined : onClose}
-      title="대행계약 등록"
-      subtitle="계약은 수수료만 매출로 잡고, 나머지는 대행업체 전달금입니다."
-      footer={
-        <>
-          <button type="button" className="btn-ghost" onClick={onClose} disabled={saving}>
-            취소
-          </button>
-          <button type="submit" form="agency-deal-form" className="btn-primary" disabled={saving}>
-            {saving ? '저장 중…' : '등록'}
-          </button>
-        </>
-      }
-    >
-      <form id="agency-deal-form" onSubmit={submit} className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        {error ? (
-          <div className="sm:col-span-2">
-            <InlineAlert tone="error">{error}</InlineAlert>
-          </div>
-        ) : null}
-        <Field label="행사이름" required className="sm:col-span-2">
-          <input className="input" value={form.name} onChange={set('name')} placeholder="예: BMICE 인증제 관광 개발 컨설팅 및 운영" />
-        </Field>
-        <Field label="발주처 (원청)" required>
-          <PartnerPicker value={form.client} onChange={set('client')} placeholder="예: 부산관광고등학교" userId={userId} />
-        </Field>
-        <Field label="대행업체 (실제 수행사)" required hint="치면 검색되고, 없으면 + 새로 등록으로 추가하세요">
-          <PartnerPicker value={form.agencyName} onChange={set('agencyName')} placeholder="예: (사)부산컨벤션산업협회" userId={userId} />
-        </Field>
-        <Field label="총계약액 (원, VAT포함)" hint="대행업체에 전달되는 금액 포함 전체">
-          <AmountInput
-            className="input text-right font-num tabular-nums"
-            value={form.total}
-            onChange={set('total')}
-            placeholder="예: 49000000"
-          />
-        </Field>
-        <Field label="수수료율 (%)" hint="부가세포함 총계약액 기준. 총계약 × 수수료율로 자동 계산됩니다">
-          <input
-            type="text"
-            inputMode="decimal"
-            className="input text-right font-num tabular-nums"
-            value={form.rate}
-            onChange={set('rate')}
-            placeholder="3"
-          />
-        </Field>
-        <Field label="수수료 (원, VAT포함)" hint="장부 계약금액·매출이 됩니다. 특약이 있으면 직접 고치세요" className="sm:col-span-2">
-          <AmountInput
-            className="input text-right font-num tabular-nums"
-            value={form.fee}
-            onChange={(e) => {
-              setFeeTouched(true)
-              set('fee')(e)
-            }}
-            placeholder="예: 1470000"
-          />
-        </Field>
-        <Field label="시작일">
-          <input type="date" className="input" value={form.start} onChange={set('start')} />
-        </Field>
-        <Field label="종료일">
-          <input type="date" className="input" value={form.end} onChange={set('end')} />
-        </Field>
-        <Field label="연결자" hint="이 건을 연결해준 분 (예: 협회 담당자)">
-          <input
-            className="input"
-            value={form.referrer}
-            onChange={set('referrer')}
-            placeholder="예: 정가희 국장(부산컨벤션산업협회)"
-          />
-        </Field>
-        <Field label="메모" className="sm:col-span-2">
-          <textarea className="input min-h-[64px] resize-y" value={form.memo} onChange={set('memo')} />
-        </Field>
-      </form>
-    </Modal>
   )
 }
 

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom'
 import EntryFormModal from '../components/EntryFormModal'
 import EntryTable from '../components/EntryTable'
+import AgencyDealModal from '../components/AgencyDealModal'
 import PartnerFormModal from '../components/PartnerFormModal'
 import Icon from '../components/Icon'
 import ProjectFormModal from '../components/ProjectFormModal'
@@ -15,6 +16,17 @@ import { ENTRY_META, PROJECT_STATUS } from '../lib/constants'
 import { contractSplit, formatDateHuman, formatKRW, formatPercent, monthLabel, normalizeVendorName } from '../lib/format'
 import { groupByMonth, summarize } from '../lib/summary'
 import { deleteEntry, isMissingTableError, linkProjectPartner, listAttachments, listEntries, listPartners, listProfiles, listProjectPartners, listProjects, setProjectPartnerRole, unlinkProjectPartner } from '../lib/api'
+
+/* 대금집행 상태에 따른 칩 스타일 */
+const statusChip = (s) => {
+  switch (s) {
+    case '입금완료': return 'bg-amber-50 text-amber-700 border-amber-200'
+    case '정산중': return 'bg-blue-50 text-blue-700 border-blue-200'
+    case '지급완료': return 'bg-emerald-50 text-emerald-700 border-emerald-200'
+    case '계약중': return 'bg-ink-100 text-ink-600 border-ink-200'
+    default: return 'bg-ink-100 text-ink-600 border-ink-200'
+  }
+}
 
 const TABS = [
   { key: 'all', label: '전체' },
@@ -44,6 +56,8 @@ export default function ProjectDetail() {
   const [viewerFiles, setViewerFiles] = useState(null)
   const [reloadKey, setReloadKey] = useState(0)
   const [ledgerTab, setLedgerTab] = useState('entries')
+  const [agencyDealOpen, setAgencyDealOpen] = useState(false)
+  const [agencyDealInitial, setAgencyDealInitial] = useState(null)
 
   /* 프로젝트 금액 열람: 관리자 + 설정 허용 + 담당자 본인.
      state 선언보다 위에서 project를 참조하면 TDZ로 죽습니다 (직원 전용 크래시 주의) */
@@ -239,6 +253,19 @@ export default function ProjectDetail() {
     return vendors.filter((v) => !(v.partner && linkedIds.has(v.partner.id)))
   }, [vendors, linkedVendors])
 
+  /* 대행계약 여부: 연결된 파트너 중 role='대행'이 있으면 대행계약 프로젝트 */
+  const isAgencyDeal = linkedVendors.some((v) => v.linkRole === '대행')
+  const agencyPartner = linkedVendors.find((v) => v.linkRole === '대행')?.partner
+
+  /* 대행계약 대금 추산: project.contract_amount(총계약), project.agency_fee(수수료 수익) */
+  const agencyContract = Number(project?.contract_amount || 0)
+  const agencyFee = Number(project?.agency_fee || 0)
+  const agencyPassThrough = agencyContract - agencyFee
+  const agencyPaid = vendors
+    .filter((v) => agencyPartner && normalizeVendorName(v.name) === normalizeVendorName(agencyPartner.name))
+    .reduce((a, v) => a + v.total, 0)
+  const agencyUnpaid = agencyPassThrough - agencyPaid
+
   const handleDeleteEntry = async () => {
     if (!removing) return
     setBusy(true)
@@ -319,6 +346,24 @@ export default function ProjectDetail() {
                 : '담당 미지정'}
               {project.venue ? ` · ${project.venue}` : ''}
             </p>
+            {isAgencyDeal ? (
+              <div className="mt-2 rounded-lg border border-ink-200 bg-ink-50/60 px-3 py-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className={`chip ${statusChip(project.agency_status || '계약중')}`}>
+                    {project.agency_status || '계약중'}
+                  </span>
+                  {agencyPartner ? (
+                    <span className="text-xs text-ink-600">
+                      대행업체 {agencyPartner.name}
+                      {agencyPartner.contact_person ? ` (담당 ${agencyPartner.contact_person})` : ''}
+                    </span>
+                  ) : null}
+                </div>
+                <p className="mt-1 text-[11px] text-ink-500">
+                  대행계약 구조: 원청 입금(총계약) → 수수료(우리 수익) → 대행업체 전달금(나중에 지급)
+                </p>
+              </div>
+            ) : null}
             {csplit.total > 0 ? (
               <p className="mt-1 text-sm font-semibold text-ink-800">
                 계약 {formatKRW(csplit.supply)}원
@@ -328,9 +373,17 @@ export default function ProjectDetail() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <button type="button" className="btn-ghost" onClick={() => setProjectForm(true)}>
+            <button type="button" className="btn-ghost" onClick={() => {
+              if (isAgencyDeal) {
+                const agencyLink = linkedVendors.find((v) => v.linkRole === '대행')
+                setAgencyDealInitial({ project, partnerId: agencyLink?.partner?.id })
+                setAgencyDealOpen(true)
+              } else {
+                setProjectForm(true)
+              }
+            }}>
               <Icon name="pencil" size={16} />
-              프로젝트 수정
+              {isAgencyDeal ? '대행계약 수정' : '프로젝트 수정'}
             </button>
             {['sale', 'purchase', 'opex'].map((type) => (
               <button key={type} type="button" className="btn-soft" onClick={() => setFormType(type)}>
@@ -343,7 +396,15 @@ export default function ProjectDetail() {
       </div>
 
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-        {detailMoney ? (
+        {isAgencyDeal ? (
+          <>
+            <StatCard label="총계약액 (원청 입금)" value={agencyContract} tone="sale" icon="trending-up" hint="발주처로부터 입금받은 전체 금액" />
+            <StatCard label="수수료 수익" value={agencyFee} tone={agencyFee >= 0 ? 'profit' : 'loss'} icon="coins" hint="우리 회사 매출" />
+            <StatCard label="대행업체 전달금" value={agencyPassThrough} tone="opex" icon="cart" hint="총계약 − 수수료" />
+            <StatCard label="실제 지급" value={agencyPaid} tone="opex" icon="wallet" hint="대행업체에 지급한 금액" />
+            <StatCard label="미지급액" value={agencyUnpaid} tone={agencyUnpaid > 0 ? 'loss' : 'neutral'} icon="clock" hint="전달금 − 실제 지급" />
+          </>
+        ) : detailMoney ? (
           <>
             <StatCard label="순매출액" value={stats.revenue} tone="sale" icon="trending-up" hint="공급가액 기준" />
             <StatCard label="매출원가" value={stats.cogs} tone="purchase" icon="cart" hint="매입" />
@@ -370,7 +431,56 @@ export default function ProjectDetail() {
         )}
       </div>
 
-      {detailMoney && csplit.total > 0 ? (
+      {isAgencyDeal ? (
+        <div className="card p-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-sm font-bold text-ink-800">대행계약 돈 흐름</p>
+          </div>
+          <div className="mt-3 grid grid-cols-3 gap-3 text-right">
+            <div>
+              <p className="text-[11px] text-ink-400">원청 입금 (총계약)</p>
+              <p className="font-num text-sm font-bold tabular-nums text-ink-900">{formatKRW(agencyContract)}원</p>
+            </div>
+            <div>
+              <p className="text-[11px] text-ink-400">수수료 수익 (우리 매출)</p>
+              <p className="font-num text-sm font-bold tabular-nums text-emerald-700">{formatKRW(agencyFee)}원</p>
+            </div>
+            <div>
+              <p className="text-[11px] text-ink-400">대행업체 전달금</p>
+              <p className="font-num text-sm font-bold tabular-nums text-ink-500">{formatKRW(agencyPassThrough)}원</p>
+            </div>
+          </div>
+          <div className="mt-2 grid grid-cols-3 gap-3 text-right">
+            <div>
+              <p className="text-[10px] text-ink-400">실제 지급</p>
+              <p className="font-num text-xs font-bold tabular-nums text-ink-500">{formatKRW(agencyPaid)}원</p>
+            </div>
+            <div>
+              <p className="text-[10px] text-ink-400">미지급액</p>
+              <p className={`font-num text-xs font-bold tabular-nums ${agencyUnpaid > 0 ? 'text-loss' : 'text-ink-400'}`}>
+                {formatKRW(agencyUnpaid)}원
+              </p>
+            </div>
+            <div>
+              <p className="text-[10px] text-ink-400">상태</p>
+              <p className="font-num text-xs font-bold tabular-nums text-ink-400">
+                <span className={`chip ${statusChip(project.agency_status || '계약중')}`}>
+                  {project.agency_status || '계약중'}
+                </span>
+              </p>
+            </div>
+          </div>
+          <p className="mt-2 text-[11px] leading-relaxed text-ink-500">
+            대행계약은 원청(주최처)에서 받은 돈 중 수수료만 우리 회사 매출이고, 나머지는 대행업체에 전달하는 구조입니다.
+            실제 지급 내역은 매입/운영비 메뉴에서 대행업체 이름으로 입력하면 반영됩니다.
+          </p>
+          {project.memo ? (
+            <p className="mt-3 whitespace-pre-line border-t border-ink-100 pt-3 text-xs leading-relaxed text-ink-600">
+              {project.memo}
+            </p>
+          ) : null}
+        </div>
+      ) : detailMoney && csplit.total > 0 ? (
         <div className="card p-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="text-sm font-bold text-ink-800">계약 대비 순매출</p>
@@ -727,6 +837,19 @@ function VendorPanel({ links, linked, candidates, linkBusy, isAdmin, userId, par
           </ul>
         </div>
       ) : null}
+      {agencyDealOpen && (
+        <AgencyDealModal
+          partners={partners}
+          userId={user?.id}
+          initial={agencyDealInitial}
+          onClose={() => setAgencyDealOpen(false)}
+          onSaved={() => {
+            setAgencyDealOpen(false)
+            setAgencyDealInitial(null)
+            setReloadKey((k) => k + 1)
+          }}
+        />
+      )}
     </div>
   )
 }

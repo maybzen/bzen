@@ -490,7 +490,7 @@ export default function EntryTable({
                       <span className="text-ink-300">—</span>
                     )}
                     {showSource && isReportRow(entry) ? (
-                      <span className="ml-1 chip bg-violet-50 text-violet-700" title="지출결의·직원 입력분">지결</span>
+                      <span className="ml-1 chip bg-violet-50 text-violet-700" title="지출결의·직원 입력분">지출결의</span>
                     ) : null}
                   </td>
                   <td className="td max-w-[150px] truncate">
@@ -513,12 +513,12 @@ export default function EntryTable({
                           <select
                             className="input w-full min-w-[64px] max-w-[110px] px-2 py-1 text-xs"
                             value={cardOptions.includes(tag) ? tag : ''}
-                            title={tag === '기타' ? (isReportRow(entry) ? '지결' : '미지정') : tag}
+                            title={tag === '기타' ? (isReportRow(entry) ? '지출결의' : '미지정') : tag}
                             disabled={saving}
                             onChange={(e) => saveCard(entry, e.target.value)}
                           >
-                            {/* 지결분은 카드 미지정이 아니라 '지결'로 구분해 보여줍니다 */}
-                            <option value="">{isReportRow(entry) ? '지결' : '미지정'}</option>
+                            {/* 지출결의분은 카드 미지정이 아니라 '지출결의'로 구분해 보여줍니다 */}
+                            <option value="">{isReportRow(entry) ? '지출결의' : '미지정'}</option>
                             {cardOptions.map((c) => (
                               <option key={c} value={c}>
                                 {shortCard(c)}
@@ -529,7 +529,7 @@ export default function EntryTable({
                           <span className="text-xs text-ink-500" title={entry.memo || ''}>
                             {tag === '기타' ? (
                               <span className={isReportRow(entry) ? 'text-violet-600' : 'text-ink-300'}>
-                                {isReportRow(entry) ? '지결' : '—'}
+                                {isReportRow(entry) ? '지출결의' : '—'}
                               </span>
                             ) : (
                               shortCard(tag)
@@ -735,7 +735,7 @@ export default function EntryTable({
                           <span className="chip bg-ink-100 text-ink-600">{entry.category}</span>
                         ) : null}
                         {showSource && isReportRow(entry) ? (
-                          <span className="chip bg-violet-50 text-violet-700">지결</span>
+                          <span className="chip bg-violet-50 text-violet-700">지출결의</span>
                         ) : null}
                       </div>
                       <p className="mt-1.5 truncate text-sm font-bold text-ink-900">
