@@ -23,6 +23,11 @@ export default function AgencyDealModal({ partners, userId, initial = null, onCl
       const m = String(initial.project.memo || '').match(/총계약\s*([\d,]+)\s*원/)
       return m ? m[1].replace(/,/g, '') : String(initial.project.contract_amount || '')
     })(),
+    rate: (() => {
+      if (!initial?.project) return '3'
+      const m = String(initial.project.memo || '').match(/수수료\s*([\d.]+)\s*%/)
+      return m ? m[1] : '3'
+    })(),
     fee: (() => {
       if (!initial?.project) return ''
       const m = String(initial.project.memo || '').match(/수수료\s*([\d,]+)\s*원/)
@@ -42,9 +47,14 @@ export default function AgencyDealModal({ partners, userId, initial = null, onCl
     const v = transform ? transform(e.target.value) : e.target.value
     setForm((f) => {
       const next = { ...f, [key]: v }
-      if ((key === 'total' || key === 'fee') && !feeTouched) {
+      if (key === 'total' && !feeTouched) {
         const t = Number(String(next.total).replace(/[^0-9]/g, '')) || 0
-        const r = Number(next.fee).replace(/[^0-9]/g, '') || 0
+        const r = Number(next.rate) || 0
+        if (t && r) next.fee = String(Math.round((t * r) / 100))
+      }
+      if (key === 'rate' && !feeTouched) {
+        const t = Number(String(next.total).replace(/[^0-9]/g, '')) || 0
+        const r = Number(next.rate) || 0
         if (t && r) next.fee = String(Math.round((t * r) / 100))
       }
       return next
@@ -53,6 +63,7 @@ export default function AgencyDealModal({ partners, userId, initial = null, onCl
 
   const feeNum = Number(String(form.fee).replace(/[^0-9]/g, '')) || 0
   const totalNum = Number(String(form.total).replace(/[^0-9]/g, '')) || 0
+  const rateNum = Number(form.rate) || 0
 
   const handleDelete = async () => {
     if (!initial?.project?.id) return
@@ -63,7 +74,7 @@ export default function AgencyDealModal({ partners, userId, initial = null, onCl
       if (initial.partnerId) {
         await unlinkProjectPartner(initial.project.id, initial.partnerId).catch(() => {})
       }
-      await deleteProject(initial.project.id, user?.id)
+      await deleteProject(initial.project.id, userId)
       toast.success('대행계약을 삭제했습니다.')
       onSaved?.()
       onClose?.()
@@ -213,7 +224,20 @@ export default function AgencyDealModal({ partners, userId, initial = null, onCl
             placeholder="예: 49880000"
           />
         </Field>
-        <Field label="수수료액 (원, VAT포함)" hint="총계약액 중 우리 회사 매출로 잡을 금액">
+        <Field label="수수료율 (%)" hint="총계약액 × 수수료율로 수수료액이 자동 계산됩니다">
+          <input
+            type="text"
+            inputMode="decimal"
+            className="input text-right font-num tabular-nums"
+            value={form.rate}
+            onChange={(e) => {
+              setFeeTouched(true)
+              set('rate')(e)
+            }}
+            placeholder="예: 3"
+          />
+        </Field>
+        <Field label="수수료액 (원, VAT포함)" hint="총계약액 중 우리 회사 매출로 잡을 금액. 특약이 있으면 직접 고치세요" className="sm:col-span-2">
           <AmountInput
             className="input text-right font-num tabular-nums"
             value={form.fee}

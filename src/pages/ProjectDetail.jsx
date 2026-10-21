@@ -374,7 +374,8 @@ export default function ProjectDetail() {
 
           <div className="flex flex-wrap items-center gap-2">
             <button type="button" className="btn-ghost" onClick={() => {
-              if (isAgencyDeal) {
+              const isAgency = isAgencyDeal || Number(project?.contract_amount || 0) > 0
+              if (isAgency) {
                 const agencyLink = linkedVendors.find((v) => v.linkRole === '대행')
                 setAgencyDealInitial({ project, partnerId: agencyLink?.partner?.id })
                 setAgencyDealOpen(true)
