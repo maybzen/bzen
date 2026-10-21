@@ -11,7 +11,7 @@ import { ensureLedgerIndex, useLedgerIndex } from '../lib/ledgerIndex'
 import { isStaffVisible, staffIdsFromProfiles } from '../lib/permissions'
 import { ISSUE_META, checkEntryDraft } from '../lib/validate'
 import { aliasRoot } from '../lib/aliases'
-import { cardTagOf, withMemoCard, withMemoUser, shortCard, CARD_OPTIONS } from '../lib/cardTag'
+import { cardTagOf, withMemoCard, shortCard, CARD_OPTIONS } from '../lib/cardTag'
 
 const MAX_FILE = 20 * 1024 * 1024
 
@@ -485,7 +485,7 @@ export default function EntryFormModal({
                 ? '지출결의로 저장됩니다 (지출자 기준 집계). 카드 이용자도 함께 기록됩니다.'
                 : initial?.id
                   ? '운영비로 저장됩니다.'
-                  : '회사 비용은 운영비, 개인이 먼저 쓴 돈은 개인지결로 등록하세요.'}
+                  : '회사 비용은 운영비, 개인이 먼저 쓴 돈은 개인 지출결의로 등록하세요.'}
             </p>
           </div>
         ) : null}

@@ -253,13 +253,14 @@ export default function ProjectDetail() {
     return vendors.filter((v) => !(v.partner && linkedIds.has(v.partner.id)))
   }, [vendors, linkedVendors])
 
-  /* 대행계약 여부: 연결된 파트너 중 role='대행'이 있으면 대행계약 프로젝트 */
+  /* 대행계약 여부: 연결된 파트너 중 role='대행'이 있거나, 수수료 수익이 잡혀 있으면 대행계약 */
   const isAgencyDeal = linkedVendors.some((v) => v.linkRole === '대행')
   const agencyPartner = linkedVendors.find((v) => v.linkRole === '대행')?.partner
 
   /* 대행계약 대금 추산: project.contract_amount(총계약), project.agency_fee(수수료 수익) */
   const agencyContract = Number(project?.contract_amount || 0)
   const agencyFee = Number(project?.agency_fee || 0)
+  const isAgencyProject = isAgencyDeal || agencyFee > 0
   const agencyPassThrough = agencyContract - agencyFee
   const agencyPaid = vendors
     .filter((v) => agencyPartner && normalizeVendorName(v.name) === normalizeVendorName(agencyPartner.name))
@@ -346,7 +347,7 @@ export default function ProjectDetail() {
                 : '담당 미지정'}
               {project.venue ? ` · ${project.venue}` : ''}
             </p>
-            {isAgencyDeal ? (
+            {isAgencyProject ? (
               <div className="mt-2 rounded-lg border border-ink-200 bg-ink-50/60 px-3 py-2">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className={`chip ${statusChip(project.agency_status || '계약중')}`}>
@@ -374,7 +375,7 @@ export default function ProjectDetail() {
 
           <div className="flex flex-wrap items-center gap-2">
             <button type="button" className="btn-ghost" onClick={() => {
-              const isAgency = isAgencyDeal || Number(project?.contract_amount || 0) > 0
+              const isAgency = isAgencyProject
               if (isAgency) {
                 const agencyLink = linkedVendors.find((v) => v.linkRole === '대행')
                 setAgencyDealInitial({ project, partnerId: agencyLink?.partner?.id })
@@ -384,7 +385,7 @@ export default function ProjectDetail() {
               }
             }}>
               <Icon name="pencil" size={16} />
-              {isAgencyDeal ? '대행계약 수정' : '프로젝트 수정'}
+              {isAgencyProject ? '대행계약 수정' : '프로젝트 수정'}
             </button>
             {['sale', 'purchase', 'opex'].map((type) => (
               <button key={type} type="button" className="btn-soft" onClick={() => setFormType(type)}>
@@ -397,7 +398,7 @@ export default function ProjectDetail() {
       </div>
 
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-        {isAgencyDeal ? (
+        {isAgencyProject ? (
           <>
             <StatCard label="총계약액 (원청 입금)" value={agencyContract} tone="sale" icon="trending-up" hint="발주처로부터 입금받은 전체 금액" />
             <StatCard label="수수료 수익" value={agencyFee} tone={agencyFee >= 0 ? 'profit' : 'loss'} icon="coins" hint="우리 회사 매출" />
@@ -432,7 +433,7 @@ export default function ProjectDetail() {
         )}
       </div>
 
-      {isAgencyDeal ? (
+      {isAgencyProject ? (
         <div className="card p-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="text-sm font-bold text-ink-800">대행계약 돈 흐름</p>
@@ -451,7 +452,7 @@ export default function ProjectDetail() {
               <p className="font-num text-sm font-bold tabular-nums text-ink-500">{formatKRW(agencyPassThrough)}원</p>
             </div>
           </div>
-          <div className="mt-2 grid grid-cols-3 gap-3 text-right">
+          <div className="mt-2 grid grid-cols-2 gap-3 text-right">
             <div>
               <p className="text-[10px] text-ink-400">실제 지급</p>
               <p className="font-num text-xs font-bold tabular-nums text-ink-500">{formatKRW(agencyPaid)}원</p>
@@ -460,14 +461,6 @@ export default function ProjectDetail() {
               <p className="text-[10px] text-ink-400">미지급액</p>
               <p className={`font-num text-xs font-bold tabular-nums ${agencyUnpaid > 0 ? 'text-loss' : 'text-ink-400'}`}>
                 {formatKRW(agencyUnpaid)}원
-              </p>
-            </div>
-            <div>
-              <p className="text-[10px] text-ink-400">상태</p>
-              <p className="font-num text-xs font-bold tabular-nums text-ink-400">
-                <span className={`chip ${statusChip(project.agency_status || '계약중')}`}>
-                  {project.agency_status || '계약중'}
-                </span>
               </p>
             </div>
           </div>
@@ -660,6 +653,20 @@ export default function ProjectDetail() {
         onClose={() => setViewerFiles(null)}
         attachments={viewerFiles || []}
       />
+
+      {agencyDealOpen ? (
+        <AgencyDealModal
+          partners={partners}
+          userId={user?.id}
+          initial={agencyDealInitial}
+          onClose={() => setAgencyDealOpen(false)}
+          onSaved={() => {
+            setAgencyDealOpen(false)
+            setAgencyDealInitial(null)
+            setReloadKey((k) => k + 1)
+          }}
+        />
+      ) : null}
     </div>
   )
 }
@@ -838,19 +845,6 @@ function VendorPanel({ links, linked, candidates, linkBusy, isAdmin, userId, par
           </ul>
         </div>
       ) : null}
-      {agencyDealOpen && (
-        <AgencyDealModal
-          partners={partners}
-          userId={user?.id}
-          initial={agencyDealInitial}
-          onClose={() => setAgencyDealOpen(false)}
-          onSaved={() => {
-            setAgencyDealOpen(false)
-            setAgencyDealInitial(null)
-            setReloadKey((k) => k + 1)
-          }}
-        />
-      )}
     </div>
   )
 }

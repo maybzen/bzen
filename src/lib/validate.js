@@ -7,7 +7,7 @@
  *
  * 저장 자체를 막지 않는다. 판단은 사람이 한다.
  */
-import { CATEGORIES, NON_OPERATING_SALE_CATEGORIES, isNonOperatingSale } from './constants'
+import { ALL_CATEGORIES, NON_OPERATING_SALE_CATEGORIES, isNonOperatingSale } from './constants'
 import { parseISO, toISODate } from './format'
 
 /* ------------------------------------------------------------------ */
@@ -253,7 +253,7 @@ export function checkFields(entry) {
   const out = []
   const category = String(entry?.category || '').trim()
   const type = entry?.entry_type || 'opex'
-  const allowed = CATEGORIES[type] || []
+  const allowed = ALL_CATEGORIES[type] || []
 
   if (!category) {
     out.push({ code: ISSUE.FIELD, field: 'category', text: '비목이 비어 있습니다.' })
@@ -261,7 +261,9 @@ export function checkFields(entry) {
     // 회사 관행상 세금계산서 있는 지출은 매입(purchase)으로 잡고 비목으로 계정과목을 표시한다
     // (예: purchase + 임차료/통신비). 그래서 매입·운영비의 비목 역전은 정상으로 본다.
     // 단, 어느 유형에도 없는 비목(오타 등)은 잘못이다.
-    const elsewhere = Object.keys(CATEGORIES).find((t) => t !== type && (CATEGORIES[t] || []).includes(category))
+    const elsewhere = Object.keys(ALL_CATEGORIES).find(
+      (t) => t !== type && (ALL_CATEGORIES[t] || []).includes(category),
+    )
     if (!elsewhere) {
       out.push({ code: ISSUE.FIELD, field: 'category', text: `등록된 비목이 아닙니다: “${category}”` })
     } else if (type === 'sale') {

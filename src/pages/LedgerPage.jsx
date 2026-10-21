@@ -10,7 +10,7 @@ import { ConfirmDialog, EmptyState, LoadingBlock, Modal, PageHeader, StatCard } 
 import { useAuth } from '../auth/AuthContext'
 import { isStaffVisible, staffIdsFromProfiles } from '../lib/permissions'
 import { withMemoCard, CARD_OPTIONS } from '../lib/cardTag'
-import { CATEGORIES, ENTRY_META } from '../lib/constants'
+import { ALL_CATEGORIES, CATEGORIES, ENTRY_META } from '../lib/constants'
 import { ISSUE_META } from '../lib/validate'
 import { downloadTextFile, parseAmount, parseCSV, toCSV } from '../lib/csv'
 import { formatKRW } from '../lib/format'
@@ -554,7 +554,7 @@ export default function LedgerPage({ type, source = 'manual', title, description
             </button>
             {type === 'opex' && source === 'manual' ? (
               <span className="text-[11px] text-ink-400">
-                보라색 <span className="chip bg-violet-50 text-violet-700">지결</span> = 지출결의·직원 입력분
+                보라색 <span className="chip bg-violet-50 text-violet-700">지출결의</span> = 지출결의·직원 입력분
               </span>
             ) : null}
           </div>
@@ -821,7 +821,7 @@ function ImportModal({ open, onClose, onDone, type, source, projects, userId, on
       if (iDate < 0 || iSupply < 0) throw new Error('"일자" 와 "공급가액" 열이 필요합니다.')
 
       const projectByName = new Map(projects.map((p) => [p.name.trim(), p.id]))
-      const allowedCats = CATEGORIES[type] || []
+      const allowedCats = ALL_CATEGORIES[type] || []
       const out = []
       const bad = []
       const warnList = []

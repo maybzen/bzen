@@ -564,7 +564,7 @@ export default function Projects() {
                         <p className="font-num text-sm font-extrabold tabular-nums text-ink-500">{formatKRW(d.passThrough)}</p>
                       </div>
                     </div>
-                    <div className="mt-2 grid grid-cols-3 gap-2 text-right">
+                    <div className="mt-2 grid grid-cols-2 gap-2 text-right">
                       <div>
                         <p className="text-[10px] text-ink-400">실제 지급</p>
                         <p className="font-num text-xs font-bold tabular-nums text-ink-500">{formatKRW(d.paid)}</p>
@@ -573,14 +573,6 @@ export default function Projects() {
                         <p className="text-[10px] text-ink-400">미지급</p>
                         <p className={`font-num text-xs font-bold tabular-nums ${d.unpaid > 0 ? 'text-loss' : 'text-ink-400'}`}>
                           {formatKRW(d.unpaid)}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-[10px] text-ink-400">상태</p>
-                        <p className="font-num text-xs font-bold tabular-nums text-ink-400">
-                          <span className={`chip ${statusChip(d.project.agency_status || '계약중')}`}>
-                            {d.project.agency_status || '계약중'}
-                          </span>
                         </p>
                       </div>
                     </div>
