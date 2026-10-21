@@ -339,7 +339,9 @@ export default function Projects() {
     return [...byAgency.values()]
       .map((r) => ({ ...r, 
         unpaid: r.passThrough - r.paid,                       /* 미지급액 (전달금 − 실제 지급) */
-        deals: r.deals.sort((a, b) => b.contract - a.contract) 
+        deals: r.deals
+          .map((d) => ({ ...d, unpaid: d.passThrough - d.paid }))
+          .sort((a, b) => b.contract - a.contract) 
       }))
       .sort((a, b) => b.fee - a.fee)
   }, [links, partners, projects, entries, collections])
