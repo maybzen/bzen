@@ -215,10 +215,16 @@ export default function Projects() {
     load()
   }, [load, reloadKey]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // 내부 귀속용(사내 공통)은 목록에서 숨기고 선택지에는 둡니다.
+  /* 대행계약은 '대행계약' 탭에서만 보여주고 일반 프로젝트 목록에서는 뺍니다. */
+  const agencyProjectIds = useMemo(
+    () => new Set((links || []).filter((l) => (l.role || '협력') === '대행').map((l) => l.project_id)),
+    [links],
+  )
+
+  // 내부 귀속용(사내 공통)과 대행계약은 목록에서 숨기고 선택지에는 둡니다.
   const visibleProjects = useMemo(
-    () => projects.filter((p) => !p.is_hidden),
-    [projects],
+    () => projects.filter((p) => !p.is_hidden && !agencyProjectIds.has(p.id)),
+    [projects, agencyProjectIds],
   )
 
   /** 프로젝트별 활동 연도. 거래가 있는 연도 + 시작일 연도 + 종료일 연도. */
