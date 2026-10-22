@@ -327,7 +327,7 @@ export default function Projects() {
       const p = partnerById.get(l.partner_id)
       const project = projectById.get(l.project_id)
       if (!p || !project) continue
-      if (!byAgency.has(p.id)) byAgency.set(p.id, { partner: p, deals: [], contract: 0, paid: 0, fee: 0, passThrough: 0 })
+      if (!byAgency.has(p.id)) byAgency.set(p.id, { partner: p, agencyId: p.id, agencyName: p.name, deals: [], contract: 0, paid: 0, fee: 0, passThrough: 0 })
       /* 대행은 부가세포함가 기준 (구글시트와 동일) */
       const contract = Number(project.contract_amount || 0)
       const fee = Number(project.agency_fee || 0)            /* 수수료 수익액 (우리 회사 매출) */
