@@ -1,6 +1,6 @@
 export const APP_NAME = '인트라넷'
 /** 화면 우하단·설정에 표시되는 배포 버전. 사용자 전달 수정마다 올립니다 */
-export const APP_VERSION = '2026-10-22b'
+export const APP_VERSION = '2026-10-22c'
 export const DEFAULT_COMPANY = '(주)비젠커뮤니케이션'
 export const COMPANY_EN = 'BZen Communication'
 

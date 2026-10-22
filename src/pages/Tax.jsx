@@ -3,13 +3,24 @@ import { Link } from 'react-router-dom'
 import Icon from '../components/Icon'
 import { AttachmentModal } from '../components/Attachments'
 import { useToast } from '../components/Toast'
-import { InlineAlert, LoadingBlock, Modal, PageHeader } from '../components/ui'
+import { AmountInput, Field, InlineAlert, LoadingBlock, Modal, PageHeader } from '../components/ui'
 import { useAuth } from '../auth/AuthContext'
 import { useStaffPermissions } from '../lib/permissions'
-import { listAttachments, listEntries, listProfiles, listProjects, uploadAttachment } from '../lib/api'
-import EntryFormModal from '../components/EntryFormModal'
+import { listAttachments, listEntries, uploadAttachment } from '../lib/api'
 import { downloadTextFile, toCSV } from '../lib/csv'
 import { formatKRW, todayISO } from '../lib/format'
+import {
+  TAX_PAYMENT_TYPES,
+  deadlinePaymentKey,
+  listTaxPayments,
+  newPaymentKey,
+  paymentDiff,
+  paymentMap,
+  removeTaxPayment,
+  saveTaxPayment,
+  taxPaymentType,
+  vatPaymentKey,
+} from '../lib/taxPayments'
 import {
   TAX_DOCS,
   TAX_TYPES,
@@ -77,7 +88,7 @@ function DeadlineCard({
   const done = isDone(state, deadline.id)
   const prior = isPrior(deadline.due)
 
-  /* 원천세는 장부 납부액 표시 + 납부 등록 (장부에 없으면 0원).
+  /* 원천세는 세금관리에서 입력한 납부 기록을 우선 표시하고, 없으면 예전 장부 기록을 보여줍니다.
      매달 같이 나오는 국세(소득세)+지방세(특별징수분) 쌍으로 보여줍니다 */
   if (deadline.type === 'withholding') {
     return (
@@ -88,16 +99,18 @@ function DeadlineCard({
           {paid && paid.total ? (
             <button
               type="button"
-              onClick={() => onShowPay(deadline)}
+              onClick={() => (paid.record ? onRegisterPay(deadline) : onShowPay(deadline))}
               className="ml-1.5 font-num font-bold tabular-nums text-brand-700 hover:underline"
-              title="클릭하면 장부 내역 확인"
+              title={paid.record ? '입력한 납부 기록 수정' : '클릭하면 장부 내역 확인'}
             >
               {formatKRW(paid.total)}원
             </button>
           ) : (
             <span className="ml-1.5 font-num font-bold tabular-nums text-ink-300">미등록</span>
           )}
-          {paid && paid.total ? (
+          {paid?.record ? (
+            <span className="ml-1 text-[11px] text-ink-400">납부 기록</span>
+          ) : paid && paid.total ? (
             <span className="ml-1 text-[11px] text-ink-400">
               국세 {formatKRW(paid.national)}·지방 {formatKRW(paid.local)}
               {paid.count > 2 ? ` · ${paid.count}건` : ''}
@@ -109,7 +122,7 @@ function DeadlineCard({
           type="button"
           onClick={() => onRegisterPay(deadline)}
           className="shrink-0 rounded-lg p-1.5 text-ink-400 transition hover:bg-brand-50 hover:text-brand-700"
-          title="납부 등록 (장부에 기록)"
+          title="납부 기록 입력"
         >
           <Icon name="plus" size={16} strokeWidth={2.4} />
         </button>
@@ -242,21 +255,22 @@ function DeadlineCard({
 }
 
 export default function Tax() {
-  const { profile, user, isAdmin } = useAuth()
+  const { profile, user } = useAuth()
   const toast = useToast()
   const thisYear = Number(todayISO().slice(0, 4))
   const [year, setYear] = useState(thisYear)
   const [loading, setLoading] = useState(true)
   const [entries, setEntries] = useState([])
-  const [projects, setProjects] = useState([])
-  const [profiles, setProfiles] = useState([])
+  const [payments, setPayments] = useState([])
   const [state, setState] = useState(() => loadTaxState())
   const [openId, setOpenId] = useState(null)
   const [taxFilter, setTaxFilter] = useState('all')
   const [attachmentsByEntry, setAttachmentsByEntry] = useState({})
   const [uploading, setUploading] = useState(false)
   const [viewerFiles, setViewerFiles] = useState(null)
-  const [payTarget, setPayTarget] = useState(null)
+  const [payForm, setPayForm] = useState(null)
+  const [paySaving, setPaySaving] = useState(false)
+  const [payError, setPayError] = useState('')
   const [payDetailYm, setPayDetailYm] = useState('')
   const [reloadKey, setReloadKey] = useState(0)
   const today = todayISO()
@@ -271,15 +285,13 @@ export default function Tax() {
     Promise.all([
       listEntries({ from: `${year - 1}-01-01`, to: `${year - 1}-12-31` }),
       listEntries({ from: `${year}-01-01`, to: `${year}-12-31` }),
-      listProjects().catch(() => []),
-      listProfiles().catch(() => []),
+      listTaxPayments().catch(() => []),
     ])
-      .then(([prev, cur, projectRows, profileRows]) => {
+      .then(([prev, cur, paymentRows]) => {
         if (!mounted) return
         const all = [...(prev || []), ...(cur || [])]
         setEntries(all)
-        setProjects(projectRows || [])
-        setProfiles(profileRows || [])
+        setPayments(paymentRows || [])
         const insIds = all.filter((e) => e.counterparty === '국민건강보험공단').map((e) => e.id)
         listAttachments(insIds)
           .then((files) => {
@@ -309,7 +321,57 @@ export default function Tax() {
   const vatRows = useMemo(() => vatEstimateByFiling(entries, year), [entries, year])
   /* 원천세 납부월별 장부 합계 (납부기한 달 키) */
   const paidMap = useMemo(() => withholdingPaidByMonth(entries), [entries])
-  const paidOf = (deadline) => paidMap.get(String(deadline.due || '').slice(0, 7)) || null
+  const payByKey = useMemo(() => paymentMap(payments), [payments])
+
+  /* 세금관리 탭에 직접 입력한 납부 기록을 우선하고,
+     예전에 장부(세금과공과)에 넣은 원천세는 기록이 없을 때만 보여줍니다. */
+  const paidOf = (deadline) => {
+    const rec = payByKey.get(deadlinePaymentKey(deadline.id))
+    if (rec) return { total: Number(rec.paid || 0), national: 0, local: 0, count: 1, record: rec }
+    return paidMap.get(String(deadline.due || '').slice(0, 7)) || null
+  }
+
+  /* 부가세 예상 4줄 + 저장된 실납부 기록 */
+  const vatAutoRows = useMemo(
+    () =>
+      vatRows.map((row) => ({
+        key: vatPaymentKey(year, row.key),
+        row,
+        rec: payByKey.get(vatPaymentKey(year, row.key)) || null,
+      })),
+    [vatRows, payByKey, year],
+  )
+
+  /* 부가세 4줄에 자동으로 붙는 기록을 뺀 나머지(원천세·법인세·4대보험·기타) */
+  const otherPayments = useMemo(() => {
+    const autoKeys = new Set(vatRows.map((row) => vatPaymentKey(year, row.key)))
+    return payments
+      .filter((p) => !autoKeys.has(p.key))
+      .filter((p) => {
+        const y = String(p.due || p.paidOn || '').slice(0, 4)
+        return !y || y === String(year)
+      })
+      .sort((a, b) => {
+        const ad = String(a.due || a.paidOn || '')
+        const bd = String(b.due || b.paidOn || '')
+        return ad.localeCompare(bd)
+      })
+  }, [payments, vatRows, year])
+
+  const paySummary = useMemo(() => {
+    let expected = 0
+    let paid = 0
+    for (const { row, rec } of vatAutoRows) {
+      expected += Number(row.net || 0)
+      if (rec) paid += Number(rec.paid || 0)
+    }
+    for (const p of otherPayments) {
+      expected += Number(p.expected || 0)
+      paid += Number(p.paid || 0)
+    }
+    return { expected, paid, diff: paid - expected }
+  }, [vatAutoRows, otherPayments])
+
   const scheduleList = useMemo(() => deadlines.filter((d) => matchTaxFilter(d, taxFilter)), [deadlines, taxFilter])
   const currentSchedule = useMemo(() => scheduleList.filter((d) => d.due >= today), [scheduleList, today])
   const pastSchedule = useMemo(() => scheduleList.filter((d) => d.due < today), [scheduleList, today])
@@ -358,6 +420,116 @@ export default function Tax() {
   const toggleDone = (id, done) => {
     setState((s) => setTaxDone(s, id, done))
     if (done) toast.success('완료로 표시했습니다.')
+  }
+
+  /* ------------------------- 세금 납부 기록 입력 ------------------------- */
+
+  const openPayForVat = (row, rec) => {
+    setPayError('')
+    if (rec) {
+      setPayForm({ ...rec })
+      return
+    }
+    const label = String(row.label || '')
+    const period = (label.match(/\(([^)]+)\)/) || [])[1] || label
+    setPayForm({
+      key: vatPaymentKey(year, row.key),
+      type: 'vat',
+      title: `부가세 ${label.split(' (')[0]}`.trim(),
+      period,
+      due: row.due,
+      expected: Number(row.net || 0),
+      paid: '',
+      paidOn: '',
+      memo: '',
+    })
+  }
+
+  const openPayForDeadline = (deadline) => {
+    setPayError('')
+    const rec = payByKey.get(deadlinePaymentKey(deadline.id))
+    if (rec) {
+      setPayForm({ ...rec })
+      return
+    }
+    const ledger = paidMap.get(String(deadline.due || '').slice(0, 7))
+    setPayForm({
+      key: deadlinePaymentKey(deadline.id),
+      type: deadline.type,
+      title: deadline.title,
+      period: deadline.period || '',
+      due: deadline.due || '',
+      expected: '',
+      paid: ledger?.total ? String(ledger.total) : '',
+      paidOn: ledger?.total ? today : '',
+      memo: '',
+    })
+  }
+
+  const openPayNew = (type = 'other') => {
+    const t = taxPaymentType(type)
+    setPayError('')
+    setPayForm({
+      key: newPaymentKey(),
+      type,
+      title: t.title,
+      period: '',
+      due: '',
+      expected: '',
+      paid: '',
+      paidOn: today,
+      memo: '',
+    })
+  }
+
+  const submitPay = async (e) => {
+    e.preventDefault()
+    if (!payForm) return
+    const title = String(payForm.title || '').trim()
+    if (!title) {
+      setPayError('항목명을 입력해 주세요.')
+      return
+    }
+    const toNum = (v) => Number(String(v ?? '').replace(/[^0-9.\-]/g, '')) || 0
+    const paidNum = toNum(payForm.paid)
+    setPaySaving(true)
+    setPayError('')
+    try {
+      const saved = await saveTaxPayment(
+        {
+          ...payForm,
+          title,
+          expected: toNum(payForm.expected),
+          paid: paidNum,
+          paidOn: payForm.paidOn || (paidNum ? today : ''),
+        },
+        user?.id,
+      )
+      setPayments((prev) => [...prev.filter((p) => p.id !== saved.id && p.key !== saved.key), saved])
+      setPayForm(null)
+      toast.success('납부 기록을 저장했습니다.')
+    } catch (err) {
+      setPayError(err.message)
+    } finally {
+      setPaySaving(false)
+    }
+  }
+
+  const handleDeletePay = async () => {
+    if (!payForm?.id) return
+    if (!window.confirm('이 납부 기록을 삭제할까요?')) return
+    setPaySaving(true)
+    setPayError('')
+    try {
+      await removeTaxPayment(payForm.id)
+      setPayments((prev) => prev.filter((p) => p.id !== payForm.id))
+      setPayForm(null)
+      toast.success('납부 기록을 삭제했습니다.')
+    } catch (err) {
+      setPayError(err.message)
+    } finally {
+      setPaySaving(false)
+    }
   }
 
   /** 세무법인 전달용: 과세기간 장부 CSV */
@@ -426,35 +598,218 @@ export default function Tax() {
               <p className="text-xs text-ink-500">매출세액 − 매입세액 · 장부 입력 기준</p>
             </header>
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[560px] border-collapse">
+              <table className="w-full min-w-[860px] border-collapse">
                 <thead className="bg-ink-50/70">
                   <tr>
                     <th className="th">신고 구분</th>
                     <th className="th text-right">매출세액</th>
                     <th className="th text-right">매입세액</th>
                     <th className="th text-right">납부(환급) 예상</th>
+                    <th className="th text-right">실납부</th>
+                    <th className="th text-right">차액</th>
                     <th className="th text-right">납부기한</th>
+                    <th className="th text-center">납부일</th>
+                    <th className="th" />
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-ink-100">
-                  {vatRows.map((r) => (
-                    <tr key={r.key}>
-                      <td className="td font-semibold">{r.label}</td>
-                      <td className="td num">{formatKRW(r.saleVat)}원</td>
-                      <td className="td num">{formatKRW(r.buyVat)}원</td>
-                      <td className={`td num font-bold ${r.net < 0 ? 'text-emerald-700' : 'text-loss'}`}>
-                        {r.net < 0 ? `환급 ${formatKRW(Math.abs(r.net))}원` : `${formatKRW(r.net)}원`}
-                      </td>
-                      <td className="td num text-ink-500">{r.due}</td>
-                    </tr>
-                  ))}
+                  {vatAutoRows.map(({ row: r, rec }) => {
+                    const diff = paymentDiff(rec)
+                    return (
+                      <tr key={r.key}>
+                        <td className="td font-semibold">{r.label}</td>
+                        <td className="td num">{formatKRW(r.saleVat)}원</td>
+                        <td className="td num">{formatKRW(r.buyVat)}원</td>
+                        <td className={`td num font-bold ${r.net < 0 ? 'text-emerald-700' : 'text-loss'}`}>
+                          {r.net < 0 ? `환급 ${formatKRW(Math.abs(r.net))}원` : `${formatKRW(r.net)}원`}
+                        </td>
+                        <td className="td num font-bold">
+                          {rec && Number(rec.paid) !== 0 ? (
+                            `${formatKRW(rec.paid)}원`
+                          ) : (
+                            <span className="font-medium text-ink-300">미입력</span>
+                          )}
+                        </td>
+                        <td
+                          className={`td num font-bold ${
+                            diff === null
+                              ? 'text-ink-300'
+                              : diff === 0
+                                ? 'text-emerald-700'
+                                : diff > 0
+                                  ? 'text-amber-700'
+                                  : 'text-loss'
+                          }`}
+                        >
+                          {diff === null ? '—' : `${diff > 0 ? '+' : ''}${formatKRW(diff)}원`}
+                        </td>
+                        <td className="td num text-ink-500">{r.due}</td>
+                        <td className="td text-center text-xs text-ink-500">{rec?.paidOn || '—'}</td>
+                        <td className="td text-right">
+                          <button
+                            type="button"
+                            className="btn-ghost whitespace-nowrap px-2 py-1 text-xs"
+                            onClick={() => openPayForVat(r, rec)}
+                          >
+                            {rec ? '수정' : '실납부 입력'}
+                          </button>
+                        </td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>
             <p className="border-t border-ink-100 px-4 py-3 text-[11px] leading-relaxed text-ink-400">
               장부에 빠진 매입이 있으면 실제보다 많게 나옵니다. 확정신고분은 예정신고 납부세액 차감 전
               금액입니다. 간이과세·면세·공제 한도·가산세는 반영되지 않으니 신고 전 금진에 장부 CSV를 보내
-              대조하세요.
+              대조하세요. <span className="font-semibold text-ink-500">실납부를 입력하면 예상과의 차액을 자동 계산합니다.</span>
+            </p>
+          </section>
+
+          {/* 3. 세금·법정부담금 납부 기록 (직원 화면 비공개 · 운영비 장부와 분리) */}
+          <section className="card overflow-hidden">
+            <header className="flex flex-wrap items-center justify-between gap-2 border-b border-ink-200 px-4 py-3.5">
+              <div className="min-w-0">
+                <h2 className="text-sm font-bold text-ink-900">세금·법정부담금 납부 기록 ({year}년)</h2>
+                <p className="mt-0.5 text-xs text-ink-500">
+                  부가세·원천세·법인세·지방소득세·4대보험을 예상과 실제 납부액으로 비교합니다.
+                </p>
+              </div>
+              <button type="button" className="btn-primary whitespace-nowrap" onClick={() => openPayNew()}>
+                <Icon name="plus" size={15} />
+                납부 기록 추가
+              </button>
+            </header>
+
+            <div className="flex flex-wrap gap-1.5 border-b border-ink-100 px-4 py-3">
+              {TAX_PAYMENT_TYPES.map((t) => (
+                <button
+                  key={t.key}
+                  type="button"
+                  onClick={() => openPayNew(t.key)}
+                  className={`chip ${t.chip} transition hover:brightness-95`}
+                  title={`${t.label} 납부 기록 추가`}
+                >
+                  + {t.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="grid grid-cols-3 gap-2 border-b border-ink-100 px-4 py-3 text-right">
+              <div>
+                <p className="text-[11px] text-ink-400">예상 합계 (부가세 포함)</p>
+                <p className="font-num text-sm font-extrabold tabular-nums text-ink-900">
+                  {formatKRW(paySummary.expected)}원
+                </p>
+              </div>
+              <div>
+                <p className="text-[11px] text-ink-400">실납부 합계</p>
+                <p className="font-num text-sm font-extrabold tabular-nums text-brand-700">
+                  {formatKRW(paySummary.paid)}원
+                </p>
+              </div>
+              <div>
+                <p className="text-[11px] text-ink-400">차액</p>
+                <p
+                  className={`font-num text-sm font-extrabold tabular-nums ${
+                    paySummary.diff === 0
+                      ? 'text-emerald-700'
+                      : paySummary.diff > 0
+                        ? 'text-amber-700'
+                        : 'text-loss'
+                  }`}
+                >
+                  {paySummary.diff > 0 ? '+' : ''}
+                  {formatKRW(paySummary.diff)}원
+                </p>
+              </div>
+            </div>
+
+            {otherPayments.length ? (
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[860px] border-collapse">
+                  <thead className="bg-ink-50/70">
+                    <tr>
+                      <th className="th">구분</th>
+                      <th className="th text-left">항목</th>
+                      <th className="th text-left">대상 기간</th>
+                      <th className="th text-right">납부기한</th>
+                      <th className="th text-right">예상금액</th>
+                      <th className="th text-right">실납부금</th>
+                      <th className="th text-right">차액</th>
+                      <th className="th text-center">납부일</th>
+                      <th className="th text-left">메모</th>
+                      <th className="th" />
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-ink-100">
+                    {otherPayments.map((p) => {
+                      const t = taxPaymentType(p.type)
+                      const diff = paymentDiff(p)
+                      return (
+                        <tr key={p.id}>
+                          <td className="td">
+                            <span className={`chip ${t.chip}`}>{t.label}</span>
+                          </td>
+                          <td className="td font-semibold">{p.title}</td>
+                          <td className="td text-ink-500">{p.period || '—'}</td>
+                          <td className="td num text-ink-500">{p.due || '—'}</td>
+                          <td className="td num">
+                            {Number(p.expected) < 0
+                              ? `환급 ${formatKRW(Math.abs(p.expected))}원`
+                              : `${formatKRW(p.expected)}원`}
+                          </td>
+                          <td className="td num font-bold">
+                            {Number(p.paid) !== 0 ? (
+                              `${formatKRW(p.paid)}원`
+                            ) : (
+                              <span className="font-medium text-ink-300">미입력</span>
+                            )}
+                          </td>
+                          <td
+                            className={`td num font-bold ${
+                              diff === null
+                                ? 'text-ink-300'
+                                : diff === 0
+                                  ? 'text-emerald-700'
+                                  : diff > 0
+                                    ? 'text-amber-700'
+                                    : 'text-loss'
+                            }`}
+                          >
+                            {diff === null ? '—' : `${diff > 0 ? '+' : ''}${formatKRW(diff)}원`}
+                          </td>
+                          <td className="td text-center text-xs text-ink-500">{p.paidOn || '—'}</td>
+                          <td className="td max-w-[160px] truncate text-xs text-ink-500" title={p.memo}>
+                            {p.memo || '—'}
+                          </td>
+                          <td className="td text-right">
+                            <button
+                              type="button"
+                              className="btn-ghost whitespace-nowrap px-2 py-1 text-xs"
+                              onClick={() => {
+                                setPayError('')
+                                setPayForm({ ...p })
+                              }}
+                            >
+                              수정
+                            </button>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p className="px-4 py-6 text-center text-xs text-ink-400">
+                원천세·4대보험·법인세 등 추가 기록이 없습니다. 위 버튼으로 추가하세요.
+              </p>
+            )}
+            <p className="border-t border-ink-100 px-4 py-3 text-[11px] leading-relaxed text-ink-400">
+              4대보험은 세금은 아니지만 법정 부담금이라 함께 관리합니다. 여기 입력한 금액은 운영비 장부에
+              남기지 않으므로 직원 화면·프로젝트 손익에는 잡히지 않습니다.
             </p>
           </section>
 
@@ -478,7 +833,7 @@ export default function Tax() {
               </div>
             </div>
             {(taxFilter === 'all' || taxFilter === 'withholding') && (
-              <p className="text-xs text-ink-500">원천세(매월 10일)는 + 버튼으로 납부를 등록하면 금액이 표시됩니다. 매달 같이 나오는 국세(소득세)+지방세(특별징수분) 합산입니다.</p>
+              <p className="text-xs text-ink-500">원천세(매월 10일)는 + 버튼으로 실납부금을 기록하면 금액이 표시됩니다. 매달 같이 나오는 국세(소득세)+지방세(특별징수분) 합산입니다.</p>
             )}
             {taxFilter === 'corp' && (
               <p className="text-xs text-ink-500">법인세 확정(3/31)과 지방소득세(4/30)는 연 1회 세트입니다. 매달 나가는 지방세(특별징수분)는 원천세 행에 포함됩니다.</p>
@@ -495,7 +850,7 @@ export default function Tax() {
                 onToggleDone={toggleDone}
                 onExport={exportFiling}
                 paid={paidOf(d)}
-                onRegisterPay={setPayTarget}
+                onRegisterPay={openPayForDeadline}
                 onShowPay={(dl) => setPayDetailYm(String(dl.due || '').slice(0, 7))}
                 {...insuranceProps(d)}
               />
@@ -525,7 +880,7 @@ export default function Tax() {
                       onToggleDone={toggleDone}
                       onExport={exportFiling}
                       paid={paidOf(d)}
-                      onRegisterPay={setPayTarget}
+                      onRegisterPay={openPayForDeadline}
                       onShowPay={(dl) => setPayDetailYm(String(dl.due || '').slice(0, 7))}
                       {...insuranceProps(d)}
                     />
@@ -561,7 +916,7 @@ export default function Tax() {
                   onToggleDone={toggleDone}
                   onExport={exportFiling}
                   paid={paidOf(d)}
-                  onRegisterPay={setPayTarget}
+                  onRegisterPay={openPayForDeadline}
                   onShowPay={(dl) => setPayDetailYm(String(dl.due || '').slice(0, 7))}
                   {...insuranceProps(d)}
                 />
@@ -583,34 +938,137 @@ export default function Tax() {
         title="고지서 PDF"
       />
 
-      {/* 원천세 납부 등록: 장부에 세금과공과로 기록됩니다 (급여관리 세금·원천징수에 함께 집계).
-          세금은 부가세가 없으니 면세 체크가 켜진 채로 열립니다. 적요의 N월분(귀속월)이 다르면 고쳐주세요 */}
-      <EntryFormModal
-        open={Boolean(payTarget)}
-        onClose={() => setPayTarget(null)}
-        onSaved={() => {
-          setPayTarget(null)
-          setReloadKey((k) => k + 1)
+      {/* 세금·법정부담금 납부 기록 입력.
+          예상금액과 실납부금을 함께 적으면 차액을 자동 계산합니다.
+          (운영비 장부에는 남기지 않아 직원 화면·프로젝트 손익에 잡히지 않습니다) */}
+      <Modal
+        open={Boolean(payForm)}
+        onClose={() => {
+          if (paySaving) return
+          setPayForm(null)
+          setPayError('')
         }}
-        entryType="opex"
-        source="manual"
-        initial={
-          payTarget
-            ? {
-                entry_date: today,
-                counterparty: '세무서',
-                category: '세금과공과',
-                description: `${payTarget.period} 원천세`,
-                memo: '원천징수',
-                tax_free: true,
-              }
-            : null
+        title={payForm?.id ? '납부 기록 수정' : '납부 기록 추가'}
+        subtitle="예상금액과 실제 납부한 금액을 적으면 차액을 계산해 보여줍니다."
+        footer={
+          <>
+            <button
+              type="button"
+              className="btn-ghost"
+              onClick={() => {
+                setPayForm(null)
+                setPayError('')
+              }}
+              disabled={paySaving}
+            >
+              취소
+            </button>
+            {payForm?.id ? (
+              <button
+                type="button"
+                className="btn-ghost text-rose-600 hover:bg-rose-50"
+                onClick={handleDeletePay}
+                disabled={paySaving}
+              >
+                삭제
+              </button>
+            ) : null}
+            <button type="submit" form="tax-payment-form" className="btn-primary" disabled={paySaving}>
+              {paySaving ? '저장 중…' : '저장'}
+            </button>
+          </>
         }
-        projects={projects}
-        profiles={profiles}
-        isAdmin={isAdmin}
-        userId={user?.id}
-      />
+      >
+        {payForm ? (
+          <form id="tax-payment-form" onSubmit={submitPay} className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            {payError ? (
+              <div className="sm:col-span-2">
+                <InlineAlert tone="error">{payError}</InlineAlert>
+              </div>
+            ) : null}
+            <Field label="구분">
+              <select
+                className="input"
+                value={payForm.type}
+                onChange={(e) => {
+                  const type = e.target.value
+                  setPayForm((f) => ({
+                    ...f,
+                    type,
+                    title: f.title && f.title !== taxPaymentType(f.type).title ? f.title : taxPaymentType(type).title,
+                  }))
+                }}
+              >
+                {TAX_PAYMENT_TYPES.map((t) => (
+                  <option key={t.key} value={t.key}>
+                    {t.label}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="항목명" required>
+              <input
+                className="input"
+                value={payForm.title}
+                onChange={(e) => setPayForm((f) => ({ ...f, title: e.target.value }))}
+                placeholder="예: 부가세 1기 예정"
+                required
+              />
+            </Field>
+            <Field label="대상 기간">
+              <input
+                className="input"
+                value={payForm.period}
+                onChange={(e) => setPayForm((f) => ({ ...f, period: e.target.value }))}
+                placeholder="예: 1~3월분"
+              />
+            </Field>
+            <Field label="납부기한">
+              <input
+                type="date"
+                className="input"
+                value={payForm.due || ''}
+                onChange={(e) => setPayForm((f) => ({ ...f, due: e.target.value }))}
+              />
+            </Field>
+            <Field label="예상금액" hint="부가세는 예상금액이 자동으로 채워집니다. 환급이면 음수로 적어주세요.">
+              <AmountInput
+                className="input text-right font-num tabular-nums"
+                value={payForm.expected}
+                onChange={(e) => setPayForm((f) => ({ ...f, expected: e.target.value }))}
+                placeholder="0"
+              />
+            </Field>
+            <Field label="실납부금" hint="통장에서 실제로 빠져나간 금액">
+              <AmountInput
+                className="input text-right font-num tabular-nums"
+                value={payForm.paid}
+                onChange={(e) => setPayForm((f) => ({ ...f, paid: e.target.value }))}
+                placeholder="0"
+              />
+            </Field>
+            <Field label="납부일">
+              <input
+                type="date"
+                className="input"
+                value={payForm.paidOn || ''}
+                onChange={(e) => setPayForm((f) => ({ ...f, paidOn: e.target.value }))}
+              />
+            </Field>
+            <Field label="메모" className="sm:col-span-2">
+              <input
+                className="input"
+                value={payForm.memo}
+                onChange={(e) => setPayForm((f) => ({ ...f, memo: e.target.value }))}
+                placeholder="예: 홈택스 납부, 분납 1차"
+              />
+            </Field>
+            <div className="sm:col-span-2 rounded-lg bg-ink-50 px-3 py-2 text-xs text-ink-500">
+              차액 = 실납부금 − 예상금액 · 예상이 환급(음수)이면 차액은 표시하지 않습니다.
+            </div>
+          </form>
+        ) : null}
+      </Modal>
 
       {/* 원천세 납부 내역: 합계를 누르면 어떤 장부 행인지 확인 */}
       <Modal
