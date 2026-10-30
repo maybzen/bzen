@@ -1,0 +1,35 @@
+{
+  "name": "(주)비젠커뮤니케이션 회계관리",
+  "short_name": "비젠회계",
+  "description": "매출, 매입, 운영비, 프로젝트 손익, 지출결의 관리",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "dir": "ltr",
+  "lang": "ko",
+  "background_color": "#0d1526",
+  "theme_color": "#0d1526",
+  "categories": ["business", "finance"],
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
