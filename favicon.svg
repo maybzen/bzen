@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="BZen">
+  <defs>
+    <linearGradient id="bz" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#3663f6" />
+      <stop offset="1" stop-color="#1a309e" />
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="15" fill="url(#bz)" />
+  <text
+    x="32"
+    y="43"
+    font-family="Pretendard, -apple-system, system-ui, sans-serif"
+    font-size="25"
+    font-weight="800"
+    letter-spacing="-1"
+    fill="#ffffff"
+    text-anchor="middle"
+  >BZ</text>
+</svg>
